@@ -2,6 +2,9 @@
 
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
+![alpha 0.1.0](https://img.shields.io/badge/status-alpha%200.1.0-e5a50a)
+
+Early alpha (0.1.0): used so far by its author. Expect rough edges and changes between versions; pin a version if you need stability. Report problems in [GitHub issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
 
 A workflow linter for Claude Code: it checks the work you and Claude do together against the requirements you confirmed and your project's rules, and only what does not fit reaches you. Each check runs on [Gadfly](https://github.com/mirzahusadzic/gadfly), which asks a separate model whether the work fits and asks again with your requirement removed, so a fit counts only when the requirement carries it; the method is in [the paper](https://doi.org/10.5281/zenodo.23962158).
 
