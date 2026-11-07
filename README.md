@@ -58,6 +58,8 @@ Gadfly: `midwife` 0.13.1 or later; the hooks run on its Python. The plugin, at a
 /plugin install frame-loop@claude-frame-loop
 ```
 
+From 0.1.0, whose hooks ran on the system `python3`: `claude plugin marketplace update claude-frame-loop`, then `claude plugin update frame-loop@claude-frame-loop`, and restart Claude Code.
+
 Allow the `contributor` tier (it trains on inputs) per project, in `.claude/settings.local.json`; `FRAME_LOOP_LABELS_OK` only for a repository GitHub does not confirm public:
 
 ```json
