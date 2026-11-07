@@ -151,6 +151,13 @@ class ReviewProtectedTests(unittest.TestCase):
                 self.assertTrue(config.touches_config(str(project / ".Frame-Loop" / "FRAME0.json")))
                 self.assertTrue(config.shell_touches_config("echo off > .Frame-Loop/switch"))
             self.assertFalse(config.touches_config(str(project / "frame-loop-notes.md")))
+            real = config.glob.glob
+
+            def older_glob(pathname, *, root_dir=None, dir_fd=None, recursive=False):  # Python 3.9's
+                return real(pathname, recursive=recursive)
+
+            with mock.patch.object(config.glob, "glob", older_glob):  # a hook run outside the launcher
+                self.assertTrue(config.shell_touches_config("printf x > .frame-l*/frame0.json"))
 
     def test_the_private_names_and_the_live_files_are_the_loops(self):
         folder = Path(tempfile.mkdtemp(prefix="frame-loop-l6-"))

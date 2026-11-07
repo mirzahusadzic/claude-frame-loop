@@ -240,9 +240,7 @@ def _globbed(word: str) -> list[str]:
         return []
     base = os.path.expanduser(word)
     try:
-        found = glob.glob(
-            base if os.path.isabs(base) else os.path.join(state.CWD or os.getcwd(), base), include_hidden=True
-        )
+        found = glob.glob(base if os.path.isabs(base) else os.path.join(state.CWD or os.getcwd(), base))
     except (OSError, ValueError, re.error):
         return []
     return found[:100]
