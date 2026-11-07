@@ -229,3 +229,25 @@ class EveryBranchTests(unittest.TestCase):
     def test_a_loop_file_that_cannot_be_read_is_marked_unknown(self):
         with mock.patch.object(config.Path, "read_bytes", side_effect=OSError("unreadable")):
             self.assertEqual(config.loop_files({"cwd": str(self.project)})[str(self.frame0)], "?")
+
+
+class PrintedTextTests(unittest.TestCase):
+    """An agent's report: `printf '.frame-loop/\\n' >> .gitignore` rose as a change to the loop's
+    own files, though it writes .gitignore and the folder's name is only its text."""
+
+    def test_what_echo_or_printf_prints_is_data_and_their_redirect_is_not(self):
+        for command in (
+            "printf '.frame-loop/\\n' >> .gitignore",
+            'echo ".frame-loop/" >> .gitignore && git status --short',
+            "echo 'FRAME_LOOP_TIER=private' > notes.txt",
+        ):
+            with self.subTest(command):
+                self.assertFalse(config.shell_touches_config(command))
+        for command in (
+            "echo off > .frame-loop/switch",
+            "printf x >> .frame-loop/frame0.json",
+            "echo $(rm -rf .frame-loop)",
+            "echo off | tee .frame-loop/switch",
+        ):
+            with self.subTest(command):
+                self.assertTrue(config.shell_touches_config(command))

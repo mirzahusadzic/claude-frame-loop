@@ -217,7 +217,7 @@ def shell_touches_config(command: str) -> bool:
         return False
     text, bodies = F.heredocs(command)
     ran = F.substitutions(command)  # run by the shell inside an unquoted heredoc: words to check too
-    text = "\n".join([text, *ran])
+    text = "\n".join([_without_printed(text), *ran])
     code = "\n".join(
         [text] + [body for reader, body in bodies if F.program((F._words(reader) or [""])[0]) not in DATA_SINKS]
     )
@@ -234,6 +234,24 @@ def shell_touches_config(command: str) -> bool:
         return True
     spelled = {spelling for q in _protected() for spelling in (str(q), q.as_posix())}  # C:\\x and C:/x alike
     return any(re.search(re.escape(s) + r"(?![\w.-])", code) for s in spelled)
+
+
+def _without_printed(text: str) -> str:
+    """The shell text with what `echo` and `printf` print left out, their redirects kept:
+    `printf '.frame-loop/\\n' >> .gitignore` writes .gitignore, and the loop's folder is only
+    its text. A `$(…)` inside them is a command of its own and stays."""
+    kept = []
+    for part in F._split(text):
+        words = F.command_words(F._words(part))
+        if words and F.program(words[0]) in ("echo", "printf"):
+            tokens = _tokens(part)
+            part = " ".join(
+                t
+                for k, t in enumerate(tokens)
+                if ">" in t or (k and ">" in tokens[k - 1] and set(tokens[k - 1]) <= set("<>&|0123456789"))
+            )
+        kept.append(part)
+    return "\n".join(kept)
 
 
 def _patched(command: str) -> list[str]:
