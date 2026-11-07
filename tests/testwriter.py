@@ -118,3 +118,23 @@ class FactsLineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuotesAskTests(unittest.TestCase):
+    """The claims ledger: a requirement shorter than the copy guard's 24 characters could ride
+    in a label whole, since only 24 characters in a row counted as a quote."""
+
+    def test_a_short_requirement_carried_whole_is_a_quote(self):
+        for label in ("It makes sure to return HTTP 429 now.", "Adds a check: RETURN http-429!"):
+            with self.subTest(label):
+                self.assertTrue(writer.quotes_ask(label, "Return HTTP 429."))
+        self.assertTrue(
+            writer.quotes_ask(
+                "so the tool reads its settings from one file", "the tool reads its settings from one file"
+            )
+        )
+
+    def test_two_common_words_or_a_part_of_a_short_requirement_are_no_quote(self):
+        self.assertFalse(writer.quotes_ask("Adds a fast path for reads.", "Be fast."))
+        self.assertFalse(writer.quotes_ask("Returns HTTP 500 on a failure.", "Return HTTP 429."))
+        self.assertFalse(writer.quotes_ask("It returns 4290 items.", "Return HTTP 429."))

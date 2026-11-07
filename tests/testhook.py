@@ -362,6 +362,11 @@ def ask_quoting(text):
     return {"label": "it does what was wanted: " + ask}
 
 
+def short_ask_quoting(text):
+    ask = json.loads(Path(os.environ["FRAME_LOOP_FRAME0"]).read_text(encoding="utf-8"))["asks"][1]["text"]
+    return {"label": f"Adds a guard, so that it will {ask.rstrip('.').lower()} when over."}
+
+
 def failing(text):
     return {"error": "the writer did not run (OSError)"}
 
@@ -1493,6 +1498,23 @@ class WriterTests(unittest.TestCase):
             out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
             self.assertIn(why, out["systemMessage"], spec)
             self.assertEqual(seen, [], spec)
+
+    def test_a_label_carrying_a_short_requirement_whole_is_not_sent(self):
+        """The claims ledger: a requirement under the copy guard's 24 characters rode in a
+        label whole, since only 24 characters in a row counted as a quote."""
+        short = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
+        short["asks"][1] = {
+            "id": "A2",
+            "text": "Return HTTP 429.",
+            "inversion": {"Return HTTP 429.": "Never return HTTP 429."},
+        }
+        path = WORK / f"frame0-short-{uid(self)}.json"
+        path.write_text(json.dumps(short), encoding="utf-8")
+        os.environ.update(FRAME_LOOP_FRAME0=str(path), FRAME_LOOP_WRITER="testhook:short_ask_quoting")
+        seen = loaded_seen()
+        out = hook.answer(plan_event("Serves: A2\nAdd the limit and its unit test.", cwd=self.private))
+        self.assertIn("the label quotes an ask", out["systemMessage"])
+        self.assertEqual(seen, [])
 
     def test_code_states_the_files_and_the_copy_guard_reads_only_the_writers_part(self):
         import writer

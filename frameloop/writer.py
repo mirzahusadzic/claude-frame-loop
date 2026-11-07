@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import time
 from pathlib import Path
@@ -155,6 +156,18 @@ def copied(label: str, text: str) -> list[str]:
         else:
             i += 1
     return runs
+
+
+def quotes_ask(label: str, ask: str) -> bool:
+    """Whether the label carries a requirement: WIDTH characters of it in a row, or, for a
+    requirement shorter than that, the whole of it (of three words or more, so two common
+    words never refuse a label by chance), in any case and spacing."""
+    if quotes(label, ask):
+        return True
+    words = re.findall(r"\w+", ask.casefold())
+    if len(" ".join(ask.split())) >= WIDTH or len(words) < 3:
+        return False
+    return re.search(r"\b" + r"\W+".join(map(re.escape, words)) + r"\b", label.casefold()) is not None
 
 
 def quotes(label: str, text: str) -> bool:

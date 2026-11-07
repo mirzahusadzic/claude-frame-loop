@@ -76,7 +76,7 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
                 else "the label names an id of frame 0"
                 if ids and re.search(r"\b(" + "|".join(map(re.escape, ids)) + r")\b", label)
                 else "the label quotes an ask"
-                if any(writer.quotes(label, a["text"]) for a in frame0.get("asks", []))
+                if any(writer.quotes_ask(label, a["text"]) for a in frame0.get("asks", []))
                 else None
             )
 
