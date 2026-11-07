@@ -10,7 +10,7 @@ The band's first line names what is read and why; the second, the question, the 
 
 What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 
-The questions run in order: the change put into plain words (with labels on), "does it do what you asked?", then "does it break any of your rules?"; for a change Claude declared no requirement for, "what is it for?". A passed question shows as ✓ while the next runs.
+The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules in frame 0 only the first. For a change Claude declared no requirement for, the one question is "what is it for?". When you ask whether the work is done, Claude runs `: frame-loop-read --complete`, and each requirement is read against the changes that claim it.
 
 ---
 

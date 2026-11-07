@@ -15,7 +15,7 @@ State the work in a git repository as usual. Before any code, Claude restates it
 2. Over the limit, the API returns HTTP 429 with a retry time.
 ```
 
-The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and a reversed wording per requirement, which the reader is also asked; every later change is read against it.
+The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and a reversed wording per requirement, which the reader is also asked; every later change is checked against it, and read by the reader on a signal.
 
 ---
 
@@ -33,7 +33,7 @@ A signal is a file no rule covers, a check you owe that is unmet, such as tests 
 
 ```text
 ⠹ frame-loop checking the change against your requirements, because it is a large change · 0:41
-  ✓ does what you asked · step 2 of 2: does it break any of your rules? · 9 of about 12 answers · about 0:12 left
+  does it do what you asked, and does it break any of your rules? · 9 of about 12 answers · about 0:12 left
 ```
 
 Claude receives each finding at the next prompt. The reader gets a label and file names, never the session or the code: [Privacy](privacy.md).

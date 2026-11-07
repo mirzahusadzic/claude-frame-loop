@@ -193,10 +193,11 @@ flowchart LR
 
 | Claude Code event | frame-loop |
 | --- | --- |
-| `SessionStart` | briefs Claude: frame 0, the rules, the markers |
+| `SessionStart`, on startup, resume, clear and compact | briefs Claude: frame 0, the rules, the markers |
 | `UserPromptSubmit` | takes the snapshot; tells Claude what the last turn's check found |
-| `PreToolUse` | the guard; reads Claude's markers; checks a node file before it is written; reads a plan on leaving plan mode |
-| `PostToolUse` | records lines read from outside the project, and the commands the rules ask for |
+| `PreToolUse`, on `ExitPlanMode`, `Bash` and the edit tools | the guard; reads Claude's markers; checks a node file before it is written; reads a plan on leaving plan mode |
+| `PostToolUse`, on the read tools, `Bash` and MCP tools | records lines read from outside the project, and the commands the rules ask for that passed |
+| `PostToolUseFailure`, on `Bash` | records the commands the rules ask for that failed |
 | `Stop` | the free checks, then the read on a signal; the line |
 
 ---

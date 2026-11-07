@@ -11,7 +11,7 @@ Configuration, by environment (set by the human in the hook's command line):
 - FRAME_LOOP_MODE: shadow (default) or enforce;
 - FRAME_LOOP_READER: a callable "module:function" that runs a frame and returns
   Gadfly's JSON (tests use a fake one; the live one runs the gadfly CLI);
-- FRAME_LOOP_TIER: the reader tier (default anthropic);
+- FRAME_LOOP_TIER: the reader tier (default public);
 - FRAME_LOOP_TRAINING_OK=1: the human's allowance for a tier that trains on its
   inputs. Without it such a tier is never read;
 - FRAME_LOOP_GH: the gh binary for the visibility check (default: gh from a trusted
@@ -31,10 +31,10 @@ holds such a line, or anything that looks like a secret, is never sent.
 - FRAME_LOOP_LABELS_OK=1: the human allows labels of this project, though it is not
   confirmed public, to go to a reader that trains on its inputs (needs a writer).
 - FRAME_LOOP_LIVE=<folder>: write what a reading asks now, and what it found, to
-  <folder>/<session>.json for a live view (the frame-loop-live mod reads
-  ~/.claude/frame-loop/live); plain words only, never the change.
+  <folder>/<session>.json for a live view (the band in hooks/band.tsx reads it, by
+  default ~/.claude/frame-loop/live); plain words only, never the change.
 
-The privacy ratchet: a plan may name a tighter reader ("Reader: anthropic") and never
+The privacy ratchet: a plan may name a tighter reader ("Reader: private") and never
 a looser one, and any touch of the loop's own configuration or record rises.
 
 Standard library only.

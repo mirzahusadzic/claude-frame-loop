@@ -14,11 +14,12 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 
 <p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
 
-- **Frame 0:** your requirements in your words, fixed with your OK; every change is read against them.
+- **Frame 0:** your requirements in your words, fixed with your OK; every change is checked against them.
 - **Free checks, every turn:** files, size, and what your rules require of the change, from `CLAUDE.md` and `AGENTS.md`.
 - **Tested reader:** a separate model reads a change only on a signal, under Gadfly's trials, asked again with the requirement removed, with a harmless line removed instead, and with the requirement reversed. A fit that holds without your requirement is rejected.
 - **Fixed verdicts:** ✓ fits, ▲ needs you, ■ not read; decided by rules, not by a model.
-- **Code stays local:** the reader gets a Haiku label and file names, never the diff, unless GitHub confirms the repository public. Secrets are refused and private names masked; [privacy](docs/privacy.md) lists what leaves the machine.
+- **Code stays local:** the reader gets a Haiku label and file names, never the diff. A change that looks like it holds a secret is refused before it is labelled, and private names are masked; [privacy](docs/privacy.md) lists what leaves the machine.
+- **What runs:** the hooks run `python3` on the plugin's own `frameloop/hook.py`, standard library only. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. Nothing else is sent or fetched.
 - **Authority:** pushes, releases, recursive deletes and changes to frame 0 or the loop itself are reported to you; in enforce mode they wait for your OK.
 - **Live:** a band above the prompt shows the check, its progress and the time left.
 
@@ -45,7 +46,7 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 ### Cost and limits
 
 - **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt, and a newer turn's read takes over one still running, from where that one began; in enforce mode the turn's end waits for it.
-- **Calls:** a read takes tens of reader calls, which Gadfly makes seven at a time, plus one Haiku call for the label; OpenRouter bills the reader's calls at the tier's price.
+- **Calls:** a read takes tens of reader calls, which Gadfly makes seven at a time for each of the two questions it asks at once, so up to fourteen, plus one Haiku call for the label; OpenRouter bills the reader's calls at the tier's price.
 - **Scope:** it tests whether a change rests on your requirements, not whether your requirements are right; work that touches the right files for the wrong reason is caught at completion, not per turn.
 - **Measured, not guaranteed:** the reader's calibration is summarised in [Rules](docs/rules.md#calibration).
 
@@ -68,7 +69,7 @@ node install.mjs --verify
 
 #### Gadfly
 
-Gadfly is on PyPI as `midwife` and needs Python 3.13; the hooks run the `gadfly` command it installs. `uv tool install midwife` brings its own Python instead:
+Gadfly is on PyPI as `midwife`, version 0.13 or later, and needs Python 3.13; the hooks run the `gadfly` command it installs. `uv tool install midwife` brings its own Python instead:
 
 ```sh
 pip install midwife
@@ -134,4 +135,4 @@ frame-loop's reader runs on Gadfly's trials. To cite the method, cite its paper:
 
 ---
 
-[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · [Rules](docs/rules.md) · [Privacy](docs/privacy.md#models) · [Crossings](docs/crossings.md) · [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Setup](docs/setup.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Apache-2.0](LICENSE)
+[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · [Crossings](docs/crossings.md) · [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Setup](docs/setup.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Apache-2.0](LICENSE)
