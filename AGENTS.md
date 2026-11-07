@@ -52,5 +52,5 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 - Docs: README brief, details in `docs/`; docs-only changes need link and fact checks, not a full test run. Shape: top-level sections are `###` headings under a `---` rule, since GitHub underlines `#` and `##`; section leads of two or three sentences at most; tables only for tabular data, run-in lists otherwise; explanation before a code block, no comments inside; at most one alert per section; each link once per page.
 - Docs voice: the docs describe the tool, in the third person and in the reader's terms; steps are imperatives; no sentence that carries no load.
 - The work is the user's and Claude's together: the docs say "the work" or "the change", never "Claude's work"; Claude's replies and plans stay Claude's.
-- Figures: SVG in the dolls' style, light and dark, every colour checked for contrast against its box; no more than two charts on a page.
+- Figures: SVG in nested frames, as in Gadfly's paper, light and dark, every colour checked for contrast against its box; no more than two charts on a page.
 - Commits: a Conventional Commits subject of at most 72 characters, a blank line, then a body hard-wrapped at 72. Messages stay objective and about this project.

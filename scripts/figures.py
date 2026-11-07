@@ -1,4 +1,4 @@
-"""Builds docs/images/frames-{light,dark}.svg: the dolls filled with one request, each span of the
+"""Builds docs/images/frames-{light,dark}.svg: nested frames filled with one request, each span of the
 request in its own hue, its rule beside it in the complementary hue, one shade deeper per
 level, every shade chosen by contrast against the box it sits in."""
 import colorsys

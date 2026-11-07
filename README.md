@@ -7,12 +7,12 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/dolls-dark.svg">
-    <img src="docs/images/dolls-light.svg" width="720" alt="Nested frames: You hold the method, frame-loop on Gadfly, which holds the workflow, Claude Code, which holds the reader. An outer frame declares and is never rewritten from inside; an inner one informs it only through a gate.">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/frames-dark.svg">
+    <img src="docs/images/frames-light.svg" width="720" alt="Nested frames, filled in with one request. You: add rate limiting to the API, over the limit return HTTP 429, and confirm its requirements and a rule. Method, frame-loop: the requirements broken down by crossing into two siblings, each with its own Claude turn and reading. Requests counted per client, each count resets after a minute: the turn adds a counter that resets each minute, and the reader finds it serves the reset, and does not once that requirement is hidden, so it fits. The HTTP 429 carries Retry-After, the seconds left in the window: the turn sets Retry-After from the window, and the reader finds it serves the seconds left, and does not once that requirement is hidden, so it fits.">
   </picture>
 </p>
 
-<p align="center"><em>Each frame holds the one inside it: an outer frame declares what the inner may do and is never rewritten from inside; an inner frame informs an outer one only through a gate.</em></p>
+<p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
 
 - **Frame 0:** your requirements in your words, fixed with your OK; every change is read against them.
 - **Free checks, every turn:** files, size, and what your rules require of the change, from `CLAUDE.md` and `AGENTS.md`.
@@ -29,15 +29,7 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 | git hooks | Claude Code hooks: a tree snapshot at each prompt, a check of the diff at each turn's end |
 | ablation | each fit tested by removing the requirement and asking again, by Gadfly's fixed trials |
 
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/images/frames-dark.svg">
-    <img src="docs/images/frames-light.svg" width="720" alt="The same frames, filled in with one request. You: add rate limiting to the API, over the limit return HTTP 429, and confirm its requirements and a rule. Method, frame-loop: the requirements broken down by crossing into two siblings, each with its own Claude turn and reading. Requests counted per client, each count resets after a minute: the turn adds a counter that resets each minute, and the reader finds it serves the reset, and does not once that requirement is hidden, so it fits. The HTTP 429 carries Retry-After, the seconds left in the window: the turn sets Retry-After from the window, and the reader finds it serves the seconds left, and does not once that requirement is hidden, so it fits.">
-  </picture>
-</p>
-
-<p align="center"><em>The same frames, filled in with one request. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
+---
 
 ### What you see
 
