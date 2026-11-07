@@ -33,11 +33,13 @@ A split is checked four ways, and each check is earned by a code check or a test
 
 In order, each step resting on the one before:
 
-1. **Contracts between siblings:** a statement both siblings quote, fixed at the crossing, with an obligation and its code check scoped to both siblings' paths, so it runs when either changes.
-2. **Cascading promises:** a parent's promise carried to each child as a derived constraint, with its check: code, a reading, or the user's review. A requirement may be shared by siblings.
-3. **The upward handshake:** when the climb reaches a parent, the crossing's own reading, then one confirmation by the user.
-4. **Siblings in parallel:** sibling nodes worked at the same time, each in its own scope, once their contracts hold.
-5. **Several readers to a reading:** more than one reader model, each scoring the change against frame 0 under the same trials, branching with the tree.
+1. **Invalidation, a change reopens what rests on it:** when frame 0 or a node changes, every node quoting it reopens with its descendants; its downward check, its contracts and its cascaded constraints are earned again, and its climb is undone back to the last parent that still holds. How far it travels is the reader's call, a removal test on the change asking whether the child's quote still carries under the new words, so a rewording does not cascade and a change of meaning does. Today a node is checked only when its own file is written, a child quotes its parent's requirement by id so a reworded requirement still counts as quoted, and a filled requirement stays filled; the rules already have this, as a guide changed since its rules were indexed and a rule whose quoted lines are gone.
+2. **Change-scoped runs, a change re-runs only what it reaches:** the change's paths map to nodes through their scopes, and the touched nodes name their parents (the climb) and their siblings (the contracts). Only those re-run: the obligations' code checks, the contract tests, the tested reader where meaning is in question, and a re-audit of the touched branches. A full run now and then is the backstop, and a coupling found there that no contract recorded becomes a contract; today the signals "outside the node's scope" and "an area no rule covers" are the first guard, since a change outside the map rises.
+3. **Contracts between siblings:** a statement both siblings quote, fixed at the crossing, with an obligation and its code check scoped to both siblings' paths, so it runs when either changes.
+4. **Cascading promises:** a parent's promise carried to each child as a derived constraint, with its check: code, a reading, or the user's review. A requirement may be shared by siblings.
+5. **The upward handshake:** when the climb reaches a parent, the crossing's own reading, then one confirmation by the user.
+6. **Siblings in parallel:** sibling nodes worked at the same time, each in its own scope, once their contracts hold.
+7. **Several readers to a reading:** more than one reader model, each scoring the change against frame 0 under the same trials, branching with the tree.
 
 ---
 
