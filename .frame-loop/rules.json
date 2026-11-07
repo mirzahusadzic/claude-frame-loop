@@ -3,7 +3,7 @@
  "version": 2,
  "source": {
   "file": "AGENTS.md",
-  "sha256": "1f0f40e29f81deeb756bf1d852520f79c87874d5ec92201a586fcdc43665adfe"
+  "sha256": "1f5ec0bec3a2a7449cd382a1a944bb304562c0144a5059f7dfef19f77ceb054e"
  },
  "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
  "rules": [
@@ -138,9 +138,9 @@
     "docs/images/*",
     "scripts/figures.py"
    ],
-   "text": "figures in the dolls' style, contrast checked",
+   "text": "figures in nested frames, contrast checked",
    "quote": [
-    "Figures: SVG in the dolls' style, light and dark, every colour checked for contrast against its box; no more than two charts on a page."
+    "Figures: SVG in nested frames, as in Gadfly's paper, light and dark, every colour checked for contrast against its box; no more than two charts on a page."
    ],
    "check": null,
    "accepted": true

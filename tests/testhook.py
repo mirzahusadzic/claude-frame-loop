@@ -2454,6 +2454,17 @@ class ReadOnlyTests(unittest.TestCase):
         flags = [h.get("onFailure") for entries in settings["hooks"].values() for e in entries for h in e["hooks"]]
         self.assertNotIn("block", flags)
 
+    def test_the_projects_rules_index_matches_its_guide(self):
+        """The first review: AGENTS.md changed and its rules index did not, so the release's
+        own briefing reported a rule lost. Edit the two together."""
+        import hashlib
+        rules = json.loads((ROOT / ".frame-loop/rules.json").read_text())
+        guide = (ROOT / rules["source"]["file"]).read_bytes()
+        self.assertEqual(rules["source"]["sha256"], hashlib.sha256(guide).hexdigest(), "re-index AGENTS.md")
+        words = " ".join(guide.decode().split())
+        lost = [r["id"] for r in rules["rules"] for q in r.get("quote") or [] if " ".join(q.split()) not in words]
+        self.assertEqual(lost, [])
+
     def test_no_band_hook_can_hold_up_a_prompt(self):
         """`claude plugin validate`: a gating hook without `.catch` fails closed, so a throw
         in the band's prompt hook could stop the author's prompt."""
