@@ -67,6 +67,8 @@ Three pieces: the Unified Model Router, which the reader is called through; Gadf
 | Python 3.13 or later, which `uv tool install` brings, and git | Gadfly and the hooks: the hooks run on Gadfly's own Python, so one install serves both |
 | Node.js 20 or later, the Codex CLI and an OpenRouter API key | the router |
 
+The router installs through the Codex CLI and serves both harnesses; you get Codex set up alongside, on the same tiers.
+
 #### Router
 
 The router serves Muse Spark 1.3 and Muse Spark 1.3 Contributor from one OpenRouter API key, which its first install asks for. It needs Node.js 20 and the Codex CLI it was tested with; its installer sets up Codex's configuration, asking before it merges into an existing one and backing it up, and adds a startup service that runs the router. Its own README has the details:

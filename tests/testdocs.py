@@ -75,6 +75,8 @@ class DocsTests(unittest.TestCase):
                 "OpenRouter API key",
                 "startup service",
             )
+            if name == "README.md":  # the router's coupling to Codex, said up front as a feature
+                needs += ("serves both harnesses",)
             for need in needs:
                 self.assertIn(need, text, f"{name}: {need}")
 

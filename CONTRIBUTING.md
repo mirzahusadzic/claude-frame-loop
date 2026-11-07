@@ -1,5 +1,7 @@
 # Contributing
 
+frame-loop targets Claude Code. Ports to other harnesses are welcome as community work.
+
 Changes follow [AGENTS.md](AGENTS.md): what to preserve, how to validate, and how to document. frame-loop checks its own repository with the rules indexed from that guide in `.frame-loop/rules.json`.
 
 ---
