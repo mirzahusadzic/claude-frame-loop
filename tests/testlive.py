@@ -131,6 +131,28 @@ class LiveFileTests(unittest.TestCase):
         live._live_interrupted()
         self.assertEqual(self.path.read_text(encoding="utf-8"), '{"state": "read')
 
+    def test_a_live_file_that_is_no_object_reads_as_none(self):
+        """A live file of valid JSON that is no object would crash the next prompt's hook."""
+        for text in ("[]", "3", '"reading"', "null"):
+            self.path.write_text(text, encoding="utf-8")
+            live._live_interrupted()
+            self.assertEqual(self.path.read_text(encoding="utf-8"), text)
+
+    def test_a_history_that_is_no_object_gives_no_estimate_and_no_error(self):
+        """A history of valid JSON that is no object, or a step in it that is none, would
+        crash every reading's first step or the record of what it took."""
+        work = self.tmp / "work"
+        work.mkdir()
+        for text in ("[]", "3", '{"fit": 4}', '{"fit": [4]}'):
+            (work / "live-history.json").write_text(text, encoding="utf-8")
+            with mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": str(work)}):
+                live._live_step("a step", 1, 1, key="fit")
+                shown = json.loads(self.path.read_text(encoding="utf-8"))
+                self.assertIsNone(shown["expected"])
+                self.assertIsNone(shown["expected_seconds"])
+                live._ran({"made": 4})
+            self.assertEqual(json.loads((work / "live-history.json").read_text(encoding="utf-8"))["fit"]["calls"], 4)
+
     def test_an_interrupted_read_is_closed_and_a_finished_one_left(self):
         """A read the user stopped would show as still checking in the band."""
         self.path.write_text(json.dumps({"state": "reading", "pid": None}), encoding="utf-8")

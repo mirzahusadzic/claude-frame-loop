@@ -114,6 +114,8 @@ def _live_interrupted() -> None:
     path = Path(folder) / f"{state.SESSION}.json" if folder and state.SESSION else None
     try:
         shown = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
+        if not isinstance(shown, dict):  # valid JSON that is no live state: nothing to close
+            return
         if shown.get("state") == "reading" and not _alive(shown.get("pid")):  # a background read lives on
             _live(
                 state="done", decision="interrupted", lines=["frame-loop · the last check was interrupted"], detail=[]
@@ -126,6 +128,7 @@ def _live_step(what: str, n: int = 0, of: int = 0, key: str | None = None) -> No
     """A reading's step as it starts: what is asked now, which of how many, and what the
     same step took last time, for an estimate of what is left."""
     state.LIVE.setdefault("started", time.time())
+    expected = _history().get(key) if key else None
     state.LIVE["step"] = {
         "what": what,
         "n": n,
@@ -133,7 +136,7 @@ def _live_step(what: str, n: int = 0, of: int = 0, key: str | None = None) -> No
         "key": key,
         "at": time.time(),
         "answers": 0,
-        "expected": _history().get(key) if key else None,
+        "expected": expected if isinstance(expected, dict) else None,
     }
     _live_now()
 
@@ -175,11 +178,13 @@ def _history_path() -> Path | None:
 
 
 def _history() -> dict[str, Any]:
+    """What each step took last time; a history that is torn or no object is none."""
     path = _history_path()
     try:
-        return json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
+        known = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
     except (OSError, ValueError):
         return {}
+    return known if isinstance(known, dict) else {}
 
 
 def _ran(read: dict[str, Any]) -> None:
