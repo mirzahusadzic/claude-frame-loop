@@ -192,6 +192,19 @@ class ClimbTests(unittest.TestCase):
         self.assertTrue(state["root"]["filled"]["A1"] and state["root"]["filled"]["A2"])
         self.assertTrue(state["root"]["complete"])
 
+    def test_a_chain_of_two_thousand_nodes_climbs_to_the_root(self):
+        """A climb by recursion would stop near a thousand nodes deep with a RecursionError."""
+        nodes, parent, quotes = {"root": FRAME0}, "root", "A1"
+        for i in range(2000):
+            nid, aid = f"n{i}", f"N{i}"
+            nodes[nid] = {"id": nid, "parent": parent, "asks": [{"id": aid, "quotes": quotes, "owner": "children"}]}
+            parent, quotes = nid, aid
+        nodes[parent]["asks"][0]["owner"] = "leaves"
+        state = tree.climb(nodes, {(parent, quotes)})
+        self.assertTrue(state["n0"]["complete"])
+        self.assertTrue(state["root"]["filled"]["A1"])
+        self.assertFalse(tree.climb(nodes, set())["root"]["filled"]["A1"])
+
 
 class LoadTests(unittest.TestCase):
     """The tree folder as the hook reads it."""

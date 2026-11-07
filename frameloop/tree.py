@@ -201,7 +201,12 @@ def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:
 def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> dict[str, dict[str, Any]]:
     """Each node's asks filled and whether it is complete, from the completions that read
     carried and firm, as (node, ask) pairs."""
-    children = {nid: [n for n in nodes.values() if n.get("parent") == nid] for nid in nodes}
+    children: dict[str, list[dict[str, Any]]] = {nid: [] for nid in nodes}
+    for n in nodes.values():
+        try:
+            children[n.get("parent")].append(n)
+        except (KeyError, TypeError):  # the root, an unknown parent, or one that is no name
+            pass
     state: dict[str, dict[str, Any]] = {}
 
     def owner(nid: str, ask: dict[str, Any]) -> str:
@@ -211,11 +216,18 @@ def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> 
             )
         return ask.get("owner", "leaves")
 
-    def visit(nid: str) -> dict[str, Any]:
-        if nid in state:
-            return state[nid]
+    # The nodes from the root down by a stack, not recursion, so a tree of any depth climbs;
+    # then read bottom up, each child before its parent. A node is taken once.
+    order, taken, stack = [], {"root"}, ["root"]
+    while stack:
+        nid = stack.pop()
+        order.append(nid)
         for child in children[nid]:
-            visit(child["id"])
+            if child["id"] not in taken:
+                taken.add(child["id"])
+                stack.append(child["id"])
+
+    for nid in reversed(order):
         filled = {}
         for ask in nodes[nid].get("asks") or []:
             if owner(nid, ask) == "leaves":
@@ -223,10 +235,7 @@ def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> 
             else:
                 quoting = [(c["id"], a["id"]) for c in children[nid] for a in c["asks"] if a.get("quotes") == ask["id"]]
                 filled[ask["id"]] = bool(quoting) and all(
-                    state[c]["complete"] and state[c]["filled"][a] for c, a in quoting
+                    c in state and state[c]["complete"] and state[c]["filled"][a] for c, a in quoting
                 )
         state[nid] = {"filled": filled, "complete": bool(filled) and all(filled.values())}
-        return state[nid]
-
-    visit("root")
     return state
