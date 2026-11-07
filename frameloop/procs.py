@@ -52,7 +52,7 @@ def stop_tree(proc: subprocess.Popen, windows: bool = os.name == "nt") -> None:
         if windows:
             subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=30)
         else:
-            os.killpg(proc.pid, signal.SIGKILL)
+            os.killpg(proc.pid, getattr(signal, "SIGKILL", 9))  # POSIX only; named for any system
     except (OSError, subprocess.SubprocessError):
         try:
             proc.kill()

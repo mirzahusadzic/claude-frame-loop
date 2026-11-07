@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -49,6 +50,16 @@ class StopTreeTests(unittest.TestCase):
         with mock.patch.object(procs.os, "killpg", side_effect=OSError("gone"), create=True):
             procs.stop_tree(fake, windows=False)
         fake.kill.assert_called_once()
+
+    def test_the_posix_stop_names_its_signal_on_any_system(self):
+        """CI on Windows: `signal.SIGKILL` does not exist there, so naming it raised."""
+        fake = self.proc()
+        with (
+            mock.patch.object(procs, "signal", types.SimpleNamespace()),
+            mock.patch.object(procs.os, "killpg", create=True) as killpg,
+        ):
+            procs.stop_tree(fake, windows=False)
+        killpg.assert_called_once_with(4242, 9)
 
     def test_a_process_that_will_not_die_is_left_for_later_never_waited_on(self):
         fake = self.proc()
