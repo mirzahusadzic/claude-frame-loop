@@ -116,6 +116,15 @@ class DocsTests(unittest.TestCase):
             "semantic", json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["keywords"]
         )
 
+    def test_the_readme_names_the_plugins_version(self):
+        """The plugin's version moves each release, or installed copies never update; the README's
+        alpha line and badge say the same version."""
+        version = json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["version"]
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(f"Early alpha ({version})", readme)
+        self.assertIn(f"status-alpha%20{version}", readme)
+        self.assertNotIn('"version"', (ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

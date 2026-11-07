@@ -9,7 +9,7 @@ Installation, the reader's path through the router, and every setting. The [READ
 | Needs | For | Check |
 | --- | --- | --- |
 | Claude Code, tested with 2.1.319 | the hooks, the band and `/frame-loop` (a hooks module), and the writer through `claude -p` | `claude --version` |
-| git | the turn snapshots | `git --version` |
+| git; on Windows, Git for Windows, whose Git Bash Claude Code runs the hooks with | the turn snapshots, and the hooks' shell on Windows | `git --version` |
 | [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.13 or later, on Python 3.13: `uv tool install 'midwife>=0.13'` | the reader's trials and fixed rules; its Python also runs the hooks | `gadfly --version` |
 | [uv](https://docs.astral.sh/uv/) | installing Gadfly with its own Python 3.13, or running it from a checkout | `uv --version` |
 | the [Unified Model Router](https://github.com/mirzahusadzic/unified-model-router), with Node.js 20 or later, the Codex CLI it was tested with (0.166.0) and an OpenRouter API key | the reader's model calls | `node install.mjs --verify`, in the router's checkout |

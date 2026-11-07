@@ -1,8 +1,10 @@
 # <img src="assets/icon.svg" width="36" height="36" alt="" align="top"> frame-loop
 
 [![CI](https://github.com/mirzahusadzic/claude-frame-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/mirzahusadzic/claude-frame-loop/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.13+](https://img.shields.io/badge/python-3.13%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
+![macOS · Linux · Windows](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)
 ![alpha 0.1.0](https://img.shields.io/badge/status-alpha%200.1.0-e5a50a)
 
 Early alpha (0.1.0): used so far by its author. Expect rough edges and changes between versions; pin a version if you need stability. Report problems in [GitHub issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
@@ -64,7 +66,7 @@ Three pieces: the Unified Model Router, which the reader is called through; Gadf
 | Needs | For |
 | --- | --- |
 | Claude Code (tested with 2.1.319) | the hooks, the band and `/frame-loop` |
-| Python 3.13 or later, which `uv tool install` brings, and git | Gadfly and the hooks: the hooks run on Gadfly's own Python, so one install serves both |
+| Python 3.13 or later, which `uv tool install` brings, and git (on Windows, Git for Windows) | Gadfly and the hooks: the hooks run on Gadfly's own Python, so one install serves both, on macOS, Linux and Windows |
 | Node.js 20 or later, the Codex CLI and an OpenRouter API key | the router |
 
 The router installs through the Codex CLI and serves both harnesses; you get Codex set up alongside, on the same tiers.
@@ -135,7 +137,7 @@ State the work as usual; Claude restates it as requirements and saves them once 
 
 ### Develop
 
-Tests need no API key and no network, and run on macOS, Linux and Windows. `sh scripts/coverage.sh` measures branch coverage of the hooks, their own processes included, and fails under the floor in `.coveragerc`, 99%; coverage.py lives in a venv of its own under `tests/.work`, never in the plugin. The tests that run Gadfly skip when it is not installed, and the contract tests also need a checkout named by `GADFLY_CHECKOUT`:
+Tests need no API key and no network, and CI runs them on macOS, Linux and Windows, on Python 3.13, 3.14 and 3.15. `sh scripts/coverage.sh` measures branch coverage of the hooks, their own processes included, and fails under the floor in `.coveragerc`, 99%; coverage.py lives in a venv of its own under `tests/.work`, never in the plugin. The tests that run Gadfly skip when it is not installed, and the contract tests also need a checkout named by `GADFLY_CHECKOUT`:
 
 ```sh
 python3 -m unittest discover -s tests
@@ -163,4 +165,4 @@ frame-loop's reader runs on Gadfly's trials. To cite the method, cite its paper:
 
 ---
 
-[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · advanced, not needed for a first check: [Crossings](docs/crossings.md) and [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Setup](docs/setup.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Apache-2.0](LICENSE)
+[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · advanced, not needed for a first check: [Crossings](docs/crossings.md) and [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Setup](docs/setup.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
