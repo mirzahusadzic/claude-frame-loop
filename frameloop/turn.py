@@ -344,6 +344,10 @@ def _this_turn() -> list[dict[str, Any]]:
 def _turn_acts(turn: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[Any]]:
     """The turn's acts and the guides it changed."""
     acts = [r for r in turn if r.get("event") in ("outward", "config")]
+    # A command's act counts as done only once it ran: PostToolUse records it; a denied or
+    # failed command never does.
+    ran = [r.get("command") for r in turn if r.get("event") == "act-ran"]
+    acts = [{**r, "ran": r.get("command") in ran} if r.get("event") == "outward" else r for r in acts]
     start = next((r for r in turn if r.get("event") == "guides"), None)
     return acts, (guide_changes(start["lines"], state.CWD) if start else [])
 

@@ -21,7 +21,7 @@ The change is put into plain words first (with labels on); then two questions ru
 | ✓ checked: does what you asked, breaks none of your rules | read; the fit rests on the declared requirement; neither of two readings named a rule | nothing |
 | ✓ checked: nothing in this change needed a closer look | free checks only, all met | nothing |
 | ✓ every requirement is done | completion: each requirement read as done over its changes | nothing |
-| · Claude pushed to GitHub | an act reported in a turn with nothing to read | nothing, unless you did not expect it |
+| · Claude pushed | an act reported in a turn with nothing to read | nothing, unless you did not expect it |
 | · the last check was interrupted | the check stopped before its outcome | ask for a reading again |
 | ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
@@ -45,7 +45,8 @@ Acts the loop always reports, after the outcome on the same line. In shadow mode
 
 | Act | ▲ in shadow mode |
 | --- | --- |
-| Claude pushed to GitHub · made a GitHub release · published a package | no |
+| Claude pushed · made a GitHub release · published a package | no |
+| Claude asked to push (or another act), and it did not run: denied, or the command failed | no |
 | Claude changed something people see | no |
 | Claude changed the loop's own files · ran a command on the loop's own files · tried, and it did not go through | no |
 | AGENTS.md: 5 lines added, 2 lines removed; your rules all still hold | no |

@@ -277,6 +277,8 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         )
     if name in ("PostToolUse", "PostToolUseFailure") and tool == "Bash":
         ran(event, frame0, ok=name == "PostToolUse")
+        if name == "PostToolUse" and F.outward(tool_input.get("command", "")):  # the act ran, as asked
+            _log({"event": "act-ran", "command": tool_input.get("command", "")})
     if name == "PostToolUse":
         if _training_on():
             capture(tool or "", tool_input, event.get("tool_response"))

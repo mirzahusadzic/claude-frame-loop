@@ -2469,6 +2469,51 @@ class CoreTests(unittest.TestCase):
         act = next(r for r in record._records_all() if r.get("event") == "outward" and r.get("session") == self.session)
         self.assertIn("git push origin main", lines.act_words(act)[2])
 
+    def test_an_act_that_did_not_run_is_never_reported_as_done(self):
+        """The cold review (L1): a push asked about and denied was still reported as done, and a push to
+        GitLab read "pushed to GitHub"."""
+        for ran in (False, True):
+            session = f"{self.session}-ran-{ran}"
+            hook.answer(
+                {"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"}
+            )
+            push = {"command": "git push origin main"}
+            hook.answer(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                    "session_id": session,
+                    "cwd": str(REPO),
+                    "tool_input": push,
+                }
+            )
+            if ran:
+                hook.answer(
+                    {
+                        "hook_event_name": "PostToolUse",
+                        "tool_name": "Bash",
+                        "session_id": session,
+                        "cwd": str(REPO),
+                        "tool_input": push,
+                        "tool_response": {"stdout": ""},
+                    }
+                )
+            out = hook.answer(
+                {
+                    "hook_event_name": "Stop",
+                    "session_id": session,
+                    "cwd": str(REPO),
+                    "last_assistant_message": "done",
+                    "stop_hook_active": False,
+                }
+            )
+            said = (out or {}).get("systemMessage", "")
+            self.assertNotIn("GitHub", said)
+            if ran:
+                self.assertIn("Claude pushed: git push origin main", said)
+            else:
+                self.assertIn("Claude asked to push, and it did not run: git push origin main", said)
+
     def test_a_docs_edit_under_a_docs_rule_starts_no_read(self):
         """Seen on the loop's release: every docs edit was read for two minutes, on three
         false signals: no rule covers docs, docs "have no effect", and a large change."""
@@ -2634,6 +2679,16 @@ class CoreTests(unittest.TestCase):
                 "session_id": self.session,
                 "cwd": str(REPO),
                 "tool_input": {"command": "rm -rf build"},
+            }
+        )
+        hook.answer(  # the delete ran, as Claude Code reports after the call
+            {
+                "hook_event_name": "PostToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": "rm -rf build"},
+                "tool_response": {"stdout": ""},
             }
         )
         hook.answer(

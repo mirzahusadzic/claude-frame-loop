@@ -18,7 +18,7 @@ import state
 
 # What an act the loop watches means to the author, by its trigger: (words, needs the author).
 ACT_WORDS = (
-    ("git push", "Claude pushed to GitHub", False),
+    ("git push", "Claude pushed", False),
     ("gh release", "Claude made a GitHub release", False),
     ("npm publish", "Claude published a package", False),
     ("twine upload", "Claude published a package", False),
@@ -32,6 +32,20 @@ ACT_WORDS = (
     ("T4:", "Claude touched a personal file", True),
     ("L1:", "Claude changed the loop's own files", False),
 )
+
+
+# An act asked for that did not run (denied, or the command failed), in the author's words.
+ASKED = {
+    "git push": "Claude asked to push",
+    "gh release": "Claude asked to make a GitHub release",
+    "npm publish": "Claude asked to publish a package",
+    "twine upload": "Claude asked to publish a package",
+    " publish": "Claude asked to publish a package",
+    "gem push": "Claude asked to publish a package",
+    "rm -": "Claude asked to delete a folder",
+    "git clean": "Claude asked to delete untracked files",
+    "find -delete": "Claude asked to delete files",
+}
 
 
 def _landed(record: dict[str, Any]) -> bool:
@@ -55,6 +69,9 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     )
     for key, words, needs in ACT_WORDS:
         if key in said:
+            # A command asked for, denied or failed, ran no act: said so, never as done (the cold review, L1).
+            if record.get("event") == "outward" and record.get("ran") is False:
+                return f"{ASKED.get(key, 'Claude asked for an act')}, and it did not run", False, exact
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
                 words = "Claude ran a command on the loop's own files"
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
