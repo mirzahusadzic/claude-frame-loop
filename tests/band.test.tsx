@@ -138,3 +138,36 @@ test('the band reads the live folder the settings name', async ($, on) => {
   for (let i = 0; i < 20 && !read.includes('/data/live/s.json'); i++) await new Promise(r => setTimeout(r, 10))
   expect(read).toContain('/data/live/s.json')
 })
+
+test('after /clear or a resume, the band shows the new session, never the last one', async ($, on) => {
+  const store = seed(on, null)
+  const files: Record<string, unknown> = {
+    '/home/u/.claude/frame-loop/live/old.json': { session: 'old', at: 50, state: 'done', decision: 'pass', started: 10 },
+    '/home/u/.claude/frame-loop/live/new.json': { session: 'new', at: 55, state: 'done', decision: 'rise', started: 52,
+                                                  lines: ['frame-loop ▲ needs you: the new session'] },
+  }
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    const file = files[posix(e.path)]
+    if (file === undefined) throw new Error('no such file')
+    return { value: JSON.stringify(file) }
+  })
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/home/u' : undefined }))
+  let session = 'old'
+  on('session.id', () => ({ value: session }))
+  let periods = 0
+  on('clock.every', () => {
+    periods++
+    if (periods === 3) session = 'new' // the hooks now write the new session's file
+    return periods <= 5 ? { value: undefined } : { deny: 'enough periods' }
+  })
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('clock.now', () => ({ value: 60000 }))
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  const shown = () => (store.live?.value as { session?: string } | null)?.session
+  for (let i = 0; i < 50 && shown() !== 'new'; i++) await new Promise(r => setTimeout(r, 10))
+  expect(shown()).toBe('new')
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /needs you/ }))?.text).toBe('needs you: the new session')
+  await ui.unmount()
+})

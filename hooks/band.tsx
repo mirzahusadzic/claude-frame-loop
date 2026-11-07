@@ -47,16 +47,15 @@ let switchPath = ''
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) // Windows may set only the latter
-    const id = await $.session.id()
     // Where the hooks write it: FRAME_LOOP_LIVE when the settings name a folder, as the hook reads it.
     const folder = (await $.env.get('FRAME_LOOP_LIVE')) || `${home}/.claude/frame-loop/live`
-    const path = `${folder}/${id}.json`
     switchPath = `${e.cwd}/.frame-loop/switch`
     await $.command.register({
       name: 'frame-loop',
       description: 'Switch frame-loop on or off for this project: /frame-loop, /frame-loop on, /frame-loop off',
     })
     let seen = 0
+    let shownFor = ''
     $.clock.every(250, async () => {
       try {
         const isOff = (await $.fs.read(switchPath)).trim().toLowerCase() === 'off'
@@ -64,6 +63,15 @@ export const register: Register = on => {
       } catch {
         // no switch file: on
       }
+      // The session's id at each tick: after /clear or a resume the hooks write the new
+      // session's file, and the last session's outcome is no longer this one's.
+      const id = await $.session.id()
+      if (id !== shownFor) {
+        shownFor = id
+        seen = 0
+        if ((await read($, live)) !== null) await update($, live, () => null)
+      }
+      const path = `${folder}/${id}.json`
       let now: Live | null = null
       try {
         now = JSON.parse(await $.fs.read(path)) as Live
