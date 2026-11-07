@@ -1260,6 +1260,26 @@ class ChannelTests(unittest.TestCase):
         self.assertIn("outside", out["systemMessage"])
         self.assertEqual(seen, [])
 
+    def test_every_spelling_of_an_outside_path_in_a_shell_read_is_held(self):
+        """The first review: `cat</path`, a quoted path with a space and `$HOME/…` read a
+        file outside the project, and its lines were not held."""
+        spaced = Path(OUTSIDE) / f"frame-loop private {uid(self)}" / "notes.py"
+        spaced.parent.mkdir()
+        spaced.write_text(self.SECRET_LINE + "\n")
+        self.addCleanup(lambda: spaced.exists() and spaced.unlink())
+        home = Path(os.path.expanduser("~"))
+        commands = [f"cat<{self.outside}", f'cat "{spaced}"']
+        if home in self.outside.resolve().parents:  # only where the temporary folder is under the home
+            commands.append("cat $HOME/" + str(self.outside.resolve().relative_to(home)))
+        self.assertIn(privacy.real_home() + "/notes/a.py", privacy._path_words('cat "${HOME}/notes/a.py"'))
+        for n, command in enumerate(commands):
+            session = f"spell-{n}-{uid(self)}"
+            self.post("Bash", {"command": command}, {"stdout": self.SECRET_LINE + "\n"}, session=session)
+            seen = loaded_seen()
+            out = self.read_turn(self.SECRET_LINE, session=session)
+            self.assertIn("outside", out["systemMessage"], command)
+            self.assertEqual(seen, [], command)
+
     def test_another_session_is_not_held_by_this_ones_reads(self):
         self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="c2")
         seen = loaded_seen()

@@ -11,11 +11,13 @@ import importlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
 
+import facts as F
 import readers
 import signals as S
 import state
@@ -235,6 +237,24 @@ def _outside_path(token: str) -> bool:
     return not (resolved == root or root in resolved.parents)
 
 
+def _path_words(command: str) -> list[str]:
+    """Every word of a shell command that may name a file: split as the shell splits it,
+    quotes kept together, redirects apart (`cat</x`), `$HOME` expanded, and split at the
+    quotes and `=` too, for a path inside a longer word."""
+    home = real_home()
+    words: list[str] = []
+    for part in F._split(command):
+        try:
+            lexer = shlex.shlex(part, posix=True, punctuation_chars=True)
+            lexer.whitespace_split = True
+            words += list(lexer)
+        except ValueError:
+            pass
+    words += re.split(r"[\s'\"=<>|;&()]+", command)
+    expanded = [w.replace("${HOME}", home).replace("$HOME", home) for w in words]
+    return list(dict.fromkeys(w for w in expanded if "/" in w or w.startswith("~")))
+
+
 def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
     """After a tool ran: hold what it brought in from outside the project."""
     if tool in ("Read", "NotebookRead", "Grep"):
@@ -243,8 +263,7 @@ def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
             hold(response, path)
     elif tool == "Bash":
         command = tool_input.get("command", "")
-        tokens = [t for t in re.split(r"[\s'\"=]+", command) if "/" in t or t.startswith("~")]
-        outside = next((t for t in tokens if _outside_path(t)), None)
+        outside = next((t for t in _path_words(command) if _outside_path(t)), None)
         if outside or NETWORK.search(command):
             hold(response, outside or command.split()[0])
     elif tool.startswith("mcp__"):
