@@ -214,6 +214,19 @@ def _act(words: list[str], depth: int) -> str | None:
     return None
 
 
+PIPED_TO_SHELL = "\0piped to a shell\0"
+
+
+def _printed(segment: str) -> list[str]:
+    """What a command before a pipe prints: its quoted strings, and an `echo` or `printf`
+    line's words, quoted or not."""
+    said = [a or b for a, b in re.findall(r"'([^']*)'|\"([^\"]*)\"", segment) if a or b]
+    words = command_words(_words(segment))
+    if words and program(words[0]) in ("echo", "printf"):
+        said.append(" ".join(_flags(words[1:], set())))
+    return said
+
+
 def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
     """The command without its heredocs' text, the line that opens each kept, and each
     heredoc's text with the command that reads it."""
@@ -222,7 +235,9 @@ def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
         opening = heredoc.group(0).split("\n", 1)[0]
         line = command[: heredoc.start()].rsplit("\n", 1)[-1]
         parts = _split(line)
-        bodies.append((parts[-1] if parts else "", heredoc.group(3)))
+        after = re.sub(r"^<<-?\s*(?:\\|['\"]?)\w+['\"]?", "", opening)  # `<<'EOF' | bash`
+        piped = re.match(r"\s*\|\s*(?:\S*/)?(?:bash|sh|zsh|dash|ksh)\b", after)
+        bodies.append((PIPED_TO_SHELL if piped else parts[-1] if parts else "", heredoc.group(3)))
         kept.append(command[at : heredoc.start()] + re.sub(r"^<<-?\s*(?:\\|['\"]?)\w+['\"]?", " ", opening))
         at = heredoc.end()
     return "".join(kept) + command[at:], bodies
@@ -250,20 +265,23 @@ def outward(command: str, depth: int = 0) -> str | None:
     """The outward or irreversible act a shell command runs, if any."""
     found = None
     text, bodies = heredocs(command)
-    for reader, body in bodies:  # a heredoc a shell reads runs as commands
+    for reader, body in bodies:  # a heredoc a shell reads runs as commands, piped to one too
         words = _words(reader)
-        if words and program(words[0]) in SHELLS | {"eval"} and depth < 3:
+        if depth < 3 and (words and program(words[0]) in SHELLS | {"eval"} or reader in PIPED_TO_SHELL):
             found = found or outward(body, depth + 1)
     for part in _split(text):
         found = found or _act(_words(part), depth)
-    # `echo 'git push' | bash`: a shell reading a pipe runs what the commands before it print.
-    if (
-        depth < 3
-        and not found
-        and re.search(r"\|\s*(?:\S*/)?(?:bash|sh|zsh|dash|ksh)\b(?:\s+-\w+)*\s*(?:$|[;&|)])", text)
-    ):
-        for printed in re.findall(r"'([^']*)'|\"([^\"]*)\"", text.split("|")[0]):
-            found = found or outward(next(x for x in printed if x is not None), depth + 1)
+    # `echo 'git push' | bash`: a shell reading a pipe runs what the commands before it print,
+    # and `echo push | xargs git` runs git with them.
+    if depth < 3 and not found:
+        printed = _printed(text.split("|")[0])
+        if re.search(r"\|\s*(?:\S*/)?(?:bash|sh|zsh|dash|ksh)\b(?:\s+-\w+)*\s*(?:$|[;&|)])", text):
+            for said in printed:
+                found = found or outward(said, depth + 1)
+        xargs = re.search(r"\|\s*((?:\S*/)?xargs\b[^|;&]*)", text)
+        run = command_words(_words(xargs.group(1))) if xargs else []
+        for said in printed if run else []:  # bare `xargs` only echoes: no command, no act
+            found = found or _act(run + _words(said), depth)
     for inner in substitutions(command) if depth < 3 else []:
         found = found or outward(inner, depth + 1)
     return found

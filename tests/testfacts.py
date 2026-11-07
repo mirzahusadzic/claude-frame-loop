@@ -149,6 +149,35 @@ class ReviewActTests(unittest.TestCase):
             self.assertIsNone(facts.outward(command), command)
 
 
+class PipedActTests(unittest.TestCase):
+    """Sparky's second review: the pipe into a shell was read for single-quoted strings only,
+    so a double-quoted or unquoted act, a heredoc piped to a shell and words piped into
+    `xargs git` ran unseen."""
+
+    def test_every_act_a_pipe_runs_counts(self):
+        runs = {
+            'echo "git push" | bash': "git push",
+            "echo git push origin main | sh": "git push",
+            "cat <<'EOF' | bash\ngit push origin main\nEOF": "git push",
+            "echo push | xargs git": "git push",
+            "printf 'rm -rf build' | /bin/bash": "rm -r",
+        }
+        for command, act in runs.items():
+            with self.subTest(command):
+                self.assertEqual(facts.outward(command), act)
+
+    def test_a_pipe_that_runs_nothing_is_no_act(self):
+        for command in (
+            "printf 'git push' | xargs",  # a bare xargs only echoes
+            'echo "hello" | bash',
+            "cat <<'EOF' > notes.md\ngit push\nEOF",
+            "grep push log | wc -l",
+            "echo push | xargs grep -n",
+        ):
+            with self.subTest(command):
+                self.assertIsNone(facts.outward(command))
+
+
 class ReviewFollowUpTests(unittest.TestCase):
     """Tendy's review of the cold-review fixes."""
 
