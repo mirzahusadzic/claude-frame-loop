@@ -4,6 +4,7 @@ own files, and no tree at all when git cannot make one."""
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -70,3 +71,22 @@ class SnapshotTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnicodePathTests(unittest.TestCase):
+    """The cold review, M3: git quoted a name that is not plain ASCII, so `café.py` matched no
+    scope, rule or obligation, and an owed check went silently unowed."""
+
+    def test_a_changed_file_is_named_as_it_is(self):
+        import turn
+
+        project = Path(tempfile.mkdtemp(prefix="frame-loop-unicode-"))
+        run = lambda *a: subprocess.run(["git", *a], cwd=project, capture_output=True, check=True)  # noqa: E731
+        run("init", "-q")
+        run("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "start")
+        before = repo.snapshot(str(project))
+        (project / "café.py").write_text("print('ok')\n", encoding="utf-8")
+        after = repo.snapshot(str(project))
+        step = turn.step_label(str(project), before, after, {"asks": [], "scope": ["café.py"]}, [])
+        self.assertEqual(step["paths"], ["café.py"])
+        self.assertFalse([s for s in step["signals"] if "not authorized" in s], step["signals"])

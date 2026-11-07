@@ -22,7 +22,15 @@ def project_root(cwd: str | None) -> Path:
 def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "GIT_INDEX_FILE": index} if index else None
     return subprocess.run(
-        ["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env
+        # Paths as they are: git otherwise quotes a name that is not plain ASCII ("caf\303\251.py"),
+        # and it then matches no scope, rule or check (the cold review, M3).
+        ["git", "-c", "core.quotePath=false", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        env=env,
     )
 
 
