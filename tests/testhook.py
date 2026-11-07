@@ -1954,6 +1954,30 @@ class CoreTests(unittest.TestCase):
         self.assertIn("changes are not read here: this project is not a git repository", said[0])
         self.assertNotIn("changes are not read here", said[1])
 
+    def test_a_turn_that_was_not_read_is_never_a_check_mark(self):
+        """The cold review (H2): in a folder outside git no turn is read, and the band showed a green
+        check, the first turn beside "changes are not read here"."""
+        live = WORK / f"live-nogit-{uid(self)}"
+        os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_LIVE=str(live))
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        plain = Path(tempfile.mkdtemp(prefix="frame-loop-nogit-"))
+        for n in range(2):
+            hook.answer(
+                {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(plain), "prompt": "go"}
+            )
+            (plain / "notes.md").write_text(f"{uid(self)} {n}\n", encoding="utf-8")
+            hook.answer(
+                {
+                    "hook_event_name": "Stop",
+                    "session_id": self.session,
+                    "cwd": str(plain),
+                    "last_assistant_message": "done",
+                    "stop_hook_active": False,
+                }
+            )
+            shown = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+            self.assertEqual(shown["decision"], "block", n)
+
     def test_the_switch_is_never_part_of_the_change(self):
         """The first review: writing the switch in a turn made it the change, and a paid
         reading of it."""

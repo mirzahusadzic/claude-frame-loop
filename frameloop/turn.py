@@ -188,6 +188,7 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     # The turn's first start: a message the author sends mid-turn starts no new turn.
     before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
     if before is None or after is None:
+        state.LIVE["decision"] = gate.BLOCK  # not read: never a check mark in the band (the cold review, H2)
         if not any(r.get("event") == "unreadable-project" for r in records):  # once a session, under the reply
             _log({"event": "unreadable-project", "cwd": cwd})
             state.LIVE.setdefault("shorts", []).append(
