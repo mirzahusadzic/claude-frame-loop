@@ -191,3 +191,41 @@ class ReviewProtectedTests(unittest.TestCase):
             self.assertTrue(config.touches_config(str(live / "session.json")))
             self.assertTrue(config.shell_touches_config(f"echo '' > {names}"))
             self.assertFalse(config.shell_touches_config(f"cat {names}"))
+
+
+class EveryBranchTests(unittest.TestCase):
+    """The loop's-files checks on both kinds of file system, and their failures, on any
+    system the suite runs on."""
+
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp(prefix="frame-loop-branches-"))
+        (self.project / ".frame-loop").mkdir()
+        self.frame0 = self.project / ".frame-loop" / "frame0.json"
+        self.frame0.write_text("{}", encoding="utf-8")
+        saved = state.CWD
+        self.addCleanup(setattr, state, "CWD", saved)
+        state.CWD = str(self.project)
+        patched = mock.patch.dict(
+            os.environ, {"CLAUDE_PROJECT_DIR": str(self.project), "FRAME_LOOP_FRAME0": str(self.frame0)}
+        )
+        patched.start()
+        self.addCleanup(patched.stop)
+
+    def test_both_kinds_of_file_system_find_the_loops_files(self):
+        for folds in (True, False):
+            with self.subTest(folds=folds), mock.patch.object(config, "FOLDS_CASE", folds):
+                self.assertTrue(config.touches_config(str(self.frame0)))
+                self.assertTrue(config.touches_config(str(self.project / ".claude" / "settings.local.json")))
+                self.assertFalse(config.touches_config(str(self.project / "notes.md")))
+
+    def test_a_patch_or_a_glob_that_cannot_be_read_names_nothing(self):
+        self.assertEqual(config._patched("git apply missing.diff"), [])
+        with mock.patch.object(config.Path, "read_text", side_effect=OSError("unreadable")):
+            (self.project / "p.diff").write_bytes(b"--- a/x\n")
+            self.assertEqual(config._patched("git apply p.diff"), [])
+        with mock.patch.object(config.glob, "glob", side_effect=OSError("no")):
+            self.assertEqual(config._globbed(".frame-l*/frame0.json"), [])
+
+    def test_a_loop_file_that_cannot_be_read_is_marked_unknown(self):
+        with mock.patch.object(config.Path, "read_bytes", side_effect=OSError("unreadable")):
+            self.assertEqual(config.loop_files({"cwd": str(self.project)})[str(self.frame0)], "?")

@@ -2812,6 +2812,17 @@ class CoreTests(unittest.TestCase):
         call("PreToolUse", "ls", "t2")
         self.assertIsNone(call("PostToolUse", "ls", "t2"))
 
+    def test_the_loop_files_check_never_fails_a_shell_call(self):
+        """A folder that cannot hold the hashes, or a kept file that is no object, gives no
+        change and no error."""
+        event = {"session_id": self.session, "tool_use_id": "t9", "cwd": str(REPO)}
+        with unittest.mock.patch.object(hook.Path, "mkdir", side_effect=OSError("read-only")):
+            hook._keep_loop_files(event)
+        kept = hook._loop_files_at(event)
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text("[]", encoding="utf-8")
+        self.assertEqual(hook._loop_files_changed(event), [])
+
     def test_claude_writing_the_switch_rises(self):
         os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
         out = hook.answer(
