@@ -78,6 +78,15 @@ def read_step(frame0: dict[str, Any], step: dict[str, Any], declared: list[str],
     # Both questions at once (Asked for: "are we running this in parallel?"): the rules
     # question costs its calls even when the fit fails, and the turn waits half as long.
     from concurrent.futures import ThreadPoolExecutor
+    if not (frame0.get("principles") or frame0.get("triggers")):  # requirements only: no rule to break
+        _live_step("does it do what you asked?", 1, 1, "fit")
+        asked = run(at(frames.which_ask(frame0, step, tier)))
+        _ran(asked)
+        decision, reason = gate.which_ask(asked, declared)
+        if decision != gate.PASS:
+            return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked)}
+        return {"decision": decision, "reason": "violation: frame 0 states no rules", "fit": reason,
+                "usage": _spent(asked)}
     _live_step("does it do what you asked, and does it break any of your rules?", 1, 1, "fit-and-rules")
     with ThreadPoolExecutor(2) as pool:
         fit_job = pool.submit(run, at(frames.which_ask(frame0, step, tier)))

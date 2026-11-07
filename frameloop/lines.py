@@ -82,7 +82,8 @@ def _verdict(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     if reason.startswith("obligations: "):
         return reason
     if result["decision"] == gate.PASS:
-        return f"{result['fit']} · breaks no rule" if result.get("fit") else "breaks no rule"
+        rules = "no rules set" if reason == "violation: frame 0 states no rules" else "breaks no rule"
+        return f"{result['fit']} · {rules}" if result.get("fit") else rules
     reason = reason.replace("(category ", "(").replace(": the fit does not rest on its declared ask",
                                                         " (not on its declared ask)")
     for prefix, short in (("which-ask: ", "fit "), ("violation: ", "rules ")):

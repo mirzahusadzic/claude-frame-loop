@@ -137,6 +137,20 @@ class HookTests(unittest.TestCase):
         os.environ.update(env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_MODE="enforce"))
         self.assertNotIn("hookSpecificOutput", hook.answer(plan_event("Serves: A2\nDelegate step 3 and review it.")))
 
+    def test_a_frame0_of_requirements_only_is_read_on_its_fit(self):
+        """The first review: a frame 0 with asks and no rules, the Quickstart's shape, made
+        every reading a FrameError."""
+        os.environ.update(env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_MODE="enforce",
+                              FRAME_LOOP_FRAME0=str(ROOT / "tests/fixtures/ratelimit/frame0.json")))
+        import testhook as loaded
+
+        loaded.SEEN.clear()
+        out = hook.answer(plan_event("Serves: A1\nCount requests per client and reset each minute."))
+        self.assertNotIn("error", json.dumps(out))
+        self.assertNotIn("hookSpecificOutput", out)  # it fits, and there is no rule to break
+        self.assertEqual(len(loaded.SEEN), 1)  # the fit alone: no rules question is asked
+        self.assertIn("no rules set", out["systemMessage"])
+
     def test_the_declaration_never_reaches_the_reader(self):
         os.environ.update(env(FRAME_LOOP_READER="testhook:passing"))
         import testhook as loaded  # the module the reader spec imports, even under __main__
