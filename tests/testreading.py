@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
 import hook  # noqa: E402
 import reading  # noqa: E402
+import record  # noqa: E402
 import state  # noqa: E402
 import testhook  # noqa: E402
 from testhook import FIXTURE, PUBLIC, WORK, env, plan_event, uid  # noqa: E402
@@ -114,7 +115,8 @@ class CompletionTests(Isolated):
         os.environ["FRAME_LOOP_READER"] = "testhook:completing"
 
     def claim(self, step_id, asks, diff="+    return settings.read('one.toml')\n"):
-        path = WORK / f"reading-{uid(self)}-{step_id}.diff"
+        path = record.step_diff(step_id)  # where the loop keeps a step's change
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(diff, encoding="utf-8")
         row = {"session": self.session, "event": "step", "id": step_id, "text": "a step", "claims": asks}
         with self.log.open("a", encoding="utf-8") as out:
@@ -221,7 +223,11 @@ class ReviewCompletionLabelTests(unittest.TestCase):
     def test_the_writer_gets_the_whole_diff_and_a_sent_diff_is_cut(self):
         from unittest import mock
 
-        big = WORK / f"completion-{uid(self)}.diff"
+        self.addCleanup(setattr, state, "SESSION", state.SESSION)
+        state.SESSION = f"completion-{uid(self)}"
+        self.enterContext(mock.patch.dict(os.environ, FRAME_LOOP_WORK=str(WORK / f"completion-{uid(self)}")))
+        big = record.step_diff("S1")
+        big.parent.mkdir(parents=True, exist_ok=True)
         big.write_text("+" + "x" * 80 + "\n" + "+line\n" * 2000, encoding="utf-8")
         frame0 = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
         ask = frame0["asks"][0]["id"]

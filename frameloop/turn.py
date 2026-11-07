@@ -30,7 +30,7 @@ from live import _alive, _live, detached, stop
 from obligations import obligations_line, outside_scope
 from privacy import _hash
 from reading import read_change
-from record import _log, _records, _records_all, rows
+from record import _log, _records, _records_all, rows, step_diff
 from repo import _git, project_root, snapshot
 
 
@@ -164,20 +164,10 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
 
 
 def _keep_step(step: dict[str, Any]) -> None:
-    folder = (
-        Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
-        / "steps"
-        / (state.SESSION or "none")
-    )
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{step['id']}.diff").write_text(step["diff"], encoding="utf-8")
-    _log(
-        {
-            "event": "step",
-            **{k: v for k, v in step.items() if k != "diff"},
-            "diff_file": str(folder / f"{step['id']}.diff"),
-        }
-    )
+    path = step_diff(step["id"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(step["diff"], encoding="utf-8")
+    _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"}, "diff_file": str(path)})
 
 
 def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict[str, Any] | None:

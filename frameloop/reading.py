@@ -11,7 +11,6 @@ import importlib
 import os
 import sys
 import time
-from pathlib import Path
 from typing import Any
 
 import frames
@@ -24,7 +23,7 @@ from lines import _reader_name, _tell, for_user
 from live import _live_step, _on_answers, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, outgoing, tier_for, withhold_file
-from record import _log, _records, _records_all
+from record import _log, _records, _records_all, step_diff
 from repo import _git, project_root
 
 
@@ -270,6 +269,13 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     """When the agent presents its work: each ask the session's steps claim is read once
     with the claimed steps' diffs (the reviewer's completion frame); an ask nothing claims
     is unfulfilled by rule, unread."""
+
+    def kept(step_id: str) -> str | None:
+        """A step's diff, from where the loop kept it and nowhere else: a log row cannot
+        point the reading at another file, and a diff that is gone is no evidence."""
+        path = step_diff(step_id)
+        return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
+
     steps = [
         {
             "id": r["id"],
@@ -277,7 +283,7 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             "claims": r.get("claims", []),
             # whole: the writer labels all of it, to its own limit; only a diff sent itself is cut
             # (the cold review, L8)
-            "diff": Path(r["diff_file"]).read_text(encoding="utf-8") if Path(r["diff_file"]).exists() else "",
+            "diff": kept(r["id"]),
         }
         for r in _records("step")
         if (r.get("node") or "root") == (state.NODE or "root")
@@ -298,9 +304,13 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             parts.append(f"{ask['id']}: nothing claims it")
             continue
         refusal = None
-        if tier is None or run is None:
+        missing = [s["id"] for s in claimed if s["diff"] is None]
+        if missing:
+            refusal = f"the change of {', '.join(missing)} is missing"
+        elif tier is None or run is None:
             refusal = tier_note or "no reader configured"
         else:
+            steps = [{**s, "diff": s["diff"] or ""} for s in steps]
             # With a writer every step goes as its label (the free label names paths);
             # without one, the claimed steps' diffs go, each checked.
             write = _writer() is not None

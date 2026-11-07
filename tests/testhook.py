@@ -3108,6 +3108,38 @@ class CoreTests(unittest.TestCase):
             self.assertNotIn("every requirement is done", said, frame0.name)
             self.assertIn("frame 0 is not ready", said, frame0.name)
 
+    def test_completion_with_a_step_change_missing_is_not_read(self):
+        """Sparky's second review: completion read each step's change from the path its log
+        row names, so a change gone missing was read as empty and could pass, and a row
+        pointing elsewhere sent that file instead. A change is read only from where the
+        loop kept it."""
+        os.environ.update(FRAME_LOOP_READER="testhook:passing")
+        self.turn({"hello.py": f"print('greet by name {uid(self)}')\n"}, "Serves: A1")
+        log = Path(os.environ["FRAME_LOOP_LOG"])
+        step = next(
+            r for r in map(json.loads, log.read_text(encoding="utf-8").splitlines()) if r.get("event") == "step"
+        )
+        elsewhere = Path(OUTSIDE) / f"frame-loop-elsewhere-{uid(self)}.diff"
+        elsewhere.write_text("+print('read from somewhere else')\n", encoding="utf-8")
+        self.addCleanup(lambda: elsewhere.unlink(missing_ok=True))
+        with log.open("a", encoding="utf-8") as out:
+            out.write(json.dumps({**step, "id": "S9", "diff_file": str(elsewhere)}) + "\n")
+        Path(step["diff_file"]).unlink()
+        seen = loaded_seen()
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-read --complete"},
+            }
+        )
+        said = json.dumps(out, ensure_ascii=False)
+        self.assertIn("is missing", said)
+        self.assertNotIn("A1 ✓", said)
+        self.assertNotIn("somewhere else", json.dumps(seen))
+
     @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
     def test_completion_masks_ids_and_marks_its_cut_like_every_other_reading(self):
         """with the writer off, completion

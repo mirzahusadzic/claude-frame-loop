@@ -15,6 +15,12 @@ from typing import Any
 import state
 
 
+def step_diff(step_id: str) -> Path:
+    """Where the loop keeps a step's diff, for this session."""
+    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
+    return folder / "steps" / (state.SESSION or "none") / f"{step_id}.diff"
+
+
 def _log(record: dict[str, Any]) -> None:
     path = os.environ.get("FRAME_LOOP_LOG")
     if not path:
