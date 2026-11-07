@@ -8,6 +8,7 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -187,3 +188,33 @@ class LiveFileTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PidReuseTests(unittest.TestCase):
+    """The cold review, M1: a finished read's pid can belong to another process by the next turn; the
+    newer read stopped that unrelated process and restarted from a stale start."""
+
+    def test_a_finished_reads_pid_is_never_stopped(self):
+        import record
+        import state
+        import turn
+
+        folder = Path(tempfile.mkdtemp(prefix="frame-loop-pid-"))
+        other = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"], **live.detached())
+        self.addCleanup(lambda: other.poll() is None and other.kill())
+        with mock.patch.dict(
+            os.environ, {"FRAME_LOOP_LOG": str(folder / "steps.jsonl"), "FRAME_LOOP_WORK": str(folder)}
+        ):
+            state.SESSION, state.CWD = "pid", str(folder)
+            record._log(
+                {"event": "turn-queued", "pid": other.pid, "before": "t0", "payload": str(folder / "gone.json")}
+            )
+            record._log({"event": "turn", "decision": "pass"})  # that read finished long ago
+            record._log({"event": "stop"})
+            fake = mock.Mock(pid=1)
+            with mock.patch.object(turn.subprocess, "Popen", return_value=fake):
+                turn._read_in_background({"session_id": "pid"}, str(folder), "t1", "t2", "")
+            time.sleep(0.3)
+            self.assertIsNone(other.poll(), "an unrelated process was stopped")
+            queued = [r for r in record.rows(folder / "steps.jsonl") if r.get("event") == "turn-queued"]
+            self.assertEqual(queued[-1]["before"], "t1")

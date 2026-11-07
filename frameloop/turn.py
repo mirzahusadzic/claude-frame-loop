@@ -243,7 +243,17 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     # One background read a session: a newer one stops the one still running and reads from
     # where that one began, so no turn goes unread and no two reads run at once.
     queued = [r for r in _records("turn-queued") if r.get("pid")]
-    if queued and _alive(queued[-1]["pid"]) and queued[-1].get("before"):
+    # Still running only while its payload is there (it removes it as it ends) and no turn has
+    # landed since: a finished read's pid may already be another process's (the cold review, M1).
+    landed = queued and any(r.get("at", 0) > queued[-1].get("at", 0) for r in _records("turn"))
+    running = (
+        queued
+        and queued[-1].get("payload")
+        and Path(queued[-1]["payload"]).exists()
+        and not landed
+        and _alive(queued[-1]["pid"])
+    )
+    if running and queued[-1].get("before"):
         stop(queued[-1]["pid"])  # with the calls it started: Gadfly's stop too
         # A forced stop (Windows) skips the read's own cleanup: its payload goes here.
         Path(queued[-1].get("payload") or work / "none").unlink(missing_ok=True)
