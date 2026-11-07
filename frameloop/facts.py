@@ -122,6 +122,13 @@ def _flags(words: list[str], valued: set[str]) -> list[str]:
     return words[i:]
 
 
+def program(word: str) -> str:
+    """A command's program by name, however it is spelled: `/usr/bin/git`, `C:\\Git\\git.exe`
+    and `Git.EXE` are all `git`."""
+    name = word.replace("\\", "/").rsplit("/", 1)[-1]
+    return name[:-4].lower() if name.lower().endswith(".exe") else name
+
+
 def _act(words: list[str], depth: int) -> str | None:
     while words and re.fullmatch(r"\w+=.*", words[0]):
         words = words[1:]
@@ -131,7 +138,7 @@ def _act(words: list[str], depth: int) -> str | None:
             words = words[1:]
     if not words:
         return None
-    name, args = Path(words[0]).name, words[1:]
+    name, args = program(words[0]), words[1:]
     short = "".join(a[1:] for a in args if re.fullmatch(r"-[A-Za-z]+", a))
     if name == "rm" and ("r" in short or "R" in short or "--recursive" in args):
         return "rm -r"
@@ -189,7 +196,7 @@ def outward(command: str, depth: int = 0) -> str | None:
     text, bodies = heredocs(command)
     for reader, body in bodies:  # a heredoc a shell reads runs as commands
         words = _words(reader)
-        if words and Path(words[0]).name in SHELLS | {"eval"} and depth < 3:
+        if words and program(words[0]) in SHELLS | {"eval"} and depth < 3:
             found = found or outward(body, depth + 1)
     for part in _split(text):
         found = found or _act(_words(part), depth)
@@ -206,6 +213,8 @@ def changed_files(repo: Path, rev: str = "HEAD") -> list[str]:
         cwd=repo,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
     )
     return [line for line in done.stdout.splitlines() if line.strip()]
@@ -217,6 +226,8 @@ def commit_subject(repo: Path, rev: str = "HEAD") -> str:
         cwd=repo,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         check=True,
     )
     return done.stdout.strip()

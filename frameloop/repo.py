@@ -21,7 +21,9 @@ def project_root(cwd: str | None) -> Path:
 
 def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "GIT_INDEX_FILE": index} if index else None
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, env=env)
+    return subprocess.run(
+        ["git", *args], cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env
+    )
 
 
 def snapshot(cwd: str) -> str | None:

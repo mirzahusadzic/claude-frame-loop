@@ -2508,6 +2508,11 @@ class CoreTests(unittest.TestCase):
         reaped = time.time() + 60  # a slow runner: the newer read still has its two seconds and more to go
         for r in queued:  # this test is their parent: reap them, as the system does for the hook's
             while time.time() < reaped:
+                if os.name == "nt":  # no zombies to reap: the process is gone once it ends
+                    if not live_module._alive(r["pid"]):
+                        break
+                    time.sleep(0.2)
+                    continue
                 try:
                     if os.waitpid(r["pid"], os.WNOHANG)[0]:
                         break

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import json
 import os
+import signal
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -17,11 +19,50 @@ import state
 
 
 def _alive(pid: Any) -> bool:
+    """Whether a process still runs. On Windows `os.kill(pid, 0)` would end it, so the
+    process is asked for its exit code instead."""
     try:
-        os.kill(int(pid), 0)
-        return True
-    except (OSError, TypeError, ValueError):
+        pid = int(pid)
+    except (TypeError, ValueError):
         return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel = ctypes.windll.kernel32
+        handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return False
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259  # STILL_ACTIVE
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def detached() -> dict[str, Any]:
+    """How a background read starts: a session of its own on POSIX, a new process group
+    with no console on Windows, so the hook returns and the read lives on."""
+    if os.name == "nt":
+        group = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x200)
+        return {"creationflags": group | getattr(subprocess, "DETACHED_PROCESS", 0x8)}
+    return {"start_new_session": True}
+
+
+def stop(pid: Any) -> None:
+    """Stops a background read and the calls it started: its process group on POSIX, its
+    process tree on Windows."""
+    try:
+        if os.name == "nt":
+            subprocess.run(["taskkill", "/PID", str(int(pid)), "/T", "/F"], capture_output=True, timeout=30)
+        else:
+            os.killpg(int(pid), signal.SIGTERM)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        pass
 
 
 _LIVE_LOCK = threading.Lock()

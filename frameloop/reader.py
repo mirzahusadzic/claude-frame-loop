@@ -58,8 +58,16 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
         return subprocess.CompletedProcess(args, 127, json.dumps({"error": {"message": MISSING}}), "")
     command, where = how[0] + args, how[1]
     if on_progress is None or watch is None:
-        return subprocess.run(command, capture_output=True, text=True, cwd=where)
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=where)
+        return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=where)
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        cwd=where,
+    )
     stop = threading.Event()
 
     def poll() -> None:

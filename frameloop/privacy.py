@@ -171,6 +171,8 @@ def visibility(root: Path) -> str | None:
             [gh, "repo", "view", remote.stdout.strip(), "--json", "visibility", "-q", ".visibility"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=20,
         )
     except (OSError, subprocess.TimeoutExpired):

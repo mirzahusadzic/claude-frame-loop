@@ -30,13 +30,17 @@ class LauncherTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="frame-loop-launcher-"))
         self.tools = self.tmp / "tools"  # the few commands run.sh needs, and no Python
         self.tools.mkdir()
-        for name in ("dirname", "head", "sed", "readlink", "cat"):
-            (self.tools / name).symlink_to(shutil.which(name))
+        try:
+            for name in ("dirname", "head", "sed", "readlink", "cat"):
+                (self.tools / name).symlink_to(shutil.which(name))
+        except OSError:  # Windows without symlinks: Git's own tools folder, which holds no Python
+            self.tools = Path(shutil.which("sed")).parent
+        self.shell = shutil.which("sh") or shutil.which("bash")  # Git Bash on Windows
 
     def run_hook(self, event: dict, path: list) -> str:
         env = {"PATH": os.pathsep.join([*map(str, path), str(self.tools)]), "HOME": str(self.tmp / "home")}
         done = subprocess.run(
-            ["/bin/sh", str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env, timeout=30
+            [self.shell, str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env, timeout=30
         )
         self.assertEqual((done.returncode, done.stderr), (0, ""))
         return done.stdout
@@ -49,8 +53,12 @@ class LauncherTests(unittest.TestCase):
         fake_python(tool / "python", recent=True, says="Gadfly's python")
         (tool / "gadfly").write_text("#!/bin/sh\n")
         (tool / "gadfly").chmod(0o755)
-        (old / "gadfly").symlink_to(tool / "gadfly")  # as uv tool links it into ~/.local/bin
-        out = self.run_hook({"hook_event_name": "UserPromptSubmit", "prompt": "go"}, [old])
+        try:
+            (old / "gadfly").symlink_to(tool / "gadfly")  # as uv tool links it into ~/.local/bin
+            path = [old]
+        except OSError:  # Windows without symlinks: the tool's own folder on PATH, as pip leaves it
+            path = [tool, old]
+        out = self.run_hook({"hook_event_name": "UserPromptSubmit", "prompt": "go"}, path)
         self.assertEqual(json.loads(out)["systemMessage"], "Gadfly's python")
 
     def test_with_no_python_313_the_session_is_told_once_in_one_line(self):

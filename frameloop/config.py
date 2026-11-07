@@ -65,7 +65,7 @@ READ_ONLY = {
 SED_WRITES = re.compile(r"(^|\s)(-i\S*|--in-place\S*|-[a-zA-Z]*i)(\s|$)|(^|['\";/}\s])[wW]\s+\S")
 
 
-CONFIG = re.compile(r"\.claude/(settings[^\s'\"]*|hooks\b)|FRAME_LOOP_")
+CONFIG = re.compile(r"\.claude[/\\](settings[^\s'\"]*|hooks\b)|FRAME_LOOP_")
 # git's subcommands that only read; any other may write.
 GIT_READS = {
     "log",
@@ -139,7 +139,7 @@ def _read_only(command: str) -> bool:
     text, is a read-only one (git only with a subcommand that reads, find with no action,
     sed with no write), and nothing is redirected into a file but /dev/null."""
     text, bodies = F.heredocs(command)
-    if any(Path((F._words(reader) or [""])[0]).name not in DATA_SINKS for reader, _ in bodies):
+    if any(F.program((F._words(reader) or [""])[0]) not in DATA_SINKS for reader, _ in bodies):
         return False  # a heredoc a program runs
     for part in F._split(text):
         tokens = _tokens(part)
@@ -154,7 +154,7 @@ def _read_only(command: str) -> bool:
             words = words[1:]
         if not words:
             continue
-        name, args = Path(words[0]).name, words[1:]
+        name, args = F.program(words[0]), words[1:]
         if name == "sed":
             if SED_WRITES.search(" ".join(args)):
                 return False
@@ -177,7 +177,7 @@ def shell_touches_config(command: str) -> bool:
         return False
     text, bodies = F.heredocs(command)
     code = "\n".join(
-        [text] + [body for reader, body in bodies if Path((F._words(reader) or [""])[0]).name not in DATA_SINKS]
+        [text] + [body for reader, body in bodies if F.program((F._words(reader) or [""])[0]) not in DATA_SINKS]
     )
     if CONFIG.search(code) or re.search(r"(?<![\w-])\.frame-loop(/|\b)", code):
         return True
@@ -185,9 +185,10 @@ def shell_touches_config(command: str) -> bool:
     for part in F._split(text):
         for word in _tokens(part):
             word = _unquoted(word).replace("$HOME", home).replace("${HOME}", home)
-            if ("/" in word or word.startswith("~")) and "://" not in word and touches_config(word):
+            if ("/" in word or "\\" in word or word.startswith("~")) and "://" not in word and touches_config(word):
                 return True
-    return any(re.search(re.escape(str(q)) + r"(?![\w.-])", code) for q in _protected())
+    spelled = {spelling for q in _protected() for spelling in (str(q), q.as_posix())}  # C:\\x and C:/x alike
+    return any(re.search(re.escape(s) + r"(?![\w.-])", code) for s in spelled)
 
 
 def plugin_defaults(event: dict[str, Any]) -> None:

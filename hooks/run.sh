@@ -1,7 +1,9 @@
 #!/bin/sh
 # Runs frame-loop's hook on Gadfly's own Python, so one interpreter serves both: the one
-# beside a `gadfly` on PATH (`uv tool install midwife` or pip), else a checkout's .venv
-# (GADFLY_CHECKOUT, then ~/gadfly), else the first python3.13 or later on PATH. With none,
+# beside a `gadfly` on PATH (`uv tool install midwife` or pip), else in uv's tool folder,
+# else a checkout's .venv (GADFLY_CHECKOUT, then ~/gadfly), else the first Python 3.13 or
+# later on PATH or, on Windows, from the py launcher. Under Git Bash, Claude Code's shell for
+# hooks on Windows, the same search finds python.exe in a Scripts folder. With none,
 # the session is told so in one line, and every other hook gives no opinion.
 
 export FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku
@@ -17,23 +19,39 @@ beside_gadfly() { # the interpreter of the gadfly command, through any symlinks
     link=$(readlink "$found")
     case $link in /*) found=$link ;; *) found=$(dirname "$found")/$link ;; esac
   done
-  if [ -x "$(dirname "$found")/python" ]; then
-    echo "$(dirname "$found")/python"
-    return 0
-  fi
+  for beside in "$(dirname "$found")/python" "$(dirname "$found")/python.exe"; do
+    [ -x "$beside" ] && echo "$beside" && return 0
+  done
   shebang=$(head -n 1 "$found" | sed -n 's/^#![[:space:]]*\([^[:space:]]*\).*/\1/p')
   [ -n "$shebang" ] && [ "$shebang" != /bin/sh ] && echo "$shebang"
 }
 
+in_uv_tools() { # midwife's own interpreter where `uv tool install` keeps it, on any system
+  tools=$(uv tool dir 2>/dev/null) || return 1
+  for found in "$tools/midwife/bin/python" "$tools/midwife/Scripts/python.exe"; do
+    [ -x "$found" ] && echo "$found" && return 0
+  done
+  return 1
+}
+
+from_py_launcher() { # Windows: the py launcher names a 3.13 or later
+  command -v py >/dev/null 2>&1 || return 1
+  for version in 3.15 3.14 3.13; do
+    found=$(py -"$version" -c 'import sys; print(sys.executable)' 2>/dev/null) && [ -n "$found" ] && echo "$found" && return 0
+  done
+  return 1
+}
+
 python=""
-for candidate in "$(beside_gadfly)" \
-    "${GADFLY_CHECKOUT:+$GADFLY_CHECKOUT/.venv/bin/python}" "$HOME/gadfly/.venv/bin/python" \
-    "$(command -v python3.15)" "$(command -v python3.14)" "$(command -v python3.13)" "$(command -v python3)"; do
-  if [ -n "$candidate" ] && recent "$candidate"; then
-    python=$candidate
-    break
-  fi
-done
+pick() { # the first candidate that is a Python 3.13 or later; each is looked up only when reached
+  [ -n "$1" ] && recent "$1" && python=$1
+}
+pick "$(beside_gadfly)" || pick "$(in_uv_tools)" \
+  || pick "${GADFLY_CHECKOUT:+$GADFLY_CHECKOUT/.venv/bin/python}" \
+  || pick "${GADFLY_CHECKOUT:+$GADFLY_CHECKOUT/.venv/Scripts/python.exe}" \
+  || pick "$HOME/gadfly/.venv/bin/python" || pick "$HOME/gadfly/.venv/Scripts/python.exe" \
+  || pick "$(command -v python3.15)" || pick "$(command -v python3.14)" || pick "$(command -v python3.13)" \
+  || pick "$(command -v python3)" || pick "$(command -v python)" || pick "$(from_py_launcher)"
 
 if [ -z "$python" ]; then
   event=$(cat)

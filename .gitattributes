@@ -1,0 +1,4 @@
+# Every text file is LF on every system, so diffs, hashes and the tests' fixtures match.
+* text=auto eol=lf
+*.png binary
+*.bundle binary

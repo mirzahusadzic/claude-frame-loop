@@ -112,6 +112,8 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
             input=text,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             cwd=folder,
             timeout=180,
         )

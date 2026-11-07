@@ -46,7 +46,7 @@ let switchPath = ''
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const home = await $.env.get('HOME')
+    const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) // Windows may set only the latter
     const id = await $.session.id()
     // Where the hooks write it: FRAME_LOOP_LIVE when the settings name a folder, as the hook reads it.
     const folder = (await $.env.get('FRAME_LOOP_LIVE')) || `${home}/.claude/frame-loop/live`

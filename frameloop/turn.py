@@ -26,7 +26,7 @@ from declare import _declared
 from effort import _effort_rules, _rule_hits
 from framezero import load_frame0, rules_lost
 from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words
-from live import _alive, _live
+from live import _alive, _live, detached, stop
 from obligations import obligations_line, outside_scope
 from privacy import _hash
 from reading import read_change
@@ -229,10 +229,9 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     # where that one began, so no turn goes unread and no two reads run at once.
     queued = [r for r in _records("turn-queued") if r.get("pid")]
     if queued and _alive(queued[-1]["pid"]) and queued[-1].get("before"):
-        try:
-            os.killpg(int(queued[-1]["pid"]), signal.SIGTERM)  # its own group: Gadfly's calls stop too
-        except OSError:
-            pass
+        stop(queued[-1]["pid"])  # with the calls it started: Gadfly's stop too
+        # A forced stop (Windows) skips the read's own cleanup: its payload goes here.
+        Path(queued[-1].get("payload") or work / "none").unlink(missing_ok=True)
         before = queued[-1]["before"]
         _log({"event": "background-replaced", "pid": queued[-1]["pid"]})
     payload = work / f"background-{state.SESSION}-{time.time_ns()}.json"
@@ -257,10 +256,10 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        start_new_session=True,
         env=os.environ.copy(),
+        **detached(),
     )
-    _log({"event": "turn-queued", "pid": child.pid, "before": before})
+    _log({"event": "turn-queued", "pid": child.pid, "before": before, "payload": str(payload)})
     state.LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
     state.LIVE["queued"] = True  # the background process writes the band from here on
     return {"systemMessage": "frame-loop · turn · checking in the background"}
