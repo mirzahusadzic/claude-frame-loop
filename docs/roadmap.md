@@ -14,7 +14,7 @@ These have a design and no implementation. The first three are the designed rows
 | the crossing's own reading | the promise read over all its siblings, with each one removed in turn |
 | marking a reading wrong | a reading the user marks wrong stops its node until the user has looked |
 | refusal as a typed outcome | a refusal names its ground (a rule, a prior or a policy) and its owner, and rises to the user, so quietly smaller or different work cannot pass as compliance |
-| open questions in frame 0 | frame 0 holds questions beside requirements; work on one returns a draft, an option or a question, never code tested against a guess |
+| openings in frame 0 | an opening is a question frame 0 holds open beside its requirements; work on one returns a draft, an option or a question, never code tested against a guess |
 
 ---
 
@@ -57,6 +57,6 @@ In order, each step resting on the one before:
 These are ideas, and none of them is designed yet.
 
 - **Measuring the help:** the user's own log of the reminders they would have given, turn by turn, set against what the loop raised.
-- **Typed acts:** each act admitted by its typed effect, and checked after the call against what actually changed, in place of reading the command's text.
+- **Typed acts at the membrane:** the membrane is the frames' walls together with the moments at which the rules act; there, each act is admitted by its typed effect and checked after the call against what actually changed, in place of reading the command's text.
 - **Crossings between agents:** each hop checked against the root's own words.
 - **More readers:** any model the router serves as a reader tier, Sol among them, each with its privacy declared (whether it trains on its inputs) and its effort levels calibrated before its readings are trusted. Today the tiers are a fixed table, tiers are added one by one, an unknown tier is refused, and a reading at an effort level no run has calibrated for its model is marked uncalibrated.
