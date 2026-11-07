@@ -85,3 +85,25 @@ class GuideEncodingTests(unittest.TestCase):
         guide = Path(tempfile.mkdtemp()) / "CLAUDE.md"
         guide.write_bytes("- Café rules: résumé\n- second line\n".encode("cp1252"))
         self.assertEqual(len(turn._guide_lines(str(guide))), 2)
+
+
+class ToldTests(unittest.TestCase):
+    """The cold review, M4: a background read that landed a turn late was never told to Claude, as
+    only the last reading after the last prompt was."""
+
+    def test_every_reading_that_rose_is_told_once(self):
+        import state
+        import turn
+
+        log = Path(tempfile.mkdtemp()) / "steps.jsonl"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_LOG": str(log)}):
+            state.SESSION = "told"
+            record._log({"event": "turn-start", "tree": "t0"})
+            record._log({"event": "stop"})
+            record._log({"event": "turn-start", "tree": "t1"})
+            record._log({"event": "turn", "decision": "rise", "reason": "which-ask: not firm"})  # turn 1, late
+            record._log({"event": "stop"})
+            record._log({"event": "turn", "decision": "pass", "reason": "violation: breaks no rule"})  # turn 2
+            told = turn._last_reading()
+            self.assertIn("rise: which-ask: not firm", told)
+            self.assertEqual(turn._last_reading(), "")  # told once

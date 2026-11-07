@@ -75,11 +75,14 @@ def _last_reading() -> str:
     reach only the human, so the agent hears of them at the next prompt, once."""
     mine = [r for r in _records_all() if r.get("session") == state.SESSION]
     start = max((i for i, r in enumerate(mine) if r.get("event") == "turn-start"), default=-1)
-    turns = [r for r in mine[start + 1 :] if r.get("event") == "turn"]
     acts = [act_words(r) for r in mine[start + 1 :] if r.get("event") in ("outward", "config")]
-    said = []
-    if turns and turns[-1].get("decision") != gate.PASS:
-        said.append(f"your last turn's reading: {turns[-1].get('decision')}: {turns[-1].get('reason')}")
+    # Every reading not yet told, not only the last turn's: a background read can land a turn
+    # late, after another (the cold review, M4).
+    told = max((i for i, r in enumerate(mine) if r.get("event") == "told"), default=-1)
+    rose = [r for r in mine[told + 1 :] if r.get("event") == "turn" and r.get("decision") != gate.PASS]
+    said = [f"a turn's reading: {r.get('decision')}: {r.get('reason')}" for r in rose]
+    if rose:
+        _log({"event": "told", "readings": len(rose)})
     if acts:
         said.append("the acts it told the author of: " + "; ".join(f"{w} ({e})" for w, _, e in acts))
     if not said:

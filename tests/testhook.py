@@ -2033,7 +2033,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("rise", self.turn({name: f"print({uid(self)})\n" * 400}, "done"))
         prompt = {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "next"}
         told = hook.answer(prompt)["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("your last turn's reading", told)
+        self.assertIn("a turn's reading", told)
         self.assertIn("rise", told)
         self.assertIsNone(hook.answer(prompt))  # told once, not at every prompt
 
