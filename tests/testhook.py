@@ -2247,6 +2247,13 @@ class ReadOnlyTests(unittest.TestCase):
         flags = [h.get("onFailure") for entries in settings["hooks"].values() for e in entries for h in e["hooks"]]
         self.assertNotIn("block", flags)
 
+    def test_a_reading_claude_asks_for_has_the_time_a_plan_has(self):
+        """The first review: `: frame-loop-read` runs a reading inside the Bash hook, which
+        Claude Code stopped at 30 seconds, well before a reading ends."""
+        settings = json.loads((ROOT / "hooks/hooks.json").read_text())
+        timeouts = {e["matcher"]: e["hooks"][0]["timeout"] for e in settings["hooks"]["PreToolUse"]}
+        self.assertGreaterEqual(timeouts["Bash"], timeouts["ExitPlanMode"])
+
     def test_the_briefing_names_the_wait_and_reads_only_on_a_signal(self):
         """the turn's end waits for a reading, and the author will notice."""
         with unittest.mock.patch.dict(os.environ, env(FRAME_LOOP_READ_TURNS="1")):

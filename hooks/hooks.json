@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "timeout": 30,
+            "timeout": 600,
             "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
           }
         ]
