@@ -127,3 +127,17 @@ class ReviewWriteTests(unittest.TestCase):
             self.assertTrue(config.shell_touches_config(write), write)
         for read in ("sort .frame-loop/steps.jsonl", "uniq -c .frame-loop/steps.jsonl", "git diff -- .frame-loop"):
             self.assertFalse(config.shell_touches_config(read), read)
+
+
+class ReviewProtectedTests(unittest.TestCase):
+    """The cold review, L6: the author's private names and the band's live files could be written
+    unseen, so a name list could be emptied or the band shown a false outcome."""
+
+    def test_the_private_names_and_the_live_files_are_the_loops(self):
+        folder = Path(tempfile.mkdtemp(prefix="frame-loop-l6-"))
+        names, live = folder / "names.txt", folder / "live"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_PRIVATE_NAMES": str(names), "FRAME_LOOP_LIVE": str(live)}):
+            self.assertTrue(config.touches_config(str(names)))
+            self.assertTrue(config.touches_config(str(live / "session.json")))
+            self.assertTrue(config.shell_touches_config(f"echo '' > {names}"))
+            self.assertFalse(config.shell_touches_config(f"cat {names}"))

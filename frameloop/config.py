@@ -110,6 +110,12 @@ def _protected() -> list[Path]:
     paths.append(switch_path({"cwd": state.CWD}).resolve())  # the author's switch: Claude never flips it
     if os.environ.get("FRAME_LOOP_PLUGIN") == "1":  # the whole folder, a file not written yet included
         paths.append(_home().resolve())
+    # The author's private names and the band's live files are the loop's too (the cold review, L6).
+    names = os.environ.get("FRAME_LOOP_PRIVATE_NAMES") or str(
+        Path(real_home()) / ".config/frame-loop/private-names.txt"
+    )
+    live = os.environ.get("FRAME_LOOP_LIVE") or str(Path(real_home()) / ".claude/frame-loop/live")
+    paths += [Path(names).resolve(), Path(live).resolve()]
     return paths
 
 
