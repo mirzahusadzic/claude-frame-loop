@@ -133,6 +133,25 @@ class ReviewProtectedTests(unittest.TestCase):
     """The cold review, L6: the author's private names and the band's live files could be written
     unseen, so a name list could be emptied or the band shown a false outcome."""
 
+    def test_the_loops_files_are_the_loops_in_any_case_and_through_a_glob(self):
+        """Sparky's second review: macOS and Windows open `.FRAME-LOOP/switch` as the switch,
+        and a shell expands `.frame-l*/frame0.json` to frame 0; neither was the loop's."""
+        project = Path(tempfile.mkdtemp(prefix="frame-loop-r05-"))
+        (project / ".frame-loop").mkdir()
+        frame0 = project / ".frame-loop" / "frame0.json"
+        frame0.write_text("{}", encoding="utf-8")
+        saved = state.CWD
+        self.addCleanup(setattr, state, "CWD", saved)
+        state.CWD = str(project)
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(project), "FRAME_LOOP_FRAME0": str(frame0)}):
+            self.assertTrue(config.shell_touches_config("printf x > .frame-l*/frame0.json"))
+            self.assertFalse(config.shell_touches_config("printf x > notes-*.md"))
+            if sys.platform in ("darwin", "win32"):  # a case-sensitive file system has no such alias
+                self.assertTrue(config.touches_config(str(project / ".FRAME-LOOP" / "switch")))
+                self.assertTrue(config.touches_config(str(project / ".Frame-Loop" / "FRAME0.json")))
+                self.assertTrue(config.shell_touches_config("echo off > .Frame-Loop/switch"))
+            self.assertFalse(config.touches_config(str(project / "frame-loop-notes.md")))
+
     def test_the_private_names_and_the_live_files_are_the_loops(self):
         folder = Path(tempfile.mkdtemp(prefix="frame-loop-l6-"))
         names, live = folder / "names.txt", folder / "live"

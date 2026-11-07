@@ -6,9 +6,11 @@ Standard library only.
 
 from __future__ import annotations
 
+import glob
 import os
 import re
 import shlex
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -65,7 +67,9 @@ READ_ONLY = {
 SED_WRITES = re.compile(r"(^|\s)(-i\S*|--in-place\S*|-[a-zA-Z]*i)(\s|$)|(^|['\";/}\s])[wW]\s+\S")
 
 
-CONFIG = re.compile(r"\.claude[/\\](settings[^\s'\"]*|hooks\b)|FRAME_LOOP_")
+CONFIG = re.compile(r"\.claude[/\\](settings[^\s'\"]*|hooks\b)|FRAME_LOOP_", re.I)
+# macOS and Windows find a file by any case of its name: `.FRAME-LOOP/switch` is the switch.
+FOLDS_CASE = sys.platform in ("darwin", "win32")
 # git's subcommands that only read; any other may write.
 GIT_READS = {
     "log",
@@ -130,6 +134,15 @@ def touches_config(path: str) -> bool:
         p = (p if p.is_absolute() else Path(state.CWD or os.getcwd()) / p).resolve()
     except (OSError, ValueError):
         return False
+    if FOLDS_CASE:
+        parts = [x.casefold() for x in p.parts]
+        if ".claude" in parts and (parts[-1].startswith("settings") or "hooks" in parts):
+            return True
+        here = str(p).casefold()
+        return any(
+            here == str(q).casefold() or here.startswith(str(q).casefold().rstrip(os.sep) + os.sep)
+            for q in _protected()
+        )
     if ".claude" in p.parts and (p.name.startswith("settings") or "hooks" in p.parts):
         return True
     return any(p == q or q in p.parents for q in _protected())
@@ -208,16 +221,31 @@ def shell_touches_config(command: str) -> bool:
     code = "\n".join(
         [text] + [body for reader, body in bodies if F.program((F._words(reader) or [""])[0]) not in DATA_SINKS]
     )
-    if CONFIG.search(code) or re.search(r"(?<![\w-])\.frame-loop(/|\b)", code):
+    if CONFIG.search(code) or re.search(r"(?<![\w-])\.frame-loop(/|\b)", code, re.I if FOLDS_CASE else 0):
         return True
     home = os.path.expanduser("~")
     for part in F._split(text):
         for word in _tokens(part):
             word = _unquoted(word).replace("$HOME", home).replace("${HOME}", home)
-            if ("/" in word or "\\" in word or word.startswith("~")) and "://" not in word and touches_config(word):
-                return True
+            if ("/" in word or "\\" in word or word.startswith("~")) and "://" not in word:
+                if touches_config(word) or any(touches_config(match) for match in _globbed(word)):
+                    return True
     spelled = {spelling for q in _protected() for spelling in (str(q), q.as_posix())}  # C:\\x and C:/x alike
     return any(re.search(re.escape(s) + r"(?![\w.-])", code) for s in spelled)
+
+
+def _globbed(word: str) -> list[str]:
+    """The files a shell glob names (`.frame-l*/frame0.json`), as the shell expands it."""
+    if not re.search(r"[*?\[]", word) or len(word) > 1024:
+        return []
+    base = os.path.expanduser(word)
+    try:
+        found = glob.glob(
+            base if os.path.isabs(base) else os.path.join(state.CWD or os.getcwd(), base), include_hidden=True
+        )
+    except (OSError, ValueError, re.error):
+        return []
+    return found[:100]
 
 
 def plugin_defaults(event: dict[str, Any]) -> None:
