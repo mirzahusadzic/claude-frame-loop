@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import threading
 import uuid
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
+MISSING = "Gadfly is not installed: pip install midwife (Python 3.13 or later)"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 
 
@@ -33,11 +35,28 @@ def _answers(where: Path) -> int:
     return total
 
 
+def launcher() -> tuple[list[str], Path | None] | None:
+    """How Gadfly starts, and in which folder: a checkout named by GADFLY_CHECKOUT, through
+    uv; else the `gadfly` command on PATH (`pip install midwife`); else a checkout in
+    ~/gadfly, through uv. None when there is none of these."""
+    if os.environ.get("GADFLY_CHECKOUT"):
+        return ["uv", "run", "--project", str(GADFLY), "gadfly"], GADFLY
+    found = shutil.which("gadfly")
+    if found:
+        return [found], None
+    if (GADFLY / "pyproject.toml").is_file():
+        return ["uv", "run", "--project", str(GADFLY), "gadfly"], GADFLY
+    return None
+
+
 def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedProcess:
-    command = ["uv", "run", "--project", str(GADFLY), "gadfly", *args]
+    how = launcher()
+    if how is None:  # never a pass: the gate reads an error as not read
+        return subprocess.CompletedProcess(args, 127, json.dumps({"error": {"message": MISSING}}), "")
+    command, where = how[0] + args, how[1]
     if on_progress is None or watch is None:
-        return subprocess.run(command, capture_output=True, text=True, cwd=GADFLY)
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=GADFLY)
+        return subprocess.run(command, capture_output=True, text=True, cwd=where)
+    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, cwd=where)
     stop = threading.Event()
 
     def poll() -> None:

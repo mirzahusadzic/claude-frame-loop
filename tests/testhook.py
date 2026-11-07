@@ -20,6 +20,7 @@ import framezero  # noqa: E402
 import lines  # noqa: E402
 import obligations  # noqa: E402
 import privacy  # noqa: E402
+import reader  # noqa: E402
 import record  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
@@ -121,7 +122,7 @@ def broken_frame0():
     path.write_text("{ not json")
     return path
 
-HAS_GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly")).is_dir()
+HAS_GADFLY = reader.launcher() is not None  # a checkout or a pip install
 
 class HookTests(unittest.TestCase):
     def setUp(self):
@@ -1748,7 +1749,7 @@ class CoreTests(unittest.TestCase):
         line = self.turn({"hello.py": f"print('two {id(self)}')\n", "README.md": f"two {id(self)}\n"}, "Serves: A3")
         self.assertIn("step 2", line)
 
-    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: set GADFLY_CHECKOUT")
+    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
     def test_completion_masks_ids_and_marks_its_cut_like_every_other_reading(self):
         """with the writer off, completion
         sent the claimed diffs unmasked, and cut them at 4,000 characters with no marker."""
@@ -1762,7 +1763,7 @@ class CoreTests(unittest.TestCase):
         self.assertIn("serves [id] and [id]", body)
         self.assertIn("[diff cut at 4000 characters]", body)
 
-    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: set GADFLY_CHECKOUT")
+    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
     def test_completion_reads_each_claimed_ask_with_its_claimed_diffs(self):
         self.turn({"hello.py": f"print('greet by name {id(self)}')\n", "README.md": f"usage {id(self)}\n"}, "Serves: A1")
         self.turn({"tests/test_hello.py": f"def test_name(): pass  # {id(self)}\n"}, "Serves: A2")
@@ -1847,7 +1848,7 @@ class TreeHookTests(CoreTests):
             self.assertIsNone(hole)
             self.assertIn(says, why)
 
-    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: set GADFLY_CHECKOUT")
+    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
     def test_completion_at_a_node_fills_its_asks_and_climbs(self):
         self.marker(": frame-loop-node greeter")
         self.turn({"hello.py": f"print('settings {id(self)}')\n"}, "done")
