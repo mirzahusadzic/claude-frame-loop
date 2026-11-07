@@ -138,6 +138,11 @@ def broken_frame0():
 
 HAS_GADFLY = reader.launcher() is not None  # a checkout or a pip install
 
+# The plugin's live folder is under the user's real home: no test writes there.
+TEST_HOME = WORK / "home"
+TEST_HOME.mkdir(parents=True, exist_ok=True)
+unittest.mock.patch.object(config, "real_home", lambda: str(TEST_HOME)).start()
+
 class HookTests(unittest.TestCase):
     def setUp(self):
         self.saved = dict(os.environ)
@@ -1776,6 +1781,16 @@ class CoreTests(unittest.TestCase):
             {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
         )
         self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "2")
+
+    def test_a_plugin_test_never_writes_the_users_live_folder(self):
+        """Seen after the first review: tests left live files in the user's real
+        ~/.claude/frame-loop/live, where the plugin keeps its band's state."""
+        fresh = Path(make_repo(WORK / f"livehome-{uid(self)}"))
+        os.environ.pop("FRAME_LOOP_LIVE", None)
+        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh))
+        hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session,
+                     "cwd": str(fresh)})
+        self.assertIn(TEST_HOME.resolve(), Path(os.environ["FRAME_LOOP_LIVE"]).resolve().parents)
 
     def test_a_plugin_names_its_reader_unless_set(self):
         """The first review: the plugin set no reader, so every reading said "no reader
