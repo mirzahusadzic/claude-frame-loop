@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 import frames  # noqa: E402
 
-FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text())
+FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text(encoding="utf-8"))
 
 
 def step(serves="A5"):
@@ -58,7 +58,7 @@ class WhichAskTests(unittest.TestCase):
 
     def test_an_inversion_must_restate_its_whole_ask(self):
         # TRY-1, try 2: a half-inversion leaves a clause that still fits the step.
-        whole = json.loads((ROOT / "tests/fixtures/frame0.json").read_text())
+        whole = json.loads((ROOT / "tests/fixtures/frame0.json").read_text(encoding="utf-8"))
         self.assertEqual(frames.frame0_faults(whole), [])
         half = json.loads(json.dumps(whole))
         half["asks"][0]["inversion"] = {"from one file": "from many files"}

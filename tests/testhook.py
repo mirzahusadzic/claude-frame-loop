@@ -52,7 +52,7 @@ def peeking(frame, only=()):
     if on_progress:
         on_progress(3)
     folder = Path(os.environ["FRAME_LOOP_LIVE"])
-    PEEKED.append([json.loads(x.read_text()) for x in folder.glob("*.json")])
+    PEEKED.append([json.loads(x.read_text(encoding="utf-8")) for x in folder.glob("*.json")])
     return passing(frame, only)
 
 
@@ -87,13 +87,28 @@ def drifting(frame, only=()):
     return {"exit": 0, "firm": True, "category": "unresolved", "findings": [{"levels": {"baseline": "none"}}]}
 
 
+def _fake_gh() -> str:
+    """The stand-in for `gh`: the script itself, or on Windows, which runs no script by its
+    name, a .cmd that runs it with this Python."""
+    script = ROOT / "tests/fakegh.py"
+    if os.name != "nt":
+        return str(script)
+    (ROOT / "tests/.work").mkdir(exist_ok=True)
+    wrapper = ROOT / "tests/.work/fakegh.cmd"
+    wrapper.write_text(f'@"{sys.executable}" "{script}" %*\r\n', encoding="utf-8")
+    return str(wrapper)
+
+
+FAKE_GH = _fake_gh()
+
+
 def env(**extra):
     base = {
         "FRAME_LOOP_TIER": "private",  # the shipped default trains on inputs; tests read on one that does not
         "FRAME_LOOP_LINES": "full",  # the details; the author's one line has tests of its own
         "FRAME_LOOP_FRAME0": str(FIXTURE),
         "FRAME_LOOP_LOG": str(ROOT / "tests/.work/hook-log.jsonl"),
-        "FRAME_LOOP_GH": str(ROOT / "tests/fakegh.py"),
+        "FRAME_LOOP_GH": FAKE_GH,
         "FAKE_GH_MAP": json.dumps({PUBLIC_URL: "PUBLIC", PRIVATE_URL: "PRIVATE"}),
     }
     (ROOT / "tests/.work").mkdir(exist_ok=True)
@@ -140,7 +155,7 @@ def broken_frame0():
     """A frame 0 that cannot be read: a missing one is a valid state now (not written yet),
     so a broken loop is shown by a malformed file."""
     path = WORK / "broken-frame0.json"
-    path.write_text("{ not json")
+    path.write_text("{ not json", encoding="utf-8")
     return path
 
 
@@ -241,7 +256,7 @@ class HookTests(unittest.TestCase):
         hook.answer({**plan_event("Refactor everything."), "session_id": "uq"})
         plan = [
             json.loads(x)
-            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()
+            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()
             if json.loads(x).get("event") == "plan"
         ][-1]
         self.assertEqual(plan["question"], "declare")
@@ -329,7 +344,7 @@ def id_naming(text):
 
 
 def ask_quoting(text):
-    ask = json.loads(Path(os.environ["FRAME_LOOP_FRAME0"]).read_text())["asks"][1]["text"]
+    ask = json.loads(Path(os.environ["FRAME_LOOP_FRAME0"]).read_text(encoding="utf-8"))["asks"][1]["text"]
     return {"label": "it does what was wanted: " + ask}
 
 
@@ -367,10 +382,10 @@ class AttackTests(unittest.TestCase):
         return found.get("permissionDecisionReason") or found.get("additionalContext", "")
 
     def test_a_frame0_with_a_half_inversion_rises_unread(self):
-        half = json.loads(FIXTURE.read_text())
+        half = json.loads(FIXTURE.read_text(encoding="utf-8"))
         half["asks"][0]["inversion"] = {"from one file": "from many files"}
         WORK.mkdir(exist_ok=True)
-        (WORK / "half.json").write_text(json.dumps(half))
+        (WORK / "half.json").write_text(json.dumps(half), encoding="utf-8")
         os.environ.update(
             env(
                 FRAME_LOOP_FRAME0=str(WORK / "half.json"),
@@ -408,7 +423,7 @@ class AttackTests(unittest.TestCase):
         os.environ.pop("FRAME_LOOP_TRAINING_OK")
         hook.answer(plan_event("Serves: A2\nReader: public\nAdd a test."))
         self.assertEqual(seen[-1]["battery"]["model"], "anthropic/claude-sonnet-5-5")
-        last = json.loads((WORK / "hook-log.jsonl").read_text().splitlines()[-1])
+        last = json.loads((WORK / "hook-log.jsonl").read_text(encoding="utf-8").splitlines()[-1])
         self.assertEqual(last["tier"], "anthropic")
         self.assertIn("only tighten", last["tier_note"])
 
@@ -559,7 +574,7 @@ class SessionStartTests(unittest.TestCase):
     def test_a_new_session_learns_the_asks_the_declaration_and_the_reader(self):
         os.environ.update(env(FRAME_LOOP_READER="testhook:passing"))
         text = self.context()
-        for ask in json.loads(FIXTURE.read_text())["asks"]:
+        for ask in json.loads(FIXTURE.read_text(encoding="utf-8"))["asks"]:
             self.assertIn(f"{ask['id']}: {ask['text']}", text)
         self.assertIn(": frame-loop-declare --serves <ids>", text)
         self.assertIn("openrouter/meta/muse-spark-1.3", text)  # the default reader: another model family
@@ -660,9 +675,9 @@ class TurnTests(unittest.TestCase):
         git("init", "-q")
         git("config", "user.email", "t@example.invalid")
         git("config", "user.name", "t")
-        (REPO / "hello.py").write_text("print('hello')\n")
+        (REPO / "hello.py").write_text("print('hello')\n", encoding="utf-8")
         for stray in REPO.glob("new_*.py"):
-            stray.write_text("")
+            stray.write_text("", encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "base")
         self.log = WORK / f"turn-{os.getpid()}-{uid(self)}.jsonl"
@@ -692,8 +707,8 @@ class TurnTests(unittest.TestCase):
         os.environ["FRAME_LOOP_READER"] = "testhook:passing"
         seen = loaded_seen()
         self.start()
-        (REPO / "hello.py").write_text("print('hello, world')\n")
-        (REPO / "new_test.py").write_text("assert True  # fails before the change\n")
+        (REPO / "hello.py").write_text("print('hello, world')\n", encoding="utf-8")
+        (REPO / "new_test.py").write_text("assert True  # fails before the change\n", encoding="utf-8")
         out = self.stop("Added a greeting and a test.\nServes: A2")
         text = seen[0]["inputs"][0]["text"]
         self.assertIn("hello, world", text)
@@ -708,7 +723,7 @@ class TurnTests(unittest.TestCase):
         os.environ.pop("FRAME_LOOP_READ_TURNS")
         seen = loaded_seen()
         self.start()
-        (REPO / "hello.py").write_text("print('unread')\n")
+        (REPO / "hello.py").write_text("print('unread')\n", encoding="utf-8")
         self.stop("Serves: A2")
         self.assertEqual(seen, [])
 
@@ -722,13 +737,13 @@ class TurnTests(unittest.TestCase):
     def test_a_change_without_a_declaration_rises(self):
         os.environ["FRAME_LOOP_READER"] = "testhook:passing"
         self.start()
-        (REPO / "hello.py").write_text("print('changed')\n")
+        (REPO / "hello.py").write_text("print('changed')\n", encoding="utf-8")
         self.assertIn("declares no ask", self.stop("Changed it.")["systemMessage"])
 
     def test_enforce_keeps_the_agent_working_once_never_twice(self):
         os.environ.update(FRAME_LOOP_READER="testhook:drifting", FRAME_LOOP_MODE="enforce")
         self.start()
-        (REPO / "hello.py").write_text("print('dark theme')\n")
+        (REPO / "hello.py").write_text("print('dark theme')\n", encoding="utf-8")
         out = self.stop("Serves: A1")
         self.assertEqual(out["decision"], "block")
         self.assertIn("which-ask", out["reason"])
@@ -748,14 +763,14 @@ class TurnTests(unittest.TestCase):
         # The scratch project: .frame-loop/ is gitignored, and naming it in an exclude
         # made `git add` refuse, so no snapshot was taken.
         os.environ["FRAME_LOOP_READER"] = "testhook:passing"
-        (REPO / ".gitignore").write_text(".frame-loop/\n")
+        (REPO / ".gitignore").write_text(".frame-loop/\n", encoding="utf-8")
         (REPO / ".frame-loop").mkdir(exist_ok=True)
         (REPO / "plain-log").mkdir(exist_ok=True)
         for log in (REPO / ".frame-loop/steps.jsonl", REPO / "plain-log/steps.jsonl"):
             os.environ["FRAME_LOOP_LOG"] = str(log)
             seen = loaded_seen()
             self.start()
-            (REPO / "hello.py").write_text(f"print('{log.parent.name}')\n")
+            (REPO / "hello.py").write_text(f"print('{log.parent.name}')\n", encoding="utf-8")
             out = self.stop("Serves: A2")
             self.assertIn("pass", out["systemMessage"], log)
             self.assertNotIn("steps.jsonl", seen[0]["inputs"][0]["text"], log)
@@ -839,7 +854,7 @@ class AdaptiveEffortTests(unittest.TestCase):
 
     def test_a_deleted_file_raises_the_effort_by_rule(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
-        (REPO / "gone.py").write_text("x = 1\n")
+        (REPO / "gone.py").write_text("x = 1\n", encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "gone")
         seen = loaded_seen()
@@ -856,21 +871,21 @@ class AdaptiveEffortTests(unittest.TestCase):
         manifest = REPO / "requirements.txt"
         self.addCleanup(lambda: manifest.exists() and manifest.unlink())
         self.start()
-        manifest.write_text(f"requests\n# {uid(self)}\n")  # always a change, whatever is left
+        manifest.write_text(f"requests\n# {uid(self)}\n", encoding="utf-8")  # always a change, whatever is left
         out = self.stop("Serves: A1")
         self.assertIn("↑dependency-manifest", out["systemMessage"])
 
     def test_a_large_diff_raises_the_effort_by_rule(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
         self.start()
-        (REPO / "hello.py").write_text("print('x')\n" * 2000)
+        (REPO / "hello.py").write_text("print('x')\n" * 2000, encoding="utf-8")
         self.assertIn("↑large-diff", self.stop("Serves: A1")["systemMessage"])
 
     def test_an_ordinary_turn_reads_at_the_floor(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
         seen = loaded_seen()
         self.start()
-        (REPO / "hello.py").write_text("print('hello, world')\n")
+        (REPO / "hello.py").write_text("print('hello, world')\n", encoding="utf-8")
         out = self.stop("Serves: A1")
         self.assertEqual(seen[0]["battery"]["reasoning"], "low")
         self.assertNotIn("↑", out["systemMessage"])
@@ -886,9 +901,11 @@ class AdaptiveEffortTests(unittest.TestCase):
         self.assertNotIn("uncalibrated", out["systemMessage"])
         out = hook.answer(plan_event("Serves: A2\nEffort: max\nAdd a test."))  # no margin run at max
         self.assertIn("uncalibrated", out["systemMessage"])
-        last = json.loads(self.log.read_text().splitlines()[-1])
+        last = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
         self.assertEqual(last["effort"], "max")
-        self.assertEqual(last["effort_rules"], json.loads((ROOT / "frameloop/effort.json").read_text())["version"])
+        self.assertEqual(
+            last["effort_rules"], json.loads((ROOT / "frameloop/effort.json").read_text(encoding="utf-8"))["version"]
+        )
 
 
 def naming(frame, only=()):
@@ -1033,13 +1050,15 @@ class CoopTests(unittest.TestCase):
 
     def write_settings(self, effort="low"):
         command = (
-            f"env FRAME_LOOP_FRAME0={FIXTURE} FRAME_LOOP_LOG={self.log} FRAME_LOOP_WORK={WORK} "
+            # paths with forward slashes: a shell command keeps them on Windows too
+            f"env FRAME_LOOP_FRAME0={Path(FIXTURE).as_posix()} FRAME_LOOP_LOG={Path(self.log).as_posix()} "
+            f"FRAME_LOOP_WORK={WORK.as_posix()} "
             f"FRAME_LOOP_READER=testhook:passing FRAME_LOOP_EFFORT={effort} FRAME_LOOP_TIER=private "
-            f"python3 -I {ROOT}/frameloop/hook.py"
+            f"python3 -I {ROOT.as_posix()}/frameloop/hook.py"
         )
         (REPO / ".claude").mkdir(exist_ok=True)
         (REPO / ".claude/settings.json").write_text(
-            json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": command}]}]}})
+            json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": command}]}]}}), encoding="utf-8"
         )
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "settings")
@@ -1065,7 +1084,7 @@ class CoopTests(unittest.TestCase):
     def test_an_on_demand_reading_reads_the_change_with_the_projects_settings(self):
         self.write_settings()
         seen = loaded_seen()
-        (REPO / "hello.py").write_text("print('read on demand')\n")
+        (REPO / "hello.py").write_text("print('read on demand')\n", encoding="utf-8")
         code, out = self.run_read("--serves", "A1")
         self.assertEqual(code, 0)
         self.assertIn("frame-loop · read · pass", out)
@@ -1083,11 +1102,11 @@ class CoopTests(unittest.TestCase):
     def test_an_on_demand_reading_may_raise_the_effort_never_lower_it(self):
         self.write_settings()
         seen = loaded_seen()
-        (REPO / "hello.py").write_text(f"print('raise it {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('raise it {uid(self)}')\n", encoding="utf-8")
         self.run_read("--serves", "A1", "--effort", "high")
         self.assertEqual(seen[-1]["battery"]["reasoning"], "high")
         self.write_settings(effort="high")
-        (REPO / "hello.py").write_text(f"print('lower it {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('lower it {uid(self)}')\n", encoding="utf-8")
         code, out = self.run_read("--serves", "A1", "--effort", "low")
         self.assertEqual(seen[-1]["battery"]["reasoning"], "high")
         self.assertIn("lower effort ignored", out)
@@ -1104,7 +1123,7 @@ class CoopTests(unittest.TestCase):
             )
         )
         seen = loaded_seen()
-        (REPO / "hello.py").write_text("print('marker')\n")
+        (REPO / "hello.py").write_text("print('marker')\n", encoding="utf-8")
         out = hook.answer(
             {
                 "hook_event_name": "PreToolUse",
@@ -1176,7 +1195,7 @@ class CoopTests(unittest.TestCase):
         # second copy with an empty session and folder; the log said session: null.
         import subprocess
 
-        (REPO / "hello.py").write_text("print('script')\n")
+        (REPO / "hello.py").write_text("print('script')\n", encoding="utf-8")
         self.addCleanup(lambda: git("checkout", "--", "hello.py"))
         child = {
             **os.environ,
@@ -1199,7 +1218,7 @@ class CoopTests(unittest.TestCase):
             cwd=str(ROOT),
         )
         self.assertEqual(done.returncode, 0, done.stderr)
-        last = json.loads(self.log.read_text().splitlines()[-1])
+        last = json.loads(self.log.read_text(encoding="utf-8").splitlines()[-1])
         self.assertEqual(last["event"], "read")
         self.assertEqual(last["session"], "script-1")
 
@@ -1367,7 +1386,7 @@ class WriterTests(unittest.TestCase):
             unittest.mock.patch.object(writer.subprocess, "run", side_effect=OSError("no claude")) as run,
         ):
             cached = writer._cache("a change")
-            cached.write_text(json.dumps({"label": "old"}))
+            cached.write_text(json.dumps({"label": "old"}), encoding="utf-8")
             self.assertIn("error", writer.haiku("a change"))
             self.assertTrue(run.called)
 
@@ -1443,7 +1462,7 @@ class ChannelTests(unittest.TestCase):
             FRAME_LOOP_WORK=str(WORK / f"channel-{uid(self)}"),
         )
         self.outside = Path(OUTSIDE) / f"frame-loop-private-{os.getpid()}-{uid(self)}.py"
-        self.outside.write_text(self.SECRET_LINE + "\nshort\n")
+        self.outside.write_text(self.SECRET_LINE + "\nshort\n", encoding="utf-8")
         self.addCleanup(lambda: self.outside.exists() and self.outside.unlink())
 
     def tearDown(self):
@@ -1464,7 +1483,7 @@ class ChannelTests(unittest.TestCase):
 
     def read_turn(self, added, session="c1"):
         hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"})
-        (REPO / "hello.py").write_text("print('hello')\n" + added + "\n")
+        (REPO / "hello.py").write_text("print('hello')\n" + added + "\n", encoding="utf-8")
         out = hook.answer(
             {
                 "hook_event_name": "Stop",
@@ -1487,7 +1506,7 @@ class ChannelTests(unittest.TestCase):
         self.post(
             "Read",
             {"file_path": str(self.outside)},
-            {"file": {"filePath": str(self.outside), "content": self.outside.read_text()}},
+            {"file": {"filePath": str(self.outside), "content": self.outside.read_text(encoding="utf-8")}},
         )
         seen = loaded_seen()
         out = self.read_turn(self.SECRET_LINE)
@@ -1500,7 +1519,7 @@ class ChannelTests(unittest.TestCase):
         file outside the project, and its lines were not held."""
         spaced = Path(OUTSIDE) / f"frame-loop private {uid(self)}" / "notes.py"
         spaced.parent.mkdir()
-        spaced.write_text(self.SECRET_LINE + "\n")
+        spaced.write_text(self.SECRET_LINE + "\n", encoding="utf-8")
         self.addCleanup(lambda: spaced.exists() and spaced.unlink())
         home = Path(os.path.expanduser("~"))
         commands = [f"cat<{self.outside}", f'cat "{spaced}"']
@@ -1518,8 +1537,13 @@ class ChannelTests(unittest.TestCase):
     def test_held_lines_are_checked_against_the_repository_in_one_call(self):
         """The first review: two git calls for each held line in an outgoing reading."""
         many = [f"an outside line long enough to hold, number {n:03d} {uid(self)}" for n in range(100)]
-        self.outside.write_text("\n".join(many) + "\n")
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="many")
+        self.outside.write_text("\n".join(many) + "\n", encoding="utf-8")
+        self.post(
+            "Read",
+            {"file_path": str(self.outside)},
+            {"content": self.outside.read_text(encoding="utf-8")},
+            session="many",
+        )
         state.SESSION = "many"
         with unittest.mock.patch.object(privacy, "_git", wraps=privacy._git) as calls:
             faults = privacy.outbound_faults("\n".join(many), "the label")
@@ -1527,7 +1551,12 @@ class ChannelTests(unittest.TestCase):
         self.assertLessEqual(calls.call_count, 2)
 
     def test_another_session_is_not_held_by_this_ones_reads(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="c2")
+        self.post(
+            "Read",
+            {"file_path": str(self.outside)},
+            {"content": self.outside.read_text(encoding="utf-8")},
+            session="c2",
+        )
         seen = loaded_seen()
         self.read_turn(self.SECRET_LINE, session="c3")
         self.assertEqual(len(seen), 2)
@@ -1540,9 +1569,9 @@ class ChannelTests(unittest.TestCase):
 
     def test_reading_inside_the_project_is_not_held(self):
         inside = REPO / "notes.md"
-        inside.write_text(self.SECRET_LINE + "\n")
+        inside.write_text(self.SECRET_LINE + "\n", encoding="utf-8")
         self.addCleanup(lambda: inside.exists() and inside.unlink())
-        self.post("Read", {"file_path": str(inside)}, {"content": inside.read_text()})
+        self.post("Read", {"file_path": str(inside)}, {"content": inside.read_text(encoding="utf-8")})
         seen = loaded_seen()
         self.read_turn(self.SECRET_LINE)
         self.assertEqual(len(seen), 2)
@@ -1588,13 +1617,20 @@ class ChannelTests(unittest.TestCase):
         self.assertEqual(seen, [])
 
     def test_only_hashes_are_kept(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()})
-        kept = "".join(p.read_text() for p in Path(os.environ["FRAME_LOOP_WORK"]).rglob("*") if p.is_file())
+        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text(encoding="utf-8")})
+        kept = "".join(
+            p.read_text(encoding="utf-8") for p in Path(os.environ["FRAME_LOOP_WORK"]).rglob("*") if p.is_file()
+        )
         self.assertNotIn("private_algorithm", kept)
         self.assertTrue(kept)
 
     def test_a_proposal_is_checked_too(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="prop")
+        self.post(
+            "Read",
+            {"file_path": str(self.outside)},
+            {"content": self.outside.read_text(encoding="utf-8")},
+            session="prop",
+        )
         seen = loaded_seen()
         command = f": frame-loop-read --serves A1 <<'EOF'\n{self.SECRET_LINE}\nEOF"
         out = hook.answer(
@@ -1611,7 +1647,7 @@ class ChannelTests(unittest.TestCase):
 
     def test_a_line_already_in_the_public_repository_is_never_held(self):
         common = "from __future__ import annotations  # a line the project already has"
-        (REPO / "base.py").write_text(common + "\n")
+        (REPO / "base.py").write_text(common + "\n", encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "base line")
         self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="common")
@@ -1626,14 +1662,19 @@ class ChannelTests(unittest.TestCase):
         self.assertNotIn("Sandboxed mode", text)
 
     def test_the_withhold_file_gadfly_enforces_holds_the_session_and_excuses_the_repository(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="wh")
+        self.post(
+            "Read",
+            {"file_path": str(self.outside)},
+            {"content": self.outside.read_text(encoding="utf-8")},
+            session="wh",
+        )
         common = "from __future__ import annotations  # already in the public repository"
-        (REPO / "base.py").write_text(common + "\n")
+        (REPO / "base.py").write_text(common + "\n", encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "base line")
         self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="wh")
         self.read_turn(common, session="wh")
-        data = json.loads(Path(os.environ["FRAME_LOOP_WITHHOLD"]).read_text())
+        data = json.loads(Path(os.environ["FRAME_LOOP_WITHHOLD"]).read_text(encoding="utf-8"))
         lines = data["training"]["lines"]
         self.assertIn(privacy._hash(privacy._norm(self.SECRET_LINE)), lines)
         self.assertNotIn(privacy._hash(privacy._norm(common)), lines)  # excused: the repository has it
@@ -1683,10 +1724,10 @@ class ObligationTests(unittest.TestCase):
     def setUp(self):
         self.saved = dict(os.environ)
         TurnTests.setUp(self)
-        frame0 = json.loads(FIXTURE.read_text())
+        frame0 = json.loads(FIXTURE.read_text(encoding="utf-8"))
         frame0["obligations"] = OBLIGATIONS
         self.frame0 = WORK / f"frame0-obligations-{uid(self)}.json"
-        self.frame0.write_text(json.dumps(frame0))
+        self.frame0.write_text(json.dumps(frame0), encoding="utf-8")
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_FRAME0=str(self.frame0))
         self.addCleanup(lambda: git("checkout", "--", "."))
 
@@ -1714,26 +1755,26 @@ class ObligationTests(unittest.TestCase):
         self.assertIn(": frame-loop-declare --done <ids>", text)
 
     def test_an_owed_obligation_met_is_shown_as_met(self):
-        (REPO / "hello.py").write_text("print('hi')\nif __name__ == '__main__':\n    pass\n")
-        (REPO / "README.md").write_text(f"updated {uid(self)}\n")
+        (REPO / "hello.py").write_text("print('hi')\nif __name__ == '__main__':\n    pass\n", encoding="utf-8")
+        (REPO / "README.md").write_text(f"updated {uid(self)}\n", encoding="utf-8")
         line = self.read(" --done O1,O2")
         self.assertIn("pass", line.split("\n")[0])
         self.assertIn(lines.for_user("owed O1 ✓ · O2 ✓", framezero.load_frame0()), line)
 
     def test_an_owed_obligation_unmet_rises(self):
-        (REPO / "hello.py").write_text("print('no guard, no readme')\n")
+        (REPO / "hello.py").write_text("print('no guard, no readme')\n", encoding="utf-8")
         line = self.read()
         self.assertIn("rise", line.split("\n")[0])
         self.assertIn(lines.for_user("O1 ✗", framezero.load_frame0()), line)
         self.assertIn(lines.for_user("O2 ✗", framezero.load_frame0()), line)
 
     def test_a_claim_the_check_does_not_confirm_is_named(self):
-        (REPO / "hello.py").write_text("print('claims done')\n")
+        (REPO / "hello.py").write_text("print('claims done')\n", encoding="utf-8")
         line = self.read(" --done O1")
         self.assertIn(lines.for_user("claimed O1", framezero.load_frame0()), line)
 
     def test_nothing_is_owed_when_the_scope_is_not_touched(self):
-        (REPO / "other.py").write_text("x = 1\n")
+        (REPO / "other.py").write_text("x = 1\n", encoding="utf-8")
         self.addCleanup(lambda: (REPO / "other.py").exists() and (REPO / "other.py").unlink())
         line = self.read()
         self.assertNotIn("owed", line)
@@ -1764,10 +1805,10 @@ class ObligationTests(unittest.TestCase):
         self.assertIn(lines.for_user("owes O1, O2", framezero.load_frame0()), out["systemMessage"])
 
     def test_a_malformed_obligation_keeps_frame0_unready(self):
-        frame0 = json.loads(self.frame0.read_text())
+        frame0 = json.loads(self.frame0.read_text(encoding="utf-8"))
         frame0["obligations"] = [{"id": "O9", "scope": "hello.py", "text": "x", "check": {"run": "make"}}]
-        self.frame0.write_text(json.dumps(frame0))
-        (REPO / "hello.py").write_text("print('x')\n")
+        self.frame0.write_text(json.dumps(frame0), encoding="utf-8")
+        (REPO / "hello.py").write_text("print('x')\n", encoding="utf-8")
         self.assertIn("frame 0 is not ready", self.read())
 
 
@@ -1793,7 +1834,7 @@ class CoreTests(unittest.TestCase):
     def setUp(self):
         self.saved = dict(os.environ)
         TurnTests.setUp(self)
-        frame0 = json.loads(FIXTURE.read_text())
+        frame0 = json.loads(FIXTURE.read_text(encoding="utf-8"))
         frame0["obligations"] = [
             {
                 "id": "O1",
@@ -1803,7 +1844,7 @@ class CoreTests(unittest.TestCase):
             }
         ]
         self.frame0 = WORK / f"frame0-core-{uid(self)}.json"
-        self.frame0.write_text(json.dumps(frame0))
+        self.frame0.write_text(json.dumps(frame0), encoding="utf-8")
         os.environ.update(
             FRAME_LOOP_READER="testhook:completing", FRAME_LOOP_FRAME0=str(self.frame0), FRAME_LOOP_LOG=str(self.log)
         )
@@ -1820,7 +1861,7 @@ class CoreTests(unittest.TestCase):
         )
         for name, text in files.items():
             (REPO / name).parent.mkdir(parents=True, exist_ok=True)
-            (REPO / name).write_text(text)
+            (REPO / name).write_text(text, encoding="utf-8")
         out = hook.answer(
             {
                 "hook_event_name": "Stop",
@@ -1856,7 +1897,7 @@ class CoreTests(unittest.TestCase):
             hook.answer(
                 {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(plain), "prompt": "go"}
             )
-            (plain / "notes.md").write_text(f"{uid(self)} {len(said)}\n")
+            (plain / "notes.md").write_text(f"{uid(self)} {len(said)}\n", encoding="utf-8")
             out = hook.answer(
                 {
                     "hook_event_name": "Stop",
@@ -1890,7 +1931,7 @@ class CoreTests(unittest.TestCase):
             )
             for k in range(n):
                 (REPO / "many" / f"f{k}.py").parent.mkdir(exist_ok=True)
-                (REPO / "many" / f"f{k}.py").write_text(f"print({n}, {k}, '{uid(self)}')\n")
+                (REPO / "many" / f"f{k}.py").write_text(f"print({n}, {k}, '{uid(self)}')\n", encoding="utf-8")
             with unittest.mock.patch.object(turn, "_git", wraps=turn._git) as git_calls:
                 hook.answer(
                     {
@@ -1954,7 +1995,7 @@ class CoreTests(unittest.TestCase):
         )
         (REPO / "notes").mkdir(exist_ok=True)
         # a size that never depends on the platform's object ids: under the large-change signal
-        (REPO / "notes" / f"{uid(self)}.py").write_text("".join(f"print({k})\n" for k in range(400)))
+        (REPO / "notes" / f"{uid(self)}.py").write_text("".join(f"print({k})\n" for k in range(400)), encoding="utf-8")
         bash(": frame-loop-declare --serves A2")
         out = hook.answer(
             {
@@ -1980,7 +2021,7 @@ class CoreTests(unittest.TestCase):
         )  # what the wait is for
         self.assertEqual(len(steps), 2)  # the two questions ran at once, in one step
         self.assertTrue(all(x["answers"] >= 3 for x in steps), steps)  # counted as they come in, summed
-        done = json.loads((live / f"{self.session}.json").read_text())
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(done["state"], "done")
         self.assertIn(done["decision"], ("pass", "rise"))
         self.assertEqual(done["detail"], out.split("\n"))  # the details, for the band's fold
@@ -2042,9 +2083,9 @@ class CoreTests(unittest.TestCase):
         os.environ.update(FRAME_LOOP_READER="testhook:passing")
         prompt = {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         hook.answer(prompt)
-        (REPO / "early.py").write_text(f"print('early {uid(self)}')\n")
+        (REPO / "early.py").write_text(f"print('early {uid(self)}')\n", encoding="utf-8")
         hook.answer({**prompt, "prompt": "btw"})  # mid-turn
-        (REPO / "late.py").write_text(f"print('late {uid(self)}')\n")
+        (REPO / "late.py").write_text(f"print('late {uid(self)}')\n", encoding="utf-8")
         hook.answer(
             {
                 "hook_event_name": "Stop",
@@ -2081,12 +2122,12 @@ class CoreTests(unittest.TestCase):
         and the turn compared this project's AGENTS.md with that one's ("2 of your rules
         lost their wording") and diffed trees across the two."""
         elsewhere = Path(make_repo(WORK / f"elsewhere-{uid(self)}"))
-        (elsewhere / "AGENTS.md").write_text("# Another guide\n\n- Another rule.\n")
+        (elsewhere / "AGENTS.md").write_text("# Another guide\n\n- Another rule.\n", encoding="utf-8")
         os.environ.update(FRAME_LOOP_READER="testhook:passing", CLAUDE_PROJECT_DIR=str(REPO))
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        (REPO / "hello.py").write_text(f"print('here {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('here {uid(self)}')\n", encoding="utf-8")
         out = hook.answer(
             {
                 "hook_event_name": "Stop",
@@ -2125,7 +2166,7 @@ class CoreTests(unittest.TestCase):
             "triggers": ["L1: the loop's own configuration or record is touched"],
         }
         landed = WORK / f"landed-{uid(self)}.json"
-        landed.write_text("{}")
+        landed.write_text("{}", encoding="utf-8")
         wrote = {"event": "config", "path": str(landed), "at": landed.stat().st_mtime}
         refused = {"event": "config", "path": str(WORK / f"never-{uid(self)}.json"), "at": 1}  # Claude Code said no
         self.assertEqual(lines.act_words(ran)[0], "Claude ran a command on the loop's own files")
@@ -2224,8 +2265,8 @@ class CoreTests(unittest.TestCase):
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(fresh), "prompt": "OK"}
         )
         (fresh / ".frame-loop").mkdir()
-        (fresh / ".frame-loop/frame0.json").write_text(Path(FIXTURE).read_text())
-        (fresh / "greet.py").write_text("print('hello')\n")
+        (fresh / ".frame-loop/frame0.json").write_text(Path(FIXTURE).read_text(encoding="utf-8"), encoding="utf-8")
+        (fresh / "greet.py").write_text("print('hello')\n", encoding="utf-8")
         hook.answer(
             {
                 "hook_event_name": "Stop",
@@ -2242,9 +2283,9 @@ class CoreTests(unittest.TestCase):
         """Seen in the novice profile: Claude saved frame 0 with asks only, and every reading
         crashed on its missing id."""
         bare = WORK / f"bare-{uid(self)}.json"
-        raw = json.loads(Path(FIXTURE).read_text())
+        raw = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
         raw.pop("id", None)
-        bare.write_text(json.dumps(raw))
+        bare.write_text(json.dumps(raw), encoding="utf-8")
         os.environ.update(FRAME_LOOP_FRAME0=str(bare), FRAME_LOOP_READER="testhook:passing")
         self.assertIn("rise", self.turn({"hello.py": f"print('bare {uid(self)}')\n" * 300}, "done") + "rise")
         self.assertEqual(framezero.load_frame0()["id"], "frame-0")
@@ -2257,16 +2298,20 @@ class CoreTests(unittest.TestCase):
         live = WORK / f"live-int-{uid(self)}"
         live.mkdir()
         os.environ["FRAME_LOOP_LIVE"] = str(live)
-        (live / f"{self.session}.json").write_text(json.dumps({"session": self.session, "at": 1, "state": "reading"}))
+        (live / f"{self.session}.json").write_text(
+            json.dumps({"session": self.session, "at": 1, "state": "reading"}), encoding="utf-8"
+        )
         hook.answer(
             {"hook_event_name": "SessionStart", "source": "resume", "session_id": self.session, "cwd": str(REPO)}
         )
-        self.assertEqual(json.loads((live / f"{self.session}.json").read_text())["state"], "done")
-        (live / f"{self.session}.json").write_text(json.dumps({"session": self.session, "at": 1, "state": "reading"}))
+        self.assertEqual(json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))["state"], "done")
+        (live / f"{self.session}.json").write_text(
+            json.dumps({"session": self.session, "at": 1, "state": "reading"}), encoding="utf-8"
+        )
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        shown = json.loads((live / f"{self.session}.json").read_text())
+        shown = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(shown["state"], "done")
         self.assertEqual(shown["decision"], "interrupted")  # the first review: "quiet", shown as a green check
 
@@ -2284,7 +2329,7 @@ class CoreTests(unittest.TestCase):
         def look():
             while not stop.is_set():
                 try:
-                    text = path.read_text()
+                    text = path.read_text(encoding="utf-8")
                     json.loads(text)
                 except FileNotFoundError:
                     pass
@@ -2302,7 +2347,7 @@ class CoreTests(unittest.TestCase):
             reader_thread.join()
             state.LIVE.clear()
         self.assertEqual(broken, [])
-        self.assertEqual(len(json.loads(path.read_text())), 40)
+        self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))), 40)
 
     def test_an_act_reported_is_never_shown_as_checked(self):
         """The first live use: a push in a turn with nothing to read showed a green check
@@ -2332,7 +2377,7 @@ class CoreTests(unittest.TestCase):
                 "stop_hook_active": False,
             }
         )
-        shown = json.loads((live / f"{self.session}.json").read_text())
+        shown = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(shown["decision"], "noted", shown)
         act = next(r for r in record._records_all() if r.get("event") == "outward" and r.get("session") == self.session)
         self.assertIn("git push origin main", lines.act_words(act)[2])
@@ -2358,14 +2403,17 @@ class CoreTests(unittest.TestCase):
                         }
                     ],
                 }
-            )
+            ),
+            encoding="utf-8",
         )
         os.environ.update(FRAME_LOOP_RULES=str(rules), FRAME_LOOP_READER="testhook:passing")
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
         (REPO / "docs").mkdir(exist_ok=True)
-        (REPO / "docs" / f"page-{uid(self)}.md").write_text(f"# Page {uid(self)}\n" + "A line of the docs.\n" * 2000)
+        (REPO / "docs" / f"page-{uid(self)}.md").write_text(
+            f"# Page {uid(self)}\n" + "A line of the docs.\n" * 2000, encoding="utf-8"
+        )
         hook.answer(
             {
                 "hook_event_name": "PreToolUse",
@@ -2413,7 +2461,7 @@ class CoreTests(unittest.TestCase):
         switch.parent.mkdir(exist_ok=True)
         self.addCleanup(lambda: switch.unlink() if switch.exists() else None)
         os.environ.update(FRAME_LOOP_READER="testhook:passing", CLAUDE_PROJECT_DIR=str(REPO))
-        switch.write_text("off\n")
+        switch.write_text("off\n", encoding="utf-8")
         out = hook.answer(
             {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(REPO)}
         )
@@ -2430,7 +2478,7 @@ class CoreTests(unittest.TestCase):
                 }
             )
         )
-        switch.write_text("on\n")
+        switch.write_text("on\n", encoding="utf-8")
         self.assertNotEqual(self.turn({"hello.py": f"print('on {uid(self)}')\n" * 300}, "done"), "")
 
     def test_claude_writing_the_switch_rises(self):
@@ -2467,10 +2515,10 @@ class CoreTests(unittest.TestCase):
             time.sleep(0.2)
             turns = [r for r in record._records_all() if r.get("event") == "turn" and r.get("session") == self.session]
         self.assertTrue(turns, "the background read never landed in the record")
-        done = json.loads((live / f"{self.session}.json").read_text())
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         while done.get("state") != "done" and time.time() < deadline:
             time.sleep(0.2)
-            done = json.loads((live / f"{self.session}.json").read_text())
+            done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(done["state"], "done")
         while (
             any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob("background-*.json")) and time.time() < deadline
@@ -2624,8 +2672,8 @@ class CoreTests(unittest.TestCase):
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        (REPO / "hello.py").write_text("print('first file')\n" * 30)
-        (REPO / "zz_last.py").write_text(f"print('the last file {uid(self)}')\n")
+        (REPO / "hello.py").write_text("print('first file')\n" * 30, encoding="utf-8")
+        (REPO / "zz_last.py").write_text(f"print('the last file {uid(self)}')\n", encoding="utf-8")
         hook.answer(
             {
                 "hook_event_name": "PreToolUse",
@@ -2656,7 +2704,7 @@ class CoreTests(unittest.TestCase):
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        (REPO / "hello.py").write_text(f"print('marked {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('marked {uid(self)}')\n", encoding="utf-8")
         said = hook.answer(
             {
                 "hook_event_name": "PreToolUse",
@@ -2680,7 +2728,7 @@ class CoreTests(unittest.TestCase):
         git("commit", "-q", "--allow-empty", "-m", "turn")
         turn = [
             json.loads(x)
-            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()
+            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()
             if json.loads(x).get("event") == "turn"
         ][-1]
         self.assertEqual(turn["declared"], ["A1"])
@@ -2724,7 +2772,8 @@ class CoreTests(unittest.TestCase):
         self.turn({"hello.py": f"print('done? {uid(self)}')\n"}, "Serves: A1")
         noinv = WORK / f"noinv-{uid(self)}.json"
         noinv.write_text(
-            json.dumps({"id": "f", "asks": [{"id": "A1", "text": "Greet by name."}], "principles": [], "triggers": []})
+            json.dumps({"id": "f", "asks": [{"id": "A1", "text": "Greet by name."}], "principles": [], "triggers": []}),
+            encoding="utf-8",
         )
         for frame0 in (WORK / f"absent-{uid(self)}.json", noinv):
             os.environ["FRAME_LOOP_FRAME0"] = str(frame0)
@@ -2822,7 +2871,7 @@ class TreeHookTests(CoreTests):
         super().setUp()
         self.tree = WORK / f"tree-{uid(self)}"
         self.tree.mkdir()
-        (self.tree / "greeter.json").write_text(json.dumps(self.GREETER))
+        (self.tree / "greeter.json").write_text(json.dumps(self.GREETER), encoding="utf-8")
         os.environ.update(FRAME_LOOP_TREE=str(self.tree), FRAME_LOOP_READER="testhook:completing")
 
     def marker(self, command):
@@ -2839,7 +2888,7 @@ class TreeHookTests(CoreTests):
     def events(self, event):
         return [
             json.loads(x)
-            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()
+            for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()
             if json.loads(x).get("event") == event and json.loads(x).get("session") == self.session
         ]
 
@@ -2849,7 +2898,7 @@ class TreeHookTests(CoreTests):
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n", encoding="utf-8")
         self.marker(": frame-loop-declare --serves N1")
         hook.answer(
             {
@@ -2907,7 +2956,7 @@ class TreeHookTests(CoreTests):
             }
         )
         self.assertIn("names no scope", out["systemMessage"])
-        (self.tree / "loose.json").write_text(json.dumps(loose))  # written before this check existed
+        (self.tree / "loose.json").write_text(json.dumps(loose), encoding="utf-8")  # written before this check existed
         self.marker(": frame-loop-node loose")
         line = self.turn({"README.md": f"usage {uid(self)}\n"}, "done")
         self.assertIn("not authorized", line)  # it inherits its parent's scope
@@ -2946,7 +2995,7 @@ class TreeHookTests(CoreTests):
                 "parent": parent,
                 "asks": [{**self.GREETER["asks"][0], "id": f"{nid}1", "quotes": "N1"}],
             }
-            (self.tree / f"{nid}.json").write_text(json.dumps(node))
+            (self.tree / f"{nid}.json").write_text(json.dumps(node), encoding="utf-8")
         out = self.marker(": frame-loop-node ping")
         self.assertNotIn("error", json.dumps(out))
         self.assertIn("circle", json.dumps(out))
@@ -2984,7 +3033,7 @@ class TreeHookTests(CoreTests):
         self.turn({"tests/test_hello.py": f"def test_settings(): pass  # {uid(self)}\n"}, "done")
         seen = loaded_seen()
         state.SESSION = self.session
-        rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()]
+        rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()]
         steps = [r for r in rows if r.get("event") == "step" and r.get("session") == self.session]
         self.assertTrue(all(s.get("node") == "greeter" for s in steps))
         self.marker(": frame-loop-declare --serves N2")
@@ -3015,10 +3064,10 @@ class SnapshotTests(unittest.TestCase):
             run("init", "-q")
             while time.time() % 1 > 0.3:
                 time.sleep(0.02)
-            Path(d, "f.py").write_text("print('raise it')\n")
+            Path(d, "f.py").write_text("print('raise it')\n", encoding="utf-8")
             run("add", "f.py")
             run("commit", "-qm", "r")
-            Path(d, "f.py").write_text("print('lower it')\n")
+            Path(d, "f.py").write_text("print('lower it')\n", encoding="utf-8")
             time.sleep(1.1 - time.time() % 1)
             tree = repo.snapshot(d)  # before git status, which rewrites the index and marks the edit
             self.assertNotEqual(tree, run("rev-parse", "HEAD^{tree}").strip())
@@ -3032,7 +3081,7 @@ class ReadOnlyTests(unittest.TestCase):
     def test_no_sample_hook_blocks_on_its_own_failure(self):
         """plan mode stays Claude Code's own, and a plan reading only informs.
         `onFailure: "block"` (Claude Code 2.1.295+) would let a broken loop block it."""
-        settings = json.loads((ROOT / "hooks/hooks.json").read_text())
+        settings = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))
         flags = [h.get("onFailure") for entries in settings["hooks"].values() for e in entries for h in e["hooks"]]
         self.assertNotIn("block", flags)
 
@@ -3041,7 +3090,7 @@ class ReadOnlyTests(unittest.TestCase):
         own briefing reported a rule lost. Edit the two together."""
         import hashlib
 
-        rules = json.loads((ROOT / ".frame-loop/rules.json").read_text())
+        rules = json.loads((ROOT / ".frame-loop/rules.json").read_text(encoding="utf-8"))
         guide = (ROOT / rules["source"]["file"]).read_bytes()
         self.assertEqual(rules["source"]["sha256"], hashlib.sha256(guide).hexdigest(), "re-index AGENTS.md")
         words = " ".join(guide.decode().split())
@@ -3051,7 +3100,7 @@ class ReadOnlyTests(unittest.TestCase):
     def test_no_band_hook_can_hold_up_a_prompt(self):
         """`claude plugin validate`: a gating hook without `.catch` fails closed, so a throw
         in the band's prompt hook could stop the author's prompt."""
-        band = (ROOT / "hooks/band.tsx").read_text()
+        band = (ROOT / "hooks/band.tsx").read_text(encoding="utf-8")
         hook_body = band[band.index("on('prompt.submit'") :]
         end = hook_body.index("\n  })")
         self.assertTrue(hook_body[end:].startswith("\n  }).catch("), hook_body[end : end + 40])
@@ -3059,7 +3108,7 @@ class ReadOnlyTests(unittest.TestCase):
     def test_a_reading_claude_asks_for_has_the_time_a_plan_has(self):
         """The first review: `: frame-loop-read` runs a reading inside the Bash hook, which
         Claude Code stopped at 30 seconds, well before a reading ends."""
-        settings = json.loads((ROOT / "hooks/hooks.json").read_text())
+        settings = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))
         timeouts = {e["matcher"]: e["hooks"][0]["timeout"] for e in settings["hooks"]["PreToolUse"]}
         self.assertGreaterEqual(timeouts["Bash"], timeouts["ExitPlanMode"])
 
@@ -3169,9 +3218,9 @@ class RulesTests(unittest.TestCase):
     def setUp(self):
         self.saved = dict(os.environ)
         TurnTests.setUp(self)
-        (REPO / "AGENTS.md").write_text(f"# guide {uid(self)}\n- docs change with the code\n")
+        (REPO / "AGENTS.md").write_text(f"# guide {uid(self)}\n- docs change with the code\n", encoding="utf-8")
         (REPO / "examples").mkdir(exist_ok=True)
-        (REPO / "examples/kept.json").write_text("{}\n")
+        (REPO / "examples/kept.json").write_text("{}\n", encoding="utf-8")
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "rules base")
         import hashlib
@@ -3246,10 +3295,11 @@ class RulesTests(unittest.TestCase):
                         },
                     ],
                 }
-            )
+            ),
+            encoding="utf-8",
         )
         self.user_guide = WORK / f"user-guide-{uid(self)}.md"
-        self.user_guide.write_text("# mine\n")
+        self.user_guide.write_text("# mine\n", encoding="utf-8")
         os.environ.update(
             FRAME_LOOP_READER="testhook:passing",
             FRAME_LOOP_RULES=str(self.rules),
@@ -3285,10 +3335,12 @@ class RulesTests(unittest.TestCase):
             git("checkout", "--", ".")
             return [json.dumps(f) for f in seen if f["name"].startswith("violation")]
 
-        touched = violation_frames(lambda: (REPO / "hello.py").write_text(f"print('hi {uid(self)}')\n"))
+        touched = violation_frames(
+            lambda: (REPO / "hello.py").write_text(f"print('hi {uid(self)}')\n", encoding="utf-8")
+        )
         self.assertTrue(touched)
         self.assertTrue(all("R4" in f and "docs change with the code" in f for f in touched))
-        elsewhere = violation_frames(lambda: (REPO / "README.md").write_text(f"run it {uid(self)}\n"))
+        elsewhere = violation_frames(lambda: (REPO / "README.md").write_text(f"run it {uid(self)}\n", encoding="utf-8"))
         self.assertTrue(elsewhere)
         self.assertFalse(any("R4" in f for f in elsewhere))
 
@@ -3297,7 +3349,7 @@ class RulesTests(unittest.TestCase):
         folder could be edited (accepted: true, a looser check) and nothing would rise."""
         handle, name = tempfile.mkstemp(prefix="frame-loop-rules-", suffix=".json")
         os.close(handle)
-        Path(name).write_text(self.rules.read_text())
+        Path(name).write_text(self.rules.read_text(encoding="utf-8"), encoding="utf-8")
         os.environ["FRAME_LOOP_RULES"] = name
         self.assertTrue(config.touches_config(name))
         out = hook.answer(
@@ -3316,16 +3368,16 @@ class RulesTests(unittest.TestCase):
         Path(name).unlink()
 
     def test_accepted_rules_are_owed_by_scope_and_unaccepted_ones_are_not(self):
-        (REPO / "hello.py").write_text(f"print('rules {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('rules {uid(self)}')\n", encoding="utf-8")
         line = self.read()
         self.assertIn(lines.for_user("R1 ✗", framezero.load_frame0()), line)
         self.assertNotIn("R3", line)
 
     def test_an_untouched_check_allows_new_files_and_refuses_changed_ones(self):
-        (REPO / "examples/new.json").write_text(f'{{"n": {uid_number(self)}}}\n')
+        (REPO / "examples/new.json").write_text(f'{{"n": {uid_number(self)}}}\n', encoding="utf-8")
         self.addCleanup(lambda: (REPO / "examples/new.json").exists() and (REPO / "examples/new.json").unlink())
         self.assertIn(lines.for_user("R2 ✓", framezero.load_frame0()), self.read())
-        (REPO / "examples/kept.json").write_text('{"changed": true}\n')
+        (REPO / "examples/kept.json").write_text('{"changed": true}\n', encoding="utf-8")
         self.assertIn(lines.for_user("R2 ✗", framezero.load_frame0()), self.read())
 
     def test_the_briefing_lists_semantic_rules_stale_scopes_and_a_changed_guide(self):
@@ -3336,7 +3388,7 @@ class RulesTests(unittest.TestCase):
         self.assertIn("matches no file", text)
         self.assertNotIn("AGENTS.md changed", text)
         self.assertNotIn("no longer in", text)
-        (REPO / "AGENTS.md").write_text("# guide, edited\n")
+        (REPO / "AGENTS.md").write_text("# guide, edited\n", encoding="utf-8")
         out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
         text = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("AGENTS.md changed since its rules were indexed", text)
@@ -3378,14 +3430,14 @@ class RulesTests(unittest.TestCase):
                 }
             )
 
-        mine = turn("yours", lambda: self.user_guide.write_text("# yours\n- one\n"))
+        mine = turn("yours", lambda: self.user_guide.write_text("# yours\n- one\n", encoding="utf-8"))
         self.assertEqual(
             mine["systemMessage"],
             "frame-loop · this turn\n  ~/.claude/CLAUDE.md: 2 lines added, 1 line removed; your rules all still hold",
         )
 
         def append():
-            with open(REPO / "AGENTS.md", "a") as f:
+            with open(REPO / "AGENTS.md", "a", encoding="utf-8") as f:
                 f.write("- commit messages stay objective\n")
 
         self.assertIn("AGENTS.md: 1 line added; your rules all still hold", turn("guide", append)["systemMessage"])
@@ -3412,7 +3464,7 @@ class RulesTests(unittest.TestCase):
             ob = next(o for o in framezero.load_frame0()["obligations"] if o["id"] == "R7")
             return obligations.checked(ob, REPO, ["hello.py"])
 
-        (REPO / "hello.py").write_text(f"print('ran {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('ran {uid(self)}')\n", encoding="utf-8")
         self.assertEqual(r7(), (False, "'uv run pytest -q' not run"))
         self.bash("uv run pytest -q > out.txt; tail -1 out.txt")
         self.bash("uv run pytest -q | tail -1")
@@ -3422,7 +3474,7 @@ class RulesTests(unittest.TestCase):
         self.bash("cd . && uv run pytest -q 2>&1")
         self.assertEqual(r7(), (True, ""))
         self.assertIn(lines.for_user("R7 ✓", framezero.load_frame0()), self.read())
-        (REPO / "hello.py").write_text(f"print('ran again {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('ran again {uid(self)}')\n", encoding="utf-8")
         self.assertEqual(r7(), (False, "'uv run pytest -q' not run on the final tree"))
 
     def test_the_parts_a_bash_call_speaks_for(self):
@@ -3457,11 +3509,12 @@ class RulesTests(unittest.TestCase):
 
     def test_a_required_command_may_have_forms(self):
         self.rules.write_text(
-            self.rules.read_text().replace(
+            self.rules.read_text(encoding="utf-8").replace(
                 '"ran": ["uv run pytest -q"]', '"ran": [["uv run pytest", "uv run pytest -q"]]'
-            )
+            ),
+            encoding="utf-8",
         )
-        (REPO / "hello.py").write_text(f"print('forms {uid(self)}')\n")
+        (REPO / "hello.py").write_text(f"print('forms {uid(self)}')\n", encoding="utf-8")
         self.bash("set -o pipefail && uv run pytest 2>&1 | tail -1")
         state.SESSION = "ru"
         ob = next(o for o in framezero.load_frame0()["obligations"] if o["id"] == "R7")

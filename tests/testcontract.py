@@ -18,7 +18,7 @@ import frames  # noqa: E402
 import gate  # noqa: E402
 import readers  # noqa: E402
 
-FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text())
+FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text(encoding="utf-8"))
 STEP = {"id": "contract", "summary": "a step", "claim": {"serves": "A5"}, "facts": {"files touched": "review notes"}}
 
 
@@ -39,7 +39,7 @@ def stage_one(frame, battery):
     work = ROOT / "tests/.work" / uuid.uuid4().hex
     work.mkdir(parents=True)
     path, out = work / "frame.json", work / "records.jsonl"
-    path.write_text(json.dumps(frame))
+    path.write_text(json.dumps(frame), encoding="utf-8")
     ran = _gadfly(
         [
             "run",
@@ -74,7 +74,7 @@ def firm(frame, battery, only=None):
     work = ROOT / "tests/.work" / uuid.uuid4().hex
     (work / "runs").mkdir(parents=True)
     path = work / "frame.json"
-    path.write_text(json.dumps(frame))
+    path.write_text(json.dumps(frame), encoding="utf-8")
     cmd = [
         "uv",
         "run",
@@ -110,7 +110,7 @@ class FloorTests(unittest.TestCase):
 
         floor = ".".join(map(str, reader.GADFLY_FLOOR))
         for doc in ("docs/setup.md", "README.md"):
-            self.assertIn(f"{floor} or later", (ROOT / doc).read_text(), doc)
+            self.assertIn(f"{floor} or later", (ROOT / doc).read_text(encoding="utf-8"), doc)
 
     @unittest.skipUnless((GADFLY / "pyproject.toml").exists(), "no Gadfly checkout")
     def test_the_checkout_is_at_the_floor_or_later(self):
@@ -118,7 +118,7 @@ class FloorTests(unittest.TestCase):
 
         import reader
 
-        found = re.search(r'^version = "(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(), re.M)
+        found = re.search(r'^version = "(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(encoding="utf-8"), re.M)
         self.assertGreaterEqual((int(found.group(1)), int(found.group(2))), reader.GADFLY_FLOOR)
 
 
@@ -135,7 +135,8 @@ class ContractTests(unittest.TestCase):
         (work / "runs").mkdir(parents=True)
         path = work / "frame.json"
         path.write_text(
-            json.dumps({**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": NAMES["Ideal"]}})
+            json.dumps({**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": NAMES["Ideal"]}}),
+            encoding="utf-8",
         )
         done = subprocess.run(
             [
@@ -196,7 +197,7 @@ class ContractTests(unittest.TestCase):
         everything = [a["id"] for a in FRAME0["asks"]]
         frame = frames.which_ask(FRAME0, {**STEP, "claim": {"serves": everything}}, "anthropic")
         path = ROOT / "tests/.work/every-ask.json"
-        path.write_text(json.dumps({**frame, "battery": {"kind": "fake-ideal"}}))
+        path.write_text(json.dumps({**frame, "battery": {"kind": "fake-ideal"}}), encoding="utf-8")
         done = subprocess.run(
             ["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
             capture_output=True,
@@ -212,7 +213,7 @@ class ContractTests(unittest.TestCase):
         for with_diffs in (True, False):
             frame = frames.completion(ASK0, "A1", STEPS, "public", with_diffs=with_diffs)
             path = ROOT / f"tests/.work/completion-{with_diffs}.json"
-            path.write_text(json.dumps(frame))
+            path.write_text(json.dumps(frame), encoding="utf-8")
             done = subprocess.run(
                 ["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
                 capture_output=True,
@@ -309,7 +310,7 @@ class LiveReaderTests(unittest.TestCase):
         import reader
 
         names = ROOT / "tests/.work/private-names.txt"
-        names.write_text("secret-project\n")
+        names.write_text("secret-project\n", encoding="utf-8")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
         text = "Files: modified mods/Secret-Project-live/hooks/register.tsx, secret-projects.md\nadds a band"
@@ -329,7 +330,7 @@ class LiveReaderTests(unittest.TestCase):
         import reader
 
         names = ROOT / "tests/.work/private-names.txt"
-        names.write_text("# one name per line\nsecret-project\n")
+        names.write_text("# one name per line\nsecret-project\n", encoding="utf-8")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
         frame = {

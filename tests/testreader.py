@@ -38,7 +38,7 @@ class LauncherTest(unittest.TestCase):
             self.assertEqual(reader.launcher(), (["uv", "run", "--project", str(self.tmp), "gadfly"], self.tmp))
 
     def test_home_checkout_when_nothing_on_path(self):
-        (self.tmp / "pyproject.toml").write_text("[project]\n")
+        (self.tmp / "pyproject.toml").write_text("[project]\n", encoding="utf-8")
         with (
             mock.patch.object(reader, "GADFLY", self.tmp),
             mock.patch.object(reader.shutil, "which", return_value=None),
@@ -65,7 +65,7 @@ class ProgressTest(unittest.TestCase):
     def test_a_long_wait_between_answers_still_reports(self):
         heard = []
         watch = Path(tempfile.mkdtemp()) / "records.jsonl"
-        watch.write_text("")
+        watch.write_text("", encoding="utf-8")
         sleeper = ([sys.executable, "-c", "import time; time.sleep(2.2)"], None)
         with (
             mock.patch.object(reader, "launcher", return_value=sleeper),

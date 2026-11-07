@@ -6,6 +6,9 @@ const BAND = {
   props: { hasSurvey: false, isWorking: true, rows: 40 },
 } as const
 
+// A path as the engine reports it on any system: Windows gives D:\\proj\\x for /proj/x.
+const posix = (path: string) => path.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/')
+
 // Stands for the engine's store: what a test seeds, and what the band writes.
 const seed = (on: any, value: unknown, dismissedAt = 0) => {
   const store: Record<string, { value: unknown; version: number }> = {
@@ -83,7 +86,7 @@ test('a rise after a check mark shows the line that needs the author', async ($,
 test('the switch: /frame-loop off writes the project switch', async ($, on) => {
   const store = seed(on, null)
   const written: Record<string, string> = {}
-  on('fs.write', (_: unknown, e: { path: string; text: string }) => { written[e.path] = e.text; return { value: undefined } })
+  on('fs.write', (_: unknown, e: { path: string; text: string }) => { written[posix(e.path)] = e.text; return { value: undefined } })
   on('command.run', () => ({ text: 'engine' }))
   on('command.register', () => ({ value: { command: 'frame-loop' } }))
   on('env.get', () => ({ value: '/home/u' }))
@@ -125,7 +128,7 @@ for (const [decision, line] of [['noted', 'frame-loop · Claude pushed to GitHub
 test('the band reads the live folder the settings name', async ($, on) => {
   seed(on, null)
   const read: string[] = []
-  on('fs.read', (_: unknown, e: { path: string }) => { read.push(e.path); throw new Error('none yet') })
+  on('fs.read', (_: unknown, e: { path: string }) => { read.push(posix(e.path)); throw new Error('none yet') })
   on('command.register', () => ({ value: { command: 'frame-loop' } }))
   on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'FRAME_LOOP_LIVE' ? '/data/live' : '/home/u' }))
   on('session.id', () => ({ value: 's' }))

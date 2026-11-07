@@ -18,7 +18,7 @@ LINK = re.compile(r"\]\(([^)\s]+)\)|<img src=\"([^\"]+)\"|srcset=\"([^\"]+)\"")
 def anchors(page: Path) -> set[str]:
     """GitHub's heading anchors: lower case, punctuation dropped, spaces as hyphens."""
     found = set()
-    for line in page.read_text().splitlines():
+    for line in page.read_text(encoding="utf-8").splitlines():
         if line.startswith("#"):
             text = re.sub(r"<[^>]+>", "", line.lstrip("#")).strip().lower()
             found.add(re.sub(r"[^\w\- ]", "", text).replace(" ", "-"))
@@ -33,7 +33,7 @@ class DocsTests(unittest.TestCase):
     def test_every_relative_link_resolves(self):
         broken = []
         for page in PAGES:
-            for groups in LINK.findall(outside_code(page.read_text())):
+            for groups in LINK.findall(outside_code(page.read_text(encoding="utf-8"))):
                 target = next(g for g in groups if g)
                 if re.match(r"[a-z]+:", target):
                     continue
@@ -50,7 +50,7 @@ class DocsTests(unittest.TestCase):
         body links."""
         twice = []
         for page in PAGES:
-            seen = [m[0].split("#")[0] for m in LINK.findall(outside_code(page.read_text())) if m[0]]
+            seen = [m[0].split("#")[0] for m in LINK.findall(outside_code(page.read_text(encoding="utf-8"))) if m[0]]
             twice += [f"{page.name}: {t}" for t in sorted({t for t in seen if t and seen.count(t) > 1})]
         self.assertEqual(twice, [])
 
@@ -58,15 +58,15 @@ class DocsTests(unittest.TestCase):
         """The cold read: the README said to set the allowance but showed no JSON, and the
         Quickstart said nothing, so a first check ended "not read"."""
         for name in ("README.md", "docs/quickstart.md", "docs/setup.md"):
-            blocks = re.findall(r"```json\n(.*?)```", (ROOT / name).read_text(), re.S)
+            blocks = re.findall(r"```json\n(.*?)```", (ROOT / name).read_text(encoding="utf-8"), re.S)
             settings = [json.loads(b) for b in blocks]
             self.assertTrue(any(s.get("env", {}).get("FRAME_LOOP_TRAINING_OK") == "1" for s in settings), name)
-            self.assertIn('"FRAME_LOOP_TIER": "private"', (ROOT / name).read_text(), name)
+            self.assertIn('"FRAME_LOOP_TIER": "private"', (ROOT / name).read_text(encoding="utf-8"), name)
 
     def test_the_install_names_every_prerequisite(self):
         """The cold read: Node.js, the Codex CLI and Python 3.13 surfaced mid-install."""
         for name in ("README.md", "docs/setup.md"):
-            text = (ROOT / name).read_text()
+            text = (ROOT / name).read_text(encoding="utf-8")
             needs = (
                 "Node.js 20",
                 "Codex CLI",
@@ -82,7 +82,7 @@ class DocsTests(unittest.TestCase):
 
     def test_the_docs_name_tiers_the_code_has(self):
         for name in ("README.md", "docs/setup.md", "docs/privacy.md"):
-            named = set(re.findall(r"`(contributor|private|public)`", (ROOT / name).read_text()))
+            named = set(re.findall(r"`(contributor|private|public)`", (ROOT / name).read_text(encoding="utf-8")))
             for tier in named:
                 self.assertIn(readers.tier(tier), readers.READERS, f"{name}: {tier}")
             self.assertIn("contributor", named, name)
@@ -102,17 +102,19 @@ class DocsTests(unittest.TestCase):
 
     def test_switching_to_enforce_is_shown(self):
         """Mirza: is changing the mode covered? It was one inline mention."""
-        readme = (ROOT / "README.md").read_text()
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertIn('"FRAME_LOOP_MODE": "enforce"', readme)
         self.assertIn("switch to enforce mode", readme)
-        self.assertIn("enforce mode", (ROOT / "docs/quickstart.md").read_text())
+        self.assertIn("enforce mode", (ROOT / "docs/quickstart.md").read_text(encoding="utf-8"))
 
     def test_the_tagline_is_one_everywhere(self):
         """Mirza: "a semantic workflow linter", in all places."""
-        listed = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())["description"]
+        listed = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))["description"]
         self.assertEqual(listed, "frame-loop: a semantic workflow linter for Claude Code")
-        self.assertIn("A semantic workflow linter for Claude Code:", (ROOT / "README.md").read_text())
-        self.assertIn("semantic", json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["keywords"])
+        self.assertIn("A semantic workflow linter for Claude Code:", (ROOT / "README.md").read_text(encoding="utf-8"))
+        self.assertIn(
+            "semantic", json.loads((ROOT / ".claude-plugin/plugin.json").read_text(encoding="utf-8"))["keywords"]
+        )
 
 
 if __name__ == "__main__":

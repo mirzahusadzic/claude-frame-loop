@@ -15,12 +15,12 @@ class RowsTest(unittest.TestCase):
 
     def test_an_unchanged_record_is_parsed_once(self):
         path = Path(tempfile.mkdtemp()) / "steps.jsonl"
-        path.write_text("".join(json.dumps({"n": n}) + "\n" for n in range(500)))
+        path.write_text("".join(json.dumps({"n": n}) + "\n" for n in range(500)), encoding="utf-8")
         with mock.patch.object(record.json, "loads", wraps=json.loads) as parsed:
             for _ in range(4):
                 self.assertEqual(len(record.rows(path)), 500)
             self.assertEqual(parsed.call_count, 500)
-            with path.open("a") as out:
+            with path.open("a", encoding="utf-8") as out:
                 out.write(json.dumps({"n": 500}) + "\n")
             self.assertEqual(len(record.rows(path)), 501)  # a change is read
             self.assertEqual(parsed.call_count, 1001)
