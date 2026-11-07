@@ -167,16 +167,20 @@ def _act(words: list[str], depth: int) -> str | None:
     short = "".join(a[1:] for a in args if re.fullmatch(r"-[A-Za-z]+", a))
     if name == "rm" and ("r" in short or "R" in short or "--recursive" in args):
         return "rm -r"
+    dry = "--dry-run" in args  # a rehearsal sends nothing and deletes nothing
     if name == "git":
         rest = _flags(args, GIT_VALUED)
-        if rest[:1] == ["push"]:
+        flags = "".join(a[1:] for a in rest[1:] if re.fullmatch(r"-[A-Za-z]+", a))
+        if rest[:1] == ["push"] and not (dry or "n" in flags):
             return "git push"
-        if rest[:1] == ["clean"] and (
-            "f" in "".join(a[1:] for a in rest if re.fullmatch(r"-[A-Za-z]+", a)) or "--force" in rest
-        ):
+        if rest[:1] == ["clean"] and ("f" in flags or "--force" in rest) and not (dry or "n" in flags):
             return "git clean"
     if name == "gh" and _flags(args, GH_VALUED)[:1] == ["release"]:
-        return "gh release"
+        sub = _flags(_flags(args, GH_VALUED)[1:], GH_VALUED)[:1]
+        if sub not in (["view"], ["list"], ["download"]):  # reading a release is no release
+            return "gh release"
+    if dry and name in {"npm", "yarn", "twine", *PUBLISH}:
+        return None
     if name == "npm" and _flags(args, NPM_VALUED)[:1] == ["publish"]:
         return "npm publish"
     if name == "twine" and _flags(args, set())[:1] == ["upload"]:

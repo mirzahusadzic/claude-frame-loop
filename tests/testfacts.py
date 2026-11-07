@@ -178,6 +178,41 @@ class PipedActTests(unittest.TestCase):
                 self.assertIsNone(facts.outward(command))
 
 
+class RehearsalTests(unittest.TestCase):
+    """Sparky's second review: reading a release and rehearsing a push, a clean or a publish
+    were reported as the acts themselves ("Claude made a GitHub release")."""
+
+    def test_reading_or_rehearsing_is_no_act(self):
+        for command in (
+            "gh release view v1",
+            "gh release list",
+            "gh -R owner/repo release download v1",
+            "git push --dry-run origin main",
+            "git push -n",
+            "git clean -fn",
+            "git clean -f --dry-run",
+            "npm publish --dry-run",
+            "cargo publish --dry-run",
+        ):
+            with self.subTest(command):
+                self.assertIsNone(facts.outward(command))
+
+    def test_the_acts_themselves_still_count(self):
+        runs = {
+            "gh release create v1": "gh release",
+            "gh release delete v1": "gh release",
+            "gh release upload v1 dist/a.whl": "gh release",
+            "git push -f origin main": "git push",
+            "git push origin main": "git push",
+            "git clean -fd": "git clean",
+            "npm publish": "npm publish",
+            "cargo publish": "cargo publish",
+        }
+        for command, act in runs.items():
+            with self.subTest(command):
+                self.assertEqual(facts.outward(command), act)
+
+
 class ReviewFollowUpTests(unittest.TestCase):
     """Tendy's review of the cold-review fixes."""
 
