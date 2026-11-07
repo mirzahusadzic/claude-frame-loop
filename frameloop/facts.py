@@ -129,8 +129,24 @@ def program(word: str) -> str:
     return name[:-4].lower() if name.lower().endswith(".exe") else name
 
 
+# Shell keywords a command can follow: `if …; then git push; fi`, `for …; do rm -rf …; done`,
+# `{ git push; }`, `! git push` (the cold review, M2).
+KEYWORDS = {"if", "then", "else", "elif", "do", "while", "until", "{", "!", "time"}
+# Package and release uploads beyond npm and twine.
+PUBLISH = {
+    "uv": "publish",
+    "cargo": "publish",
+    "poetry": "publish",
+    "pnpm": "publish",
+    "yarn": "publish",
+    "hatch": "publish",
+    "flit": "publish",
+    "gem": "push",
+}
+
+
 def _act(words: list[str], depth: int) -> str | None:
-    while words and re.fullmatch(r"\w+=.*", words[0]):
+    while words and (re.fullmatch(r"\w+=.*", words[0]) or words[0] in KEYWORDS):
         words = words[1:]
     while words and words[0] in WRAPPERS:
         words = _flags(words[1:], WRAPPERS[words[0]])
@@ -156,6 +172,14 @@ def _act(words: list[str], depth: int) -> str | None:
         return "npm publish"
     if name == "twine" and _flags(args, set())[:1] == ["upload"]:
         return "twine upload"
+    if (
+        re.fullmatch(r"python[\d.]*", name)
+        and args[:2] == ["-m", "twine"]
+        and _flags(args[2:], set())[:1] == ["upload"]
+    ):
+        return "twine upload"
+    if name in PUBLISH and _flags(args, NPM_VALUED)[:1] == [PUBLISH[name]]:
+        return f"{name} {PUBLISH[name]}"
     if name == "find":
         if "-delete" in args:
             return "find -delete"
@@ -166,6 +190,9 @@ def _act(words: list[str], depth: int) -> str | None:
                 found = _act(inner, depth)
                 if found:
                     return found
+    if depth < 3 and name in SHELLS and "<<<" in args:  # `bash <<< 'git push'`: the here-string is code
+        after = args[args.index("<<<") + 1 :]
+        return outward(after[0], depth + 1) if after else None
     if depth < 3 and name in SHELLS:
         opts = [a for a in args if re.fullmatch(r"-[A-Za-z]+", a)]
         if any("c" in a for a in opts):
@@ -218,6 +245,14 @@ def outward(command: str, depth: int = 0) -> str | None:
             found = found or outward(body, depth + 1)
     for part in _split(text):
         found = found or _act(_words(part), depth)
+    # `echo 'git push' | bash`: a shell reading a pipe runs what the commands before it print.
+    if (
+        depth < 3
+        and not found
+        and re.search(r"\|\s*(?:\S*/)?(?:bash|sh|zsh|dash|ksh)\b(?:\s+-\w+)*\s*(?:$|[;&|)])", text)
+    ):
+        for printed in re.findall(r"'([^']*)'|\"([^\"]*)\"", text.split("|")[0]):
+            found = found or outward(next(x for x in printed if x is not None), depth + 1)
     for inner in substitutions(command) if depth < 3 else []:
         found = found or outward(inner, depth + 1)
     return found

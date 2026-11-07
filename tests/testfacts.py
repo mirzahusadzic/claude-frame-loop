@@ -122,3 +122,28 @@ class FactsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewActTests(unittest.TestCase):
+    """The cold review, M2: acts behind shell keywords, a pipe or a here-string into a shell, and
+    publish commands other than npm's and twine's, passed unseen."""
+
+    def test_every_hidden_act_counts(self):
+        runs = {
+            "if true; then git push; fi": "git push",
+            'for d in a b; do rm -rf "$d"; done': "rm -r",
+            "while true; do git push; done": "git push",
+            "{ git push; }": "git push",
+            "! git push": "git push",
+            "echo 'git push' | bash": "git push",
+            "bash <<< 'git push'": "git push",
+            "uv publish": "uv publish",
+            "cargo publish": "cargo publish",
+            "poetry publish": "poetry publish",
+            "pnpm publish": "pnpm publish",
+            "python3 -m twine upload dist/*": "twine upload",
+        }
+        for command, act in runs.items():
+            self.assertEqual(facts.outward(command), act, command)
+        for command in ("echo 'hello' | bash", "grep -n publish notes.md", "cargo build", "uv run pytest"):
+            self.assertIsNone(facts.outward(command), command)

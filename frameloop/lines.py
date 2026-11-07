@@ -22,6 +22,8 @@ ACT_WORDS = (
     ("gh release", "Claude made a GitHub release", False),
     ("npm publish", "Claude published a package", False),
     ("twine upload", "Claude published a package", False),
+    (" publish", "Claude published a package", False),
+    ("gem push", "Claude published a package", False),
     ("rm -", "Claude deleted a folder", True),
     ("git clean", "Claude deleted untracked files", True),
     ("find -delete", "Claude deleted files", True),
