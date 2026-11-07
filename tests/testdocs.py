@@ -95,5 +95,12 @@ class DocsTests(unittest.TestCase):
         self.assertIn("switch to enforce mode", readme)
         self.assertIn("enforce mode", (ROOT / "docs/quickstart.md").read_text())
 
+    def test_the_tagline_is_one_everywhere(self):
+        """Mirza: "a semantic workflow linter", in all places."""
+        listed = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())["description"]
+        self.assertEqual(listed, "frame-loop: a semantic workflow linter for Claude Code")
+        self.assertIn("A semantic workflow linter for Claude Code:", (ROOT / "README.md").read_text())
+        self.assertIn("semantic", json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["keywords"])
+
 if __name__ == "__main__":
     unittest.main()

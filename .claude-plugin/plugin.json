@@ -8,6 +8,6 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/mirzahusadzic/claude-frame-loop",
   "repository": "https://github.com/mirzahusadzic/claude-frame-loop",
-  "keywords": ["workflow", "linter", "requirements", "review", "hooks", "gadfly"],
+  "keywords": ["semantic", "workflow", "linter", "requirements", "review", "hooks", "gadfly"],
   "types": "./types/index.d.ts"
 }

@@ -9,5 +9,5 @@
       "source": "./"
     }
   ],
-  "description": "frame-loop: a workflow linter for Claude Code"
+  "description": "frame-loop: a semantic workflow linter for Claude Code"
 }

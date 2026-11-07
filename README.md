@@ -6,7 +6,7 @@
 
 Early alpha (0.1.0): used so far by its author. Expect rough edges and changes between versions; pin a version if you need stability. Report problems in [GitHub issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
 
-A workflow linter for Claude Code: it checks the work you and Claude do together against the requirements you confirmed and your project's rules, and only what does not fit reaches you. Each check runs on [Gadfly](https://github.com/mirzahusadzic/gadfly), which asks a separate model whether the work fits and asks again with your requirement removed, so a fit counts only when the requirement carries it; the method is in [the paper](https://doi.org/10.5281/zenodo.23962158).
+A semantic workflow linter for Claude Code: it checks the work you and Claude do together against the requirements you confirmed and your project's rules, and only what does not fit reaches you. Each check runs on [Gadfly](https://github.com/mirzahusadzic/gadfly), which asks a separate model whether the work fits and asks again with your requirement removed, so a fit counts only when the requirement carries it; the method is in [the paper](https://doi.org/10.5281/zenodo.23962158).
 
 <p align="center">
   <picture>
@@ -28,7 +28,7 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 
 | If you know | frame-loop is |
 | --- | --- |
-| a linter | one whose rules are your requirements and your `CLAUDE.md`, run at the end of every turn |
+| a linter | one whose rules are your requirements and your `CLAUDE.md`, checked for meaning, not form, at the end of every turn |
 | code review | a reviewer who reads each change against the ticket and never sees the chat |
 | git hooks | Claude Code hooks: a tree snapshot at each prompt, a check of the diff at each turn's end |
 | ablation | each fit tested by removing the requirement and asking again, by Gadfly's fixed trials |
