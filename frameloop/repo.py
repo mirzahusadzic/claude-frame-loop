@@ -27,8 +27,8 @@ def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.Completed
 def snapshot(cwd: str) -> str | None:
     """The working tree as a git tree, tracked and untracked files alike, through an
     index of the loop's own inside .git: the user's index and files are never touched.
-    The loop's own files are left out: the log, the work folder, and frame 0, the rules
-    and the tree, which are the author's alone (a change to them reaches the
+    The loop's own files are left out: the log, the work folder, the switch, and frame
+    0, the rules and the tree, which are the author's alone (a change to them reaches the
     author as an act). None outside a git repository."""
     top = _git(cwd, "rev-parse", "--show-toplevel")
     if top.returncode != 0:
@@ -45,15 +45,23 @@ def snapshot(cwd: str) -> str | None:
     elif mine.exists():
         mine.unlink()
     skip = []
-    for name in ("FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
-        if os.environ.get(name):
-            q = Path(os.environ[name]).resolve()
-            rel = q.relative_to(root.resolve()) if root.resolve() in q.parents else None
-            # A path git already ignores must not be named: `git add` refuses it.
-            if rel is not None and _git(str(root), "check-ignore", "-q", str(rel)).returncode != 0:
-                skip.append(f":(exclude){rel}")
-    if _git(str(root), "add", "-A", "--", ".", *skip, index=str(mine)).returncode != 0:
+    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd) / ".frame-loop"
+    own = [os.environ[name] for name in ("FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_FRAME0",
+                                         "FRAME_LOOP_RULES", "FRAME_LOOP_TREE") if os.environ.get(name)]
+    own.append(str(project / "switch"))  # the author's switch
+    if os.environ.get("FRAME_LOOP_PLUGIN") == "1":
+        own.append(str(project))  # the plugin keeps all of its files there
+    for name in own:
+        q = Path(name).resolve()
+        if root.resolve() in q.parents:
+            skip.append(str(q.relative_to(root.resolve())))
+    if _git(str(root), "add", "-A", "--", ".", index=str(mine)).returncode != 0:
         return None
+    # Set back to their committed state in the loop's own index after, never named to
+    # `git add`, which refuses a path it ignores; the files themselves are untouched.
+    if skip and _git(str(root), "reset", "-q", "--", *skip, index=str(mine)).returncode != 0 and _git(
+            str(root), "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *skip, index=str(mine)).returncode != 0:
+        return None  # (no commit yet: nothing to set back to, so they are left out)
     tree = _git(str(root), "write-tree", index=str(mine))
     return tree.stdout.strip() or None
 

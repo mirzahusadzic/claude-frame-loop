@@ -1457,6 +1457,15 @@ class CoreTests(unittest.TestCase):
         git("commit", "-q", "--allow-empty", "-m", "turn")
         return out["systemMessage"] if out else ""
 
+    def test_the_switch_is_never_part_of_the_change(self):
+        """The first review: writing the switch in a turn made it the change, and a paid
+        reading of it."""
+        os.environ.update(FRAME_LOOP_READER="testhook:passing")
+        steps = len([r for r in record._records_all() if r.get("event") == "step"])
+        out = self.turn({".frame-loop/switch": f"on\n# {uid(self)}\n"}, "done")
+        self.assertNotIn("switch", out)
+        self.assertEqual(len([r for r in record._records_all() if r.get("event") == "step"]), steps)
+
     def test_a_turns_lines_wrap_and_are_never_cut(self):
         """Seen on the loop's release: "signal: … (large-" and "padding?" lost their ends to
         a cut at 100 characters made before the lines were wrapped."""
