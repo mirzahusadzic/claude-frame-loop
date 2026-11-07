@@ -327,13 +327,33 @@ class MainTests(unittest.TestCase):
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             code = frames.main([*self.args(self.write_step({"id": "t", "summary": "s"})), str(out)])
-        self.assertEqual(code, 2)
-        self.assertIn("frame-loop: 'claim'", err.getvalue())
+        self.assertEqual(code, 4)
+        self.assertIn("KeyError: 'claim'", err.getvalue())
         self.assertFalse(out.exists())
         with contextlib.redirect_stderr(err):
             code = frames.main([*self.args(self.write_step(step("A9"))), str(out)])
-        self.assertEqual(code, 2)
-        self.assertIn("distinct asks", err.getvalue())
+        self.assertEqual(code, 4)
+        self.assertRegex(err.getvalue(), r"(?m)^FrameError: .*distinct asks")
+
+    def test_a_missing_or_broken_file_is_refused_as_pythons_error(self):
+        """Mirza: errors are Python's. A missing step raised a traceback, and a refusal said
+        `frame-loop: 'claim'` with no type; Gadfly's statuses: 4 for a frame, 7 for a file."""
+        out = self.tmp / "refused"
+        for path, code, line in (
+            (self.tmp / "no-such-step.json", 7, r"^FileNotFoundError: \[Errno 2\]"),
+            (self.write_step_text("{not json"), 4, r"^JSONDecodeError: "),
+        ):
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                self.assertEqual(frames.main([*self.args(path), str(out)]), code, err.getvalue())
+            self.assertRegex(err.getvalue(), line)
+            self.assertNotIn("Traceback", err.getvalue())
+        self.assertFalse(out.exists())
+
+    def write_step_text(self, text):
+        path = self.tmp / "broken.json"
+        path.write_text(text, encoding="utf-8")
+        return path
 
     def test_the_script_runs_on_its_own(self):
         """Run as `python frameloop/frames.py`, it would find no readers module and fail."""

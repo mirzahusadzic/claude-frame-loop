@@ -1088,11 +1088,12 @@ class CoopTests(unittest.TestCase):
         here = os.getcwd()
         os.chdir(REPO)
         try:
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
+            out, err = io.StringIO(), io.StringIO()
+            with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
                 code = ondemand.main(list(args))
         finally:
             os.chdir(here)
+        self.read_err = err.getvalue()  # a refusal: standard output holds results only
         return code, out.getvalue()
 
     def test_an_on_demand_reading_reads_the_change_with_the_projects_settings(self):
@@ -1270,8 +1271,8 @@ class CoopTests(unittest.TestCase):
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "no settings")
         code, out = self.run_read("--serves", "A1")
-        self.assertNotEqual(code, 0)
-        self.assertIn("no frame-loop hook", out)
+        self.assertEqual((code, out), (2, ""))
+        self.assertIn("no frame-loop hook", self.read_err)
 
 
 class WriterTests(unittest.TestCase):

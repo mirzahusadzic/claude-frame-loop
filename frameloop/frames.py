@@ -369,6 +369,8 @@ def completion(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Writes the step's two frames; a refusal prints on standard error as a traceback's last
+    line, `Type: message`, with Gadfly's exit status for it: 4 for a frame, 7 for a file."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--frame0", required=True, type=Path)
     parser.add_argument("--step", required=True, type=Path)
@@ -381,14 +383,17 @@ def main(argv: list[str] | None = None) -> int:
             "which-ask": which_ask(frame0, step, args.tier),
             "violation": violation(frame0, step, args.tier),
         }
-    except (FrameError, KeyError) as error:
-        print(f"frame-loop: {error}", file=sys.stderr)
-        return 2
-    args.out_dir.mkdir(parents=True, exist_ok=True)
-    for kind, frame in frames.items():
-        (args.out_dir / f"{step['id']}.{kind}.json").write_text(
-            json.dumps(frame, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
-        )
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        for kind, frame in frames.items():
+            (args.out_dir / f"{step['id']}.{kind}.json").write_text(
+                json.dumps(frame, ensure_ascii=False, indent=1) + "\n", encoding="utf-8"
+            )
+    except OSError as error:  # Python's own file errors, Gadfly's status for them
+        print(f"{type(error).__name__}: {error}", file=sys.stderr)
+        return 7
+    except (FrameError, KeyError, ValueError) as error:  # a frame 0 or a step with no honest frame
+        print(f"{type(error).__name__}: {error}", file=sys.stderr)
+        return 4
     return 0
 
 

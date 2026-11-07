@@ -82,17 +82,21 @@ def reading(root: Path, serves: str, effort: str | None, base: str, done: str | 
     return 0, read_change(str(root), before, after, said, frame0, "read")["tell"]
 
 
+class UsageError(Exception):
+    """A reading asked for where none can run: what to fix is in the message."""
+
+    exit = 2
+
+
 def main(argv: list[str] | None = None) -> int:
+    """The reading's lines on standard output; a refusal on standard error, as a traceback's
+    last line (`UsageError: ...`), with its exit status."""
     args = parser().parse_args(argv)
-    top = _git(os.getcwd(), "rev-parse", "--show-toplevel")
-    if top.returncode != 0:
-        print("frame-loop · read · not read: not a git repository")
-        return 2
-    root = Path(top.stdout.strip())
-    found = project_env(root)
-    if not found:
-        print("frame-loop · read · not read: no frame-loop hook in this project's .claude settings")
-        return 2
+    try:
+        root, found = _where(args)
+    except UsageError as error:
+        print(f"{type(error).__name__}: {error}", file=sys.stderr)
+        return error.exit
     for key in [k for k in os.environ if k.startswith("FRAME_LOOP_")]:
         del os.environ[key]  # the project's settings, never the caller's
     os.environ.update(found)
@@ -102,7 +106,23 @@ def main(argv: list[str] | None = None) -> int:
     return code
 
 
+def _where(args: argparse.Namespace) -> tuple[Path, dict[str, str]]:
+    """The repository and its frame-loop settings, or the reason no reading can run here."""
+    for flag, given in (("--complete", args.complete), ("--touches", args.touches)):
+        if given:  # each needs the hook: the session's steps, or a proposal's text
+            raise UsageError(f"{flag} is read only through the hook, as ': frame-loop-read {flag} ...'")
+    top = _git(os.getcwd(), "rev-parse", "--show-toplevel")
+    if top.returncode != 0:
+        raise UsageError(f"directory {os.getcwd()!r} is not in a git repository")
+    root = Path(top.stdout.strip())
+    found = project_env(root)
+    if not found:
+        raise UsageError(f"repository {str(root)!r} has no frame-loop hook in its .claude settings")
+    return root, found
+
+
 if __name__ == "__main__":
     # Its lines hold "·" and "✓": a Windows pipe before Python 3.15 writes the code page otherwise.
     sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
     raise SystemExit(main())

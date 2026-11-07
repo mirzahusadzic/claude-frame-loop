@@ -107,11 +107,15 @@ class MainTests(unittest.TestCase):
         subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True)
 
     def main(self, *args, cwd=None):
+        code, out, _ = self.main_err(*args, cwd=cwd)
+        return code, out
+
+    def main_err(self, *args, cwd=None):
         os.chdir(cwd or self.repo)
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = ondemand.main(list(args))
-        return code, out.getvalue()
+        return code, out.getvalue(), err.getvalue()
 
     def test_the_callers_settings_never_reach_the_reading(self):
         """A caller that sets a training tier or another reader would read the change with them."""
@@ -145,9 +149,29 @@ class MainTests(unittest.TestCase):
         self.assertEqual(testhook.SEEN, [])
 
     def test_outside_a_repository_nothing_is_read(self):
-        """Outside git there is no change to read; a reading there would read nothing and pass."""
-        code, out = self.main("--serves", "A1", cwd=tempfile.mkdtemp(prefix="frame-loop-nogit-"))
-        self.assertEqual((code, out.strip()), (2, "frame-loop · read · not read: not a git repository"))
+        """Outside git there is no change to read; a reading there would read nothing and pass.
+        Mirza: errors are Python's and the command line follows clig.dev, so the refusal goes
+        to standard error as a traceback's last line, and standard output holds results only."""
+        away = tempfile.mkdtemp(prefix="frame-loop-nogit-")
+        code, out, err = self.main_err("--serves", "A1", cwd=away)
+        self.assertEqual((code, out), (2, ""))
+        self.assertEqual(err.strip(), f"UsageError: directory {os.getcwd()!r} is not in a git repository")
+
+    def test_a_repository_without_the_hook_is_refused_on_standard_error(self):
+        bare = Path(make_repo(WORK / f"ondemand-nohook-{uid(self)}"))
+        code, out, err = self.main_err("--serves", "A1", cwd=bare)
+        self.assertEqual((code, out), (2, ""))
+        self.assertRegex(err.strip(), r"^UsageError: repository '.+' has no frame-loop hook in its \.claude settings$")
+
+    def test_flags_only_the_hook_can_read_are_refused_not_ignored(self):
+        """--complete read the change instead of the asks, and --touches was dropped unsaid."""
+        (self.repo / "hello.py").write_text("print('hello, flags')\n", encoding="utf-8")
+        for flag in (["--complete"], ["--touches", "src/cli.py"]):
+            testhook.SEEN.clear()
+            code, out, err = self.main_err("--serves", "A1", *flag)
+            self.assertEqual((code, out), (2, ""), flag)
+            self.assertTrue(err.startswith(f"UsageError: {flag[0]} is read only through the hook"), err)
+            self.assertEqual(testhook.SEEN, [])
 
     def test_the_script_runs_on_its_own(self):
         """Run as `python frameloop/ondemand.py`, it would find none of its modules and fail."""
@@ -158,8 +182,9 @@ class MainTests(unittest.TestCase):
             text=True,
             encoding="utf-8",
         )
-        self.assertEqual(done.returncode, 2, done.stderr)
-        self.assertIn("not a git repository", done.stdout)
+        self.assertEqual((done.returncode, done.stdout), (2, ""), done.stderr)
+        self.assertIn("UsageError: directory", done.stderr)
+        self.assertIn("is not in a git repository", done.stderr)
 
 
 if __name__ == "__main__":
