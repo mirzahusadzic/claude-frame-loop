@@ -275,9 +275,9 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             "id": r["id"],
             "label": r["text"],
             "claims": r.get("claims", []),
-            "diff": _cut(Path(r["diff_file"]).read_text(encoding="utf-8"), 4000)
-            if Path(r["diff_file"]).exists()
-            else "",
+            # whole: the writer labels all of it, to its own limit; only a diff sent itself is cut
+            # (the cold review, L8)
+            "diff": Path(r["diff_file"]).read_text(encoding="utf-8") if Path(r["diff_file"]).exists() else "",
         }
         for r in _records("step")
         if (r.get("node") or "root") == (state.NODE or "root")
@@ -305,7 +305,8 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             # without one, the claimed steps' diffs go, each checked.
             write = _writer() is not None
             sent = {
-                s["id"]: outgoing(s["diff"], "the turn's change", tier, frame0) for s in (steps if write else claimed)
+                s["id"]: outgoing(s["diff"] if write else _cut(s["diff"], 4000), "the turn's change", tier, frame0)
+                for s in (steps if write else claimed)
             }
             refusal = next((why for _, why in sent.values() if why), None)
             frame_steps = (

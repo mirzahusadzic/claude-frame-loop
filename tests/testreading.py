@@ -212,3 +212,42 @@ class TreeCompletionTests(Isolated):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewCompletionLabelTests(unittest.TestCase):
+    """The cold review, L8: with a writer, completion labelled the first 4,000 characters of each
+    step's diff, so a completion could rest on a label of part of the work."""
+
+    def test_the_writer_gets_the_whole_diff_and_a_sent_diff_is_cut(self):
+        from unittest import mock
+
+        big = WORK / f"completion-{uid(self)}.diff"
+        big.write_text("+" + "x" * 80 + "\n" + "+line\n" * 2000, encoding="utf-8")
+        frame0 = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
+        ask = frame0["asks"][0]["id"]
+        steps = [{"id": "S1", "text": "a big step", "claims": [ask], "diff_file": str(big)}]
+        given = []
+
+        def outgoing(text, kind, tier, frame):
+            given.append(text)
+            return "a label", None
+
+        def reader(frame, only=()):
+            return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+        for writer, whole in ((lambda text: {}, True), (None, False)):
+            given.clear()
+            with (
+                mock.patch.object(reading, "_records", return_value=steps),
+                mock.patch.object(reading, "_reader", return_value=reader),
+                mock.patch.object(reading, "_writer", return_value=writer),
+                mock.patch.object(reading, "outgoing", outgoing),
+                mock.patch.object(reading, "tier_for", return_value=("private", "")),
+            ):
+                reading.complete(frame0)
+            self.assertTrue(given)
+            if whole:
+                self.assertNotIn("[diff cut", given[0])
+                self.assertGreater(len(given[0]), 4000)
+            else:
+                self.assertIn("[diff cut at 4000 characters]", given[0])

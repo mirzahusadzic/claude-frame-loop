@@ -26,7 +26,7 @@ Every reading also carries frame 0's requirements and the rules, in their own wo
 | turn, on a signal | the diff, cut at 12,000 characters | the file names, written by code, and the label of the whole change |
 | plan, on leaving plan mode | the plan's text | the file names, if any, and the plan's label |
 | proposal, before any code | its text | its label |
-| completion | each step's free label and the claimed steps' diffs, cut at 4,000 characters each | each step's label, from its diff cut at 4,000 characters |
+| completion | each step's free label and the claimed steps' diffs, cut at 4,000 characters each | each step's label, from its whole diff |
 
 ---
 
