@@ -9,9 +9,8 @@ Installation, the reader's path through the router, and every setting. The [READ
 | Needs | For | Check |
 | --- | --- | --- |
 | Claude Code, tested with 2.1.319 | the hooks, the band and `/frame-loop` (a hooks module), and the writer through `claude -p` | `claude --version` |
-| Python 3.9+ | the hooks; standard library only | `python3 --version` |
 | git | the turn snapshots | `git --version` |
-| [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.13 or later, on Python 3.13: `uv tool install 'midwife>=0.13'` | the reader's trials and fixed rules | `gadfly --version` |
+| [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.13 or later, on Python 3.13: `uv tool install 'midwife>=0.13'` | the reader's trials and fixed rules; its Python also runs the hooks | `gadfly --version` |
 | [uv](https://docs.astral.sh/uv/) | installing Gadfly with its own Python 3.13, or running it from a checkout | `uv --version` |
 | the [Unified Model Router](https://github.com/mirzahusadzic/unified-model-router), with Node.js 20 or later, the Codex CLI it was tested with (0.166.0) and an OpenRouter API key | the reader's model calls | `node install.mjs --verify`, in the router's checkout |
 | `gh`, optional | confirming a repository public | `gh repo view --json visibility` |
@@ -33,7 +32,7 @@ The reader comes from a model family other than the Claude whose work it reads, 
 
 ### Install
 
-The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. Its installer sets up the Codex CLI's configuration, asking before it merges into an existing one and backing it up, and adds a startup service that runs the router; the router's README has the details. The hooks run the `gadfly` command that `uv tool install` puts on the path, with its own Python 3.13; `pip install 'midwife>=0.13'` does the same on a Python 3.13 you already have:
+The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. Its installer sets up the Codex CLI's configuration, asking before it merges into an existing one and backing it up, and adds a startup service that runs the router; the router's README has the details. The hooks run the `gadfly` command that `uv tool install` puts on the path, with its own Python 3.13, and run themselves on that same Python, found beside the `gadfly` command, so one install covers both; without a Python 3.13, the session says so in one line; `pip install 'midwife>=0.13'` does the same on a Python 3.13 you already have:
 
 ```sh
 npm install -g @openai/codex@0.166.0

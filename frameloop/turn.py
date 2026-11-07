@@ -128,7 +128,7 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     # A docs edit has no effect on code, but it is the work when the node or a rule
     # scopes the docs (the docs branch): only unscoped paths can be "no effect".
     if claims and paths and all(S.no_effect(p, d) and not any(fnmatch.fnmatch(p, g) for g in scoped)
-                                for p, d in zip(paths, per_file)):
+                                for p, d in zip(paths, per_file, strict=True)):
         found.append("a claimed change with no effect")
     facts = {"deleted": [x[-1] for x in status if x[0].startswith("D")], "paths": paths, "chars": len(diff)}
     hit = [r["id"] for r in _effort_rules()["rules"] if _rule_hits(r, facts)]

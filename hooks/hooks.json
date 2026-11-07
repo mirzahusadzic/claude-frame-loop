@@ -8,7 +8,7 @@
             "type": "command",
             "timeout": 600,
             "statusMessage": "frame-loop · checking the plan against what you asked",
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       },
@@ -18,7 +18,7 @@
           {
             "type": "command",
             "timeout": 600,
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       },
@@ -28,7 +28,7 @@
           {
             "type": "command",
             "timeout": 30,
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }
@@ -41,7 +41,7 @@
             "type": "command",
             "timeout": 30,
             "statusMessage": "frame-loop · briefing the session",
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }
@@ -53,7 +53,7 @@
             "type": "command",
             "timeout": 600,
             "statusMessage": "frame-loop · checking this turn against what you asked",
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }
@@ -65,7 +65,7 @@
             "type": "command",
             "timeout": 30,
             "statusMessage": "frame-loop · taking the turn's snapshot",
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }
@@ -77,7 +77,7 @@
           {
             "type": "command",
             "timeout": 30,
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }
@@ -89,7 +89,7 @@
           {
             "type": "command",
             "timeout": 30,
-            "command": "env FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku python3 -I \"${CLAUDE_PLUGIN_ROOT}/frameloop/hook.py\""
+            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
           }
         ]
       }

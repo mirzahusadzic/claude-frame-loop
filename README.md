@@ -1,7 +1,7 @@
 # <img src="assets/icon.svg" width="36" height="36" alt="" align="top"> frame-loop
 
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
-![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
+![Python 3.13+](https://img.shields.io/badge/python-3.13%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 ![alpha 0.1.0](https://img.shields.io/badge/status-alpha%200.1.0-e5a50a)
 
 Early alpha (0.1.0): used so far by its author. Expect rough edges and changes between versions; pin a version if you need stability. Report problems in [GitHub issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
@@ -22,7 +22,7 @@ A semantic workflow linter for Claude Code: it checks the work you and Claude do
 - **Tested reader:** a separate model reads a change only on a signal: a file no rule covers, a check you owe that is unmet, a large change, a deleted file or a changed dependency. Gadfly asks it under fixed trials, among them with the requirement removed, with a harmless line removed instead, and with the requirement reversed. A fit that holds without your requirement is rejected.
 - **Fixed verdicts:** ✓ fits, ▲ needs you, ■ not read, · an act reported; decided by rules, not by a model.
 - **Where the change goes:** Haiku reads it on Anthropic's API, through `claude -p` on your login, as Claude Code itself does, and writes a label in plain words; the reader gets that label and the file names, never the code. A change that looks like it holds a secret is refused before it is labelled, and private names are masked; [privacy](docs/privacy.md) lists every destination.
-- **What runs:** the hooks run `python3` on the plugin's own `frameloop/hook.py`, standard library only. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. Nothing else is sent or fetched.
+- **What runs:** each hook runs the plugin's `hooks/run.sh`, which runs its `frameloop/hook.py`, standard library only, on Gadfly's own Python. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. Nothing else is sent or fetched.
 - **Authority:** pushes, releases, recursive deletes and changes to frame 0 or the loop itself are reported to you. Shadow mode, the default, reports and blocks nothing; enforce mode (`FRAME_LOOP_MODE=enforce`) waits for your OK.
 - **Live:** a band above the prompt shows the check, its progress and the time left.
 
@@ -63,8 +63,7 @@ Three pieces: the Unified Model Router, which the reader is called through; Gadf
 | Needs | For |
 | --- | --- |
 | Claude Code (tested with 2.1.319) | the hooks, the band and `/frame-loop` |
-| Python 3.9 or later, and git | the hooks, standard library only |
-| Python 3.13, or [uv](https://docs.astral.sh/uv/) to bring it | Gadfly |
+| Python 3.13 or later, which `uv tool install` brings, and git | Gadfly and the hooks: the hooks run on Gadfly's own Python, so one install serves both |
 | Node.js 20 or later, the Codex CLI and an OpenRouter API key | the router |
 
 #### Router
