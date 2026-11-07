@@ -441,6 +441,14 @@ class AttackTests(unittest.TestCase):
         self.assertEqual(last["tier"], "private")
         self.assertIn("only tighten", last["tier_note"])
 
+    def test_the_briefing_names_no_calibration_reader(self):
+        """A setting naming a calibration tier is refused at every reading; the session's
+        briefing named its Claude model as the reader all the same."""
+        os.environ.update(env(FRAME_LOOP_TIER="anthropic"))
+        said = hook.briefing(framezero.load_frame0(), "shadow")
+        self.assertNotIn("claude-sonnet", said)
+        self.assertIn("for calibration runs only", said)
+
     def test_a_reader_of_claudes_own_family_is_for_calibration_only(self):
         """Sparky's second review: a plan's `reader: anthropic` tightened a contributor
         reading to a Claude model, and a setting could name it, though Setup promises a

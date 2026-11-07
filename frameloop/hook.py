@@ -419,7 +419,13 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
     """What a new session is told: frame-loop's way of working, frame 0, the four terms of
     engagement, crossings and authority, how to declare, and what rises."""
     tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
-    reader = readers.READERS.get(tier, {}).get("model", f"unknown tier {tier!r}")
+    reader = (
+        readers.READERS[tier]["model"]
+        if tier in readers.USER_TIERS
+        else f"none: tier {tier!r} is for calibration runs only"
+        if tier in readers.READERS
+        else f"unknown tier {tier!r}"
+    )
     trains = (
         " It trains on its inputs; the human allowed that for this project."
         if (tier in readers.READERS and _trains(tier))
