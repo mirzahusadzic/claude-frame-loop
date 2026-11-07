@@ -92,5 +92,16 @@ class EncodingTests(unittest.TestCase):
         self.assertEqual(loose, [])
 
 
+class StreamTests(unittest.TestCase):
+    """Windows CI, Python 3.13 and 3.14: a pipe wrote the code page, so `·` came out as 0xb7 and a
+    `✓` would have ended the program. Both entry points write UTF-8 on every system."""
+
+    def test_both_entry_points_write_utf8(self):
+        for name in ("hook.py", "ondemand.py"):
+            source = (ROOT / "frameloop" / name).read_text(encoding="utf-8")
+            entry = source[source.index('if __name__ == "__main__":') :]
+            self.assertIn('reconfigure(encoding="utf-8")', entry, name)
+
+
 if __name__ == "__main__":
     unittest.main()

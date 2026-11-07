@@ -31,11 +31,11 @@ class LauncherTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp(prefix="frame-loop-launcher-"))
         self.tools = self.tmp / "tools"  # the few commands run.sh needs, and no Python
         self.tools.mkdir()
-        try:
+        if os.name == "nt":  # Git's own tools folder, which holds no Python: a linked .exe loses its DLLs
+            self.tools = Path(shutil.which("sed")).parent
+        else:
             for name in ("dirname", "head", "sed", "readlink", "cat"):
                 (self.tools / name).symlink_to(shutil.which(name))
-        except OSError:  # Windows without symlinks: Git's own tools folder, which holds no Python
-            self.tools = Path(shutil.which("sed")).parent
         self.shell = shutil.which("sh") or shutil.which("bash")  # Git Bash on Windows
 
     def run_hook(self, event: dict, path: list) -> str:

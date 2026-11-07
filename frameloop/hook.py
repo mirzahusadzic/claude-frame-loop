@@ -603,4 +603,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Claude Code reads UTF-8; a Windows pipe before Python 3.15 writes the code page otherwise.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        stream.reconfigure(encoding="utf-8")
     raise SystemExit(main())

@@ -103,4 +103,6 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Its lines hold "·" and "✓": a Windows pipe before Python 3.15 writes the code page otherwise.
+    sys.stdout.reconfigure(encoding="utf-8")
     raise SystemExit(main())
