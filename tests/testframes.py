@@ -72,6 +72,17 @@ class WhichAskTests(unittest.TestCase):
         del none["asks"][1]["inversion"]
         self.assertIn("A2", frames.frame0_faults(none)[0])
 
+    def test_a_sham_is_asked_for_only_when_a_harmless_line_is_left(self):
+        """The claims ledger: with every ask declared, or one ask in frame 0, nothing is left
+        to cut, yet the frame asked for a sham Gadfly could never draw."""
+        whole = json.loads((ROOT / "tests/fixtures/frame0.json").read_text(encoding="utf-8"))
+        every = [a["id"] for a in whole["asks"]]
+        one = {**whole, "asks": whole["asks"][:1]}
+        for frame0, serves, sham in ((whole, ["A1"], True), (whole, every, False), (one, ["A1"], False)):
+            with self.subTest(asks=len(frame0["asks"]), serves=serves):
+                frame = frames.which_ask(frame0, step(serves), "private")
+                self.assertEqual("sham" in frame["interventions"], sham)
+
     def test_an_inversion_that_is_empty_or_the_ask_again_is_a_fault(self):
         """The claims ledger: the check took only the inversion's key, so an empty reversal,
         or the ask itself again, passed, and the inversion trial could never move."""

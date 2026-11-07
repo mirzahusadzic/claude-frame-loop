@@ -208,7 +208,7 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 | Question | Trials | Rule |
 | --- | --- | --- |
-| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed, every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲ |
+| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲ |
 | does it break a rule? | baseline, repeat | ✓ if neither names a rule; ▲ naming the rule if both name it; ▲ if they disagree |
 | what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding |
 | is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it) |

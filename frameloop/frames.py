@@ -175,6 +175,15 @@ FULFIL_INSTRUCTION = (
 )
 
 
+def _sham(body: list[dict[str, Any]], anchors: list[str]) -> dict[str, Any]:
+    """The sham trial, a harmless line of the same kind removed, asked for only when the
+    body holds one: with every ask declared, or a rule alone, nothing is left to cut, and
+    a frame never promises a trial it cannot hold (Gadfly then lists specificity open)."""
+    kinds = {s["kind"] for s in body if s["id"] in anchors}
+    free = [s for s in body if s["id"] not in anchors and s["kind"] in kinds]
+    return {"sham": {"draws": 1}} if free else {}
+
+
 def which_ask(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[str, Any]:
     body = _spans(frame0, ("ask",))
     asks = [s["id"] for s in body]
@@ -185,7 +194,7 @@ def which_ask(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
     for a in frame0["asks"]:
         if a["id"] in mine:
             inversion.update(a.get("inversion") or {})
-    interventions: dict[str, Any] = {"repeat": True, "ablation": True, "sham": {"draws": 1}}
+    interventions: dict[str, Any] = {"repeat": True, "ablation": True, **_sham(body, mine)}
     if set(mine) != set(asks):
         # With every ask declared, cutting them all is the ablation itself: no control.
         interventions["control"] = asks
@@ -304,7 +313,7 @@ def violation_confirm(frame0: dict[str, Any], step: dict[str, Any], named: str, 
         step,
         labels,
         VIOLATION_INSTRUCTION,
-        {"ablation": True, "sham": {"draws": 1}, **({"control": rules} if len(rules) > 1 else {})},
+        {"ablation": True, **_sham(body, [named]), **({"control": rules} if len(rules) > 1 else {})},
         {"ablation": [label for label in labels if label != named]},
         tier,
     )
@@ -341,7 +350,7 @@ def completion(
         for s in steps
     ]
     inverted = next(iter((ask.get("inversion") or {}).values()), None)
-    interventions: dict[str, Any] = {"repeat": True, "ablation": True, "sham": {"draws": 1}}
+    interventions: dict[str, Any] = {"repeat": True, "ablation": True, **_sham(body, list(claimed))}
     if set(claimed) != {s["id"] for s in steps}:
         interventions["control"] = [s["id"] for s in steps]
     if len(claimed) > 1:  # each claimed step cut alone, as evidence: a padding step shows
