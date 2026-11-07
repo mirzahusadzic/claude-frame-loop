@@ -143,3 +143,38 @@ class HeldTests(Isolated):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FieldPathTests(unittest.TestCase):
+    """Seen in Gadfly's session: a commit message with an apostrophe, in a heredoc, was read as
+    one long word with slashes, taken for a path, and the PostToolUse hook failed with
+    "File name too long"."""
+
+    COMMAND = (
+        "git commit -q -F - <<'EOF'\n"
+        "fix: keep the folder's write bit from\n"
+        "chmod, a SIGINT sent to the group, and paths like a/b/c in the body\n"
+        "EOF\n"
+        "git add docs/x.md && git commit -q -F - <<'EOF'\ndocs: more a/b text " + "and words " * 400 + "\nEOF"
+    )
+
+    def test_a_commit_message_is_never_a_path_and_never_an_error(self):
+        import hook
+
+        with mock.patch.dict(os.environ, env(FRAME_LOOP_WORK=str(WORK / f"field-{uid(self)}"))):
+            out = hook.safe_answer(
+                {
+                    "hook_event_name": "PostToolUse",
+                    "tool_name": "Bash",
+                    "session_id": f"field-{uid(self)}",
+                    "cwd": PUBLIC,
+                    "tool_input": {"command": self.COMMAND},
+                    "tool_response": {"stdout": "ok"},
+                }
+            )
+        self.assertNotIn("error", json.dumps(out or {}))
+
+    def test_a_word_no_file_could_have_is_not_a_path(self):
+        state.CWD = PUBLIC
+        for word in ("a/" * 3000, "folder's write bit from\nchmod/x", "a\0b/c"):
+            self.assertFalse(privacy._outside_path(word), word[:20])

@@ -261,12 +261,20 @@ def _held(session: str | None) -> dict[str, str]:
 
 
 def _outside_path(token: str) -> bool:
-    expanded = token.replace("~", real_home(), 1) if token.startswith("~") else token
-    candidate = Path(expanded) if Path(expanded).is_absolute() else Path(state.CWD or os.getcwd()) / expanded
-    if not candidate.exists():
+    """Whether a word names an existing file outside the project. A word no file could
+    have (a line break, more than a path's length) is not a path, and a lookup that fails
+    is not one either: never an error in the hook (seen: a commit message read as a path)."""
+    if "\n" in token or "\0" in token or len(token) > 1024:
         return False
-    root = project_root(state.CWD)
-    resolved = candidate.resolve()
+    try:
+        expanded = token.replace("~", real_home(), 1) if token.startswith("~") else token
+        candidate = Path(expanded) if Path(expanded).is_absolute() else Path(state.CWD or os.getcwd()) / expanded
+        if not candidate.exists():
+            return False
+        root = project_root(state.CWD)
+        resolved = candidate.resolve()
+    except (OSError, ValueError):
+        return False
     return not (resolved == root or root in resolved.parents)
 
 
