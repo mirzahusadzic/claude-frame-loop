@@ -22,7 +22,7 @@ import state
 from declare import _masked, _value, _without_declaration
 from effort import _effort_rules
 from lines import _reader_name
-from record import _log
+from record import _log, rows
 from repo import _git, project_root
 
 _EXCUSED: set[str] = set()
@@ -214,9 +214,9 @@ def _held(session: str | None) -> dict[str, str]:
     found: dict[str, str] = {}
     for path in files:
         if path.exists():
-            for line in path.read_text(encoding="utf-8").splitlines():
-                record = json.loads(line)
-                found.setdefault(record["h"], record["from"])
+            for record in rows(path):
+                if "h" in record and "from" in record:
+                    found.setdefault(record["h"], record["from"])
     return found
 
 

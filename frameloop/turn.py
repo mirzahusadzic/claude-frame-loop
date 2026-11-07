@@ -28,7 +28,7 @@ from live import _live
 from obligations import obligations_line, outside_scope
 from privacy import _hash
 from reading import read_change
-from record import _log, _records, _records_all
+from record import _log, _records, _records_all, rows
 from repo import _git, project_root, snapshot
 
 
@@ -148,7 +148,7 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     cwd = event.get("cwd") or os.getcwd()
     path = os.environ.get("FRAME_LOOP_LOG")
     records = (
-        [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()]
+        rows(path)
         if path and Path(path).exists()
         else []
     )
@@ -158,6 +158,10 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     # The turn's first start: a message the author sends mid-turn starts no new turn.
     before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
     if before is None or after is None:
+        if not any(r.get("event") == "unreadable-project" for r in records):  # once a session, under the reply
+            _log({"event": "unreadable-project", "cwd": cwd})
+            state.LIVE.setdefault("shorts", []).append(
+                "frame-loop · changes are not read here: this project is not a git repository")
         return {"systemMessage": "frame-loop · turn not read: no snapshot (not a git repository?)"}
     if before == after:
         return None
@@ -254,9 +258,7 @@ def _turn_summary() -> dict[str, Any] | None:
     path = os.environ.get("FRAME_LOOP_LOG")
     if not path or not Path(path).exists():
         return None
-    mine = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()
-            if line.strip()]
-    mine = [r for r in mine if r.get("session") == state.SESSION]
+    mine = [r for r in rows(path) if r.get("session") == state.SESSION]
     last = max((i for i, r in enumerate(mine) if r.get("event") == "stop"), default=-1)
     turn = mine[last + 1:]
     read = [r for r in turn if r.get("event") in ("plan", "turn", "read", "proposal")]

@@ -7,14 +7,13 @@ Standard library only.
 from __future__ import annotations
 
 import fnmatch
-import json
 import os
 import re
 from pathlib import Path
 from typing import Any
 
 import state
-from record import _log
+from record import _log, rows
 from repo import _files, snapshot
 
 
@@ -79,8 +78,7 @@ def ran(event: dict[str, Any], frame0: dict[str, Any], ok: bool) -> None:
 def _ran_on(root: Path, commands: list[str]) -> tuple[bool, str]:
     """Whether each command's last run in this session passed on the tree as it is now."""
     path = os.environ.get("FRAME_LOOP_LOG")
-    runs = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()] if (
-        path and Path(path).exists()) else []
+    runs = rows(path) if path and Path(path).exists() else []
     runs = [r for r in runs if r.get("session") == state.SESSION and r.get("event") == "ran"]
     now = snapshot(str(root))
     for item in commands:
