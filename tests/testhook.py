@@ -455,6 +455,20 @@ class AttackTests(unittest.TestCase):
                 self.assertEqual(out["hookSpecificOutput"]["hookEventName"], name)
                 self.assertNotIn("permissionDecision", out["hookSpecificOutput"])
 
+    def test_a_refused_reading_is_a_square_in_both_places_and_never_hidden_by_scope(self):
+        """The first review: a reading refused before sending was ■ under the reply and ▲
+        in the band; and beside a scope fault, a failed reading was not said at all."""
+        state.LIVE.clear()
+        lines._tell("turn", {"decision": "rise", "reason": "not read: it looks like it holds a secret (an AWS key)"},
+                    "public", time.time())
+        self.assertEqual(state.LIVE["decision"], "block")
+        self.assertTrue(state.LIVE["shorts"][-1].startswith("frame-loop ■"))
+        state.LIVE.clear()
+        lines._tell("turn", {"decision": "block", "reason": "not read: Gadfly stopped", "scope": ["README.md"]},
+                    "public", time.time())
+        self.assertIn("outside what you authorized (README.md) · not checked", state.LIVE["shorts"][-1])
+        state.LIVE.clear()
+
 
 class SessionStartTests(unittest.TestCase):
     """A new session is told the loop plainly: what reads its plans, and how to declare."""
@@ -1896,7 +1910,8 @@ class CoreTests(unittest.TestCase):
                         .startswith("frame-loop ■ not read"))
         line = lines._short({"decision": "rise", "reason": "not read: the label quotes the change",
                             "scope": ["frameloop/hook.py"]}, None)
-        self.assertEqual(line, "frame-loop ▲ needs you: a change lies outside what you authorized (frameloop/hook.py)")
+        self.assertEqual(line, "frame-loop ▲ needs you: a change lies outside what you authorized (frameloop/hook.py)"
+                         " · not checked: the label quotes the change")
 
     def test_the_switch_turns_the_loop_off_and_on(self):
         """Asked for: "we need a switch to turn on/off the frame loop", like shift+tab for plan mode."""

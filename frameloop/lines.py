@@ -155,8 +155,10 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
 
 def _short(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     """The one line the author reads for a reading, Claude Code's way: a mark and words."""
-    if result.get("scope"):
-        return f"frame-loop ▲ needs you: a change lies outside what you authorized ({', '.join(result['scope'])})"
+    if result.get("scope"):  # the author's first; a reading that failed beside it is said too
+        unread = result["decision"] == gate.BLOCK or (result.get("reason") or "").startswith("not read")
+        return (f"frame-loop ▲ needs you: a change lies outside what you authorized ({', '.join(result['scope'])})"
+                + (" · not checked: " + re.sub(r"^not read: ", "", _plain(result, frame0)) if unread else ""))
     if result["decision"] == gate.PASS:
         return "frame-loop ✓ checked: does what you asked, breaks none of your rules"
     if result["decision"] == gate.BLOCK or (result.get("reason") or "").startswith("not read"):
@@ -178,7 +180,8 @@ def _tell(kind: str, result: dict[str, Any], tier: str | None, started: float,
           frame0: dict[str, Any] | None = None) -> str:
     """Two lines that fit a laptop: the verdict, then the reader, effort, time, tokens.
     The author reads one shorter line (`_short`); these two are the details."""
-    state.LIVE["decision"] = result["decision"]
+    refused = (result.get("reason") or "").startswith("not read") and not result.get("scope")
+    state.LIVE["decision"] = gate.BLOCK if refused else result["decision"]  # ■ in the band, as under the reply
     state.LIVE.setdefault("shorts", []).append(_short(result, frame0))
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
     notes = []

@@ -32,10 +32,10 @@ The questions run in order: the change put into plain words (with labels on), "d
 | ▲ needs you: it may break your rule "a rule" | both readings named the rule | read the change against it |
 | ▲ needs you: the reader couldn't settle whether this breaks one of your rules | the readings disagreed | read the details |
 | ▲ needs you: a check you owe is unmet | a code check failed, such as tests not run | have it met |
-| ▲ needs you: a change lies outside what you authorized | outside the crossing's scope | widen the scope, or undo |
+| ▲ needs you: a change lies outside what you authorized | outside the crossing's scope; "· not checked: a reason" follows when its reading failed too | widen the scope, or undo |
 | ▲ needs you: what this work is for isn't written yet | no frame 0 | state the work |
 | ▲ needs you: 2 of 3 requirements read as done | completion found requirements not done or unclaimed | finish or claim them |
-| ■ or ▲ not read: a reason | refused before sending, such as a secret or lines read from outside the project | see [Privacy](privacy.md); never counted as a fit |
+| ■ not read: a reason | refused before sending, such as a secret or lines read from outside the project | see [Privacy](privacy.md); never counted as a fit |
 
 ---
 
