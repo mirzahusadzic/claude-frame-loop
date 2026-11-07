@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import threading
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -22,6 +23,7 @@ CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 # Set by the hook for a live view: called with how many of the reader's answers are in
 # so far, while Gadfly runs (it writes each answer to its records as it lands).
 on_progress = None
+HEARTBEAT = 30  # seconds between two progress calls with no new answer
 
 
 def _answers(where: Path) -> int:
@@ -60,11 +62,13 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
     stop = threading.Event()
 
     def poll() -> None:
-        seen = -1
+        seen, said = -1, time.monotonic()
         while not stop.wait(0.5):
             n = _answers(watch)
-            if n != seen:
-                seen = n
+            # A new answer, or a heartbeat: the band hides a reading it has not heard of in
+            # 180 seconds, and a long question can go longer than that between answers.
+            if n != seen or time.monotonic() - said >= HEARTBEAT:
+                seen, said = n, time.monotonic()
                 try:
                     on_progress(n)
                 except Exception:  # a live view never fails a reading

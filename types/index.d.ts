@@ -16,6 +16,7 @@ export type Live = {
   decision?: string
   lines?: string[]
   detail?: string[]
+  pid?: number // a background read's process
 }
 
 declare module 'claude-code' {

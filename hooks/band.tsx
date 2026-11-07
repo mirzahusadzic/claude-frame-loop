@@ -48,7 +48,9 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = await $.env.get('HOME')
     const id = await $.session.id()
-    const path = `${home}/.claude/frame-loop/live/${id}.json`
+    // Where the hooks write it: FRAME_LOOP_LIVE when the settings name a folder, as the hook reads it.
+    const folder = (await $.env.get('FRAME_LOOP_LIVE')) || `${home}/.claude/frame-loop/live`
+    const path = `${folder}/${id}.json`
     switchPath = `${e.cwd}/.frame-loop/switch`
     await $.command.register({
       name: 'frame-loop',

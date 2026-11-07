@@ -121,3 +121,18 @@ for (const [decision, line] of [['noted', 'frame-loop · Claude pushed to GitHub
     await ui.unmount()
   })
 }
+
+test('the band reads the live folder the settings name', async ($, on) => {
+  seed(on, null)
+  const read: string[] = []
+  on('fs.read', (_: unknown, e: { path: string }) => { read.push(e.path); throw new Error('none yet') })
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'FRAME_LOOP_LIVE' ? '/data/live' : '/home/u' }))
+  on('session.id', () => ({ value: 's' }))
+  let periods = 0
+  on('clock.every', () => (periods++ < 1 ? { value: undefined } : { deny: 'one period' }))  // one period, then stop
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  for (let i = 0; i < 20 && !read.includes('/data/live/s.json'); i++) await new Promise(r => setTimeout(r, 10))
+  expect(read).toContain('/data/live/s.json')
+})
