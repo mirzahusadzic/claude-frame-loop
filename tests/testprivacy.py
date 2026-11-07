@@ -178,3 +178,20 @@ class FieldPathTests(unittest.TestCase):
         state.CWD = PUBLIC
         for word in ("a/" * 3000, "folder's write bit from\nchmod/x", "a\0b/c"):
             self.assertFalse(privacy._outside_path(word), word[:20])
+
+
+class ReviewSecretTests(unittest.TestCase):
+    """The cold review, L5: a PGP private key was not matched, and with labels off on a tier that
+    does not train no secret check ran at all, against Privacy."""
+
+    def test_a_pgp_key_is_a_secret(self):
+        self.assertTrue(any(p.search("-----BEGIN PGP PRIVATE KEY BLOCK-----") for _, p in privacy.SECRETS))
+
+    def test_no_tier_gets_a_secret(self):
+        diff = "--- a/x\n+++ b/x\n@@ -0,0 +1 @@\n+KEY = 'AKIAABCDEFGHIJKLMNOP'\n"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_WRITER": ""}):
+            os.environ.pop("FRAME_LOOP_WRITER")
+            state.CWD = PUBLIC
+            sent, refusal = privacy.outgoing(diff, "the turn's change", "private", {"asks": []})
+        self.assertIsNone(sent)
+        self.assertIn("secret", refusal)

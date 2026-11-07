@@ -115,6 +115,11 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
         held = outbound_faults(sent, sent_kind)
         if held:
             return None, "; ".join(held)
+    else:  # no tier ever gets a secret, as Privacy says (the cold review, L5)
+        lines = sent.splitlines()
+        secret = next((name for name, pattern in SECRETS if any(pattern.search(x) for x in lines)), None)
+        if secret:
+            return None, f"it looks like it holds a secret ({secret})"
     return sent, None
 
 

@@ -23,7 +23,7 @@ SECRET_PATTERNS = [
     ("an AWS key", r"\bAKIA[0-9A-Z]{16}\b"),
     ("a GitHub token", r"\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}"),
     ("a Slack token", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
-    ("a private key", r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----"),
+    ("a private key", r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----"),
 ]
 
 
