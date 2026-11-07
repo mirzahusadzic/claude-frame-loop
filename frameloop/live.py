@@ -114,8 +114,10 @@ def _ran(read: dict[str, Any]) -> None:
         return
     known = _history()
     known[step["key"]] = {"calls": read["made"], "seconds": round(time.time() - step["at"], 1)}
-    try:
-        path.write_text(json.dumps(known), encoding="utf-8")
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:  # whole or not at all: another session reading it never sees half a file
+        tmp.write_text(json.dumps(known), encoding="utf-8")
+        tmp.replace(path)
     except OSError:
-        pass
+        tmp.unlink(missing_ok=True)
 

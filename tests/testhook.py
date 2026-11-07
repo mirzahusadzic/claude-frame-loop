@@ -1906,6 +1906,39 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(shown["state"], "done")
         self.assertEqual(shown["decision"], "interrupted")  # the first review: "quiet", shown as a green check
 
+    def test_the_time_history_is_never_seen_half_written(self):
+        """The first review: the history of what each step took was rewritten in place,
+        so a session reading it at that moment saw half a file and lost every estimate."""
+        import threading
+        work = WORK / f"history-{uid(self)}"
+        work.mkdir()
+        os.environ.update(FRAME_LOOP_WORK=str(work), FRAME_LOOP_LIVE=str(work / "live"))
+        path = work / "live-history.json"
+        broken, stop = [], threading.Event()
+
+        def look():
+            while not stop.is_set():
+                try:
+                    text = path.read_text()
+                    json.loads(text)
+                except FileNotFoundError:
+                    pass
+                except ValueError:
+                    broken.append(1)
+
+        reader_thread = threading.Thread(target=look)
+        reader_thread.start()
+        try:
+            for n in range(300):
+                state.LIVE["step"] = {"key": f"k{n % 40}", "at": time.time()}
+                live_module._ran({"made": n})
+        finally:
+            stop.set()
+            reader_thread.join()
+            state.LIVE.clear()
+        self.assertEqual(broken, [])
+        self.assertEqual(len(json.loads(path.read_text())), 40)
+
     def test_an_act_reported_is_never_shown_as_checked(self):
         """The first live use: a push in a turn with nothing to read showed a green check
         beside "Claude pushed to GitHub"; and the details of a command stopped at its heredoc."""
