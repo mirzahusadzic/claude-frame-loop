@@ -119,7 +119,14 @@ def _within_deadline(proc: subprocess.Popen, command: list[str]) -> subprocess.C
                 os.killpg(proc.pid, signal.SIGKILL)
         except (OSError, subprocess.SubprocessError):
             proc.kill()
-        proc.communicate()
+        try:
+            proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:  # a child still holds the pipes (Windows): never wait on it
+            for pipe in (proc.stdout, proc.stderr):
+                try:
+                    pipe.close()
+                except OSError:
+                    pass
         said = f"the reader gave no answer within {_read_timeout():g} s, so it was stopped"
         return subprocess.CompletedProcess(command, 124, json.dumps({"error": {"message": said}}), "")
 

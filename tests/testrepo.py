@@ -13,6 +13,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
+import live  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
 from testhook import WORK, make_repo, uid  # noqa: E402
@@ -130,7 +131,12 @@ class DeadlineTests(unittest.TestCase):
 
     def test_a_git_call_that_hangs_ends_as_no_snapshot(self):
         project = Path(make_repo(WORK / f"deadline-{uid(self)}"))
-        subprocess.run(["git", "config", "filter.slow.clean", "sleep 20; cat"], cwd=project, check=True)
+        pid = project / "filter.pid"  # the filter's shell, which git started: it goes too
+        subprocess.run(
+            ["git", "config", "filter.slow.clean", f"echo $$ > '{pid.as_posix()}'; sleep 20; cat"],
+            cwd=project,
+            check=True,
+        )
         (project / ".gitattributes").write_text("*.txt filter=slow\n", encoding="utf-8")
         (project / "notes.txt").write_text("a line\n", encoding="utf-8")
         state.SESSION = f"deadline-{uid(self)}"
@@ -138,6 +144,9 @@ class DeadlineTests(unittest.TestCase):
             started = time.monotonic()
             self.assertIsNone(repo.snapshot(str(project)))
             self.assertLess(time.monotonic() - started, 10)
+        if os.name != "nt" and pid.exists():  # Windows ends the tree with taskkill; its pids are not the shell's
+            time.sleep(0.2)
+            self.assertFalse(live._alive(int(pid.read_text().split()[0])), "the filter outlived the deadline")
 
 
 class SnapshotCallsTests(unittest.TestCase):
