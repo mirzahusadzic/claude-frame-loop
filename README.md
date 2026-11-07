@@ -135,7 +135,7 @@ State the work as usual; Claude restates it as requirements and saves them once 
 
 ### Develop
 
-Tests need no API key and no network. The tests that run Gadfly skip when it is not installed, and the contract tests also need a checkout named by `GADFLY_CHECKOUT`:
+Tests need no API key and no network, and run on macOS, Linux and Windows. `sh scripts/coverage.sh` measures branch coverage of the hooks, their own processes included, and fails under the floor in `.coveragerc`, 99%; coverage.py lives in a venv of its own under `tests/.work`, never in the plugin. The tests that run Gadfly skip when it is not installed, and the contract tests also need a checkout named by `GADFLY_CHECKOUT`:
 
 ```sh
 python3 -m unittest discover -s tests

@@ -1,0 +1,12 @@
+# Branch coverage of the hooks, for development and CI only: scripts/coverage.sh runs it.
+# COVERAGE_ROOT is the checkout, so the hooks' own processes, in other folders, report too.
+[run]
+branch = True
+parallel = True
+source = ${COVERAGE_ROOT}/frameloop
+data_file = ${COVERAGE_ROOT}/tests/.work/coverage/.coverage
+
+[report]
+fail_under = 99
+show_missing = True
+skip_empty = True

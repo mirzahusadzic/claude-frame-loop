@@ -67,6 +67,11 @@ jobs:
         env:
           GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly
         run: uv run --no-project --python 3.13 python -m unittest discover -s tests
+      - name: Coverage of the hooks, held to its floor in .coveragerc
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly
+        run: sh scripts/coverage.sh
 
   plugin:
     name: Plugin on ${{ matrix.os }}
