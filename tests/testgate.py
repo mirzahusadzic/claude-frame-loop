@@ -71,8 +71,8 @@ class ViolationTests(unittest.TestCase):
         )
 
     def test_a_reading_with_no_findings_is_never_none(self):
-        """A run that found nothing would read as two answers of none and pass."""
-        self.assertEqual(gate.violation_stage_one({"exit": 0, "findings": []})[0], gate.RISE)
+        """A run that found nothing would read as two answers of none and pass; it is not read."""
+        self.assertEqual(gate.violation_stage_one({"exit": 0, "findings": []})[0], gate.BLOCK)
 
     def test_a_failed_rules_run_blocks(self):
         """A failed run read as two missing levels would rise as a rule, or worse, as none."""
@@ -100,3 +100,12 @@ class UndeclaredTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ReviewLowTests(unittest.TestCase):
+    """The cold review, L4: an empty answer to the rules question read as "it may break your rule None"."""
+
+    def test_no_answer_is_not_read(self):
+        for levels in ({}, {"baseline": "R1"}, {"repeat": "none"}):
+            decision, reason = gate.violation_stage_one({"exit": 0, "findings": [{"levels": levels}]})
+            self.assertEqual((decision, reason), (gate.BLOCK, "not read: the reader gave no answer"), levels)

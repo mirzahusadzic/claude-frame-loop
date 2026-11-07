@@ -49,6 +49,8 @@ def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
         return BLOCK, f"not read: {_failure(result)}"
     levels = _levels(result)
     baseline, repeat = levels.get("baseline"), levels.get("repeat")
+    if baseline is None or repeat is None:  # no answer is no reading, never a rule named None (the cold review, L4)
+        return BLOCK, "not read: the reader gave no answer"
     if baseline == repeat == "none":
         return PASS, "breaks no rule (baseline and repeat read none)"
     if baseline == repeat:
