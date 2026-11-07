@@ -7,7 +7,10 @@
 # the session is told so in one line, and every other hook gives no opinion.
 
 export FRAME_LOOP_PLUGIN=1 FRAME_LOOP_READ_TURNS=1 FRAME_LOOP_BACKGROUND=1 FRAME_LOOP_WRITER=writer:haiku
-here=$(cd "$(dirname "$0")/.." && pwd)
+# Forward slashes first: Claude Code on Windows gives the plugin root with backslashes,
+# which dirname does not split.
+slashed() { printf '%s\n' "$1" | sed 's|\\|/|g'; }
+here=$(cd "$(dirname "$(slashed "$0")")/.." && pwd)
 
 recent() { # a Python 3.13 or later
   [ -x "$1" ] && "$1" -I -c 'import sys; sys.exit(sys.version_info < (3, 13))' 2>/dev/null
@@ -16,8 +19,9 @@ recent() { # a Python 3.13 or later
 beside_gadfly() { # the interpreter of the gadfly command, through any symlinks
   found=$(command -v gadfly 2>/dev/null) || return 1
   while [ -L "$found" ]; do
-    link=$(readlink "$found")
-    case $link in /*) found=$link ;; *) found=$(dirname "$found")/$link ;; esac
+    link=$(readlink "$found") && [ -n "$link" ] || break # a link this shell cannot read: keep its path
+    link=$(slashed "$link")
+    case $link in /* | [A-Za-z]:/*) found=$link ;; *) found=$(dirname "$found")/$link ;; esac
   done
   for beside in "$(dirname "$found")/python" "$(dirname "$found")/python.exe"; do
     [ -x "$beside" ] && echo "$beside" && return 0
@@ -28,6 +32,7 @@ beside_gadfly() { # the interpreter of the gadfly command, through any symlinks
 
 in_uv_tools() { # midwife's own interpreter where `uv tool install` keeps it, on any system
   tools=$(uv tool dir 2>/dev/null) || return 1
+  tools=$(slashed "$tools")
   for found in "$tools/midwife/bin/python" "$tools/midwife/Scripts/python.exe"; do
     [ -x "$found" ] && echo "$found" && return 0
   done
@@ -37,7 +42,7 @@ in_uv_tools() { # midwife's own interpreter where `uv tool install` keeps it, on
 from_py_launcher() { # Windows: the py launcher names a 3.13 or later
   command -v py >/dev/null 2>&1 || return 1
   for version in 3.15 3.14 3.13; do
-    found=$(py -"$version" -c 'import sys; print(sys.executable)' 2>/dev/null) && [ -n "$found" ] && echo "$found" && return 0
+    found=$(py -"$version" -c 'import sys; print(sys.executable)' 2>/dev/null) && [ -n "$found" ] && slashed "$found" && return 0
   done
   return 1
 }

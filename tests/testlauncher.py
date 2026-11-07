@@ -68,11 +68,11 @@ class LauncherTests(unittest.TestCase):
         fake_python(tool / "python", recent=True, says="Gadfly's python")
         (tool / "gadfly").write_text("#!/bin/sh\n", encoding="utf-8")
         (tool / "gadfly").chmod(0o755)
-        try:
+        if os.name == "nt":  # uv copies its tools on Windows: the tool's own folder on PATH, as pip leaves it
+            path = [tool, old]
+        else:
             (old / "gadfly").symlink_to(tool / "gadfly")  # as uv tool links it into ~/.local/bin
             path = [old]
-        except OSError:  # Windows without symlinks: the tool's own folder on PATH, as pip leaves it
-            path = [tool, old]
         out = self.run_hook({"hook_event_name": "UserPromptSubmit", "prompt": "go"}, path)
         self.assertTrue(out.strip(), f"no answer; PATH {path}")
         self.assertEqual(json.loads(out)["systemMessage"], "Gadfly's python")
