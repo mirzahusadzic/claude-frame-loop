@@ -1,6 +1,6 @@
 # Repository guide
 
-A Claude Code plugin that checks Claude's work against the user's requirements through Gadfly: hooks in Python, standard library only, and a band above the prompt in TypeScript. Prefer focused fixes to what exists; add no runtime dependency beyond Claude Code, uv, Gadfly and the Unified Model Router.
+A Claude Code plugin that checks the work the user and Claude share against the user's requirements through Gadfly: hooks in Python, standard library only, and a band above the prompt in TypeScript. Prefer focused fixes to what exists; add no runtime dependency beyond Claude Code, uv, Gadfly and the Unified Model Router.
 
 ---
 
@@ -37,7 +37,7 @@ A Claude Code plugin that checks Claude's work against the user's requirements t
 
 ### Preserve these behaviors
 
-- The reader sees only what `docs/privacy.md` lists: never Claude's session, the prompts, the replies, or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only.
+- The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only.
 - A refused or failed reading is never a pass.
 - Plan mode stays Claude Code's: a plan is read only to inform.
 - Shadow mode blocks nothing, and its reads run in the background; enforce mode asks before the user's acts and sends Claude back on a ▲.
@@ -51,5 +51,6 @@ A Claude Code plugin that checks Claude's work against the user's requirements t
 - Behavior change: a test that fails on the old code, then the suite twice; band changes also `claude plugin test .`.
 - Docs: README brief, details in `docs/`; docs-only changes need link and fact checks, not a full test run. Shape: top-level sections are `###` headings under a `---` rule, since GitHub underlines `#` and `##`; section leads of two or three sentences at most; tables only for tabular data, run-in lists otherwise; explanation before a code block, no comments inside; at most one alert per section; each link once per page.
 - Docs voice: the docs describe the tool, in the third person and in the reader's terms; steps are imperatives; no sentence that carries no load.
+- The work is the user's and Claude's together: the docs say "the work" or "the change", never "Claude's work"; Claude's replies and plans stay Claude's.
 - Figures: SVG in the dolls' style, light and dark, every colour checked for contrast against its box; no more than two charts on a page.
 - Commits: a Conventional Commits subject of at most 72 characters, a blank line, then a body hard-wrapped at 72. Messages stay objective and about this project.

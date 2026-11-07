@@ -1,6 +1,6 @@
 # Privacy
 
-What a reading sends, to whom, and what is refused before it leaves the machine. The reader never sees Claude's session, the prompts, Claude's replies, or a file the change does not touch.
+What a reading sends, to whom, and what is refused before it leaves the machine. The reader never sees the session (your prompts, Claude's replies) or a file the change does not touch.
 
 ---
 

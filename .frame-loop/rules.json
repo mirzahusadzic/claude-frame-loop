@@ -15,7 +15,7 @@
    ],
    "text": "the reader sees only what privacy lists",
    "quote": [
-    "The reader sees only what `docs/privacy.md` lists: never Claude's session, the prompts, the replies, or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only."
+    "The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only."
    ],
    "check": null,
    "accepted": true
@@ -154,6 +154,20 @@
    "text": "commits follow Conventional Commits at 72",
    "quote": [
     "Commits: a Conventional Commits subject of at most 72 characters, a blank line, then a body hard-wrapped at 72. Messages stay objective and about this project."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R12",
+   "kind": "semantic",
+   "scope": [
+    "README.md",
+    "docs/*"
+   ],
+   "text": "docs call the work shared, not Claude's",
+   "quote": [
+    "The work is the user's and Claude's together: the docs say \"the work\" or \"the change\", never \"Claude's work\"; Claude's replies and plans stay Claude's."
    ],
    "check": null,
    "accepted": true

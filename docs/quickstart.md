@@ -32,7 +32,7 @@ The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves
 A signal is a file no rule covers, an unmet requirement such as tests not run, a large change, a deleted file, or a changed dependency. While the reader works, the band above the prompt shows the step, the answers so far and the time left:
 
 ```text
-⠹ frame-loop checking Claude's change against your requirements, because it is a large change · 0:41
+⠹ frame-loop checking the change against your requirements, because it is a large change · 0:41
   ✓ does what you asked · step 2 of 2: does it break any of your rules? · 9 of about 12 answers · about 0:12 left
 ```
 

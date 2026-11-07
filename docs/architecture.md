@@ -63,7 +63,7 @@ config:
         0 0 3px var(--halo), 0 0 4px var(--halo); }
 ---
 flowchart LR
-    CL["<b>Claude's turn</b><br/>edits the project"]
+    CL["<b>A turn</b><br/>Claude edits the project"]
     FC["<b>Free checks</b><br/>snapshot, files, size,<br/>what the rules require"]
     PG["<b>Label and privacy gate</b><br/>Haiku labels the change;<br/>secrets refused,<br/>private names masked"]
     RD["<b>Reader</b><br/>Gadfly's trials, through the<br/>Unified Model Router on loopback,<br/>to your tier's model"]

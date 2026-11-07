@@ -8,7 +8,7 @@ Every line frame-loop prints, what it means, and what to do. The lines appear un
 
 The band's first line names what is read and why; the second, the question, the reader's answers so far and the time left, estimated from the last read of the same kind.
 
-What is read: Claude's change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
+What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 
 The questions run in order: the change put into plain words (with labels on), "does it do what you asked?", then "does it break any of your rules?"; for a change Claude declared no requirement for, "what is it for?". A passed question shows as ✓ while the next runs.
 

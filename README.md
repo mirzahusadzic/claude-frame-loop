@@ -3,7 +3,7 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 
-A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.md) is checked against what you asked for and your project's rules, and only what does not fit reaches you.
+A workflow linter for Claude Code: it checks the work you and Claude do together against the requirements you confirmed and your project's rules, and only what does not fit reaches you. Each check runs on [Gadfly](https://github.com/mirzahusadzic/gadfly), which asks a separate model whether the work fits and asks again with your requirement removed, so a fit counts only when the requirement carries it; the method is in [the paper](https://doi.org/10.5281/zenodo.23962158).
 
 <p align="center">
   <picture>
@@ -18,7 +18,7 @@ A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.m
 - **Free checks, every turn:** files, size, and what your rules require of the change, from `CLAUDE.md` and `AGENTS.md`.
 - **Tested reader:** a separate model reads a change only on a signal, under Gadfly's trials, asked again with the requirement removed, with a harmless line removed instead, and with the requirement reversed. A fit that holds without your requirement is rejected.
 - **Fixed verdicts:** ✓ fits, ▲ needs you, ■ not read; decided by rules, not by a model.
-- **Code stays local:** the reader gets a Haiku label and file names, never the diff, unless GitHub confirms the repository public. Secrets are refused; private names are masked.
+- **Code stays local:** the reader gets a Haiku label and file names, never the diff, unless GitHub confirms the repository public. Secrets are refused and private names masked; [privacy](docs/privacy.md) lists what leaves the machine.
 - **Authority:** pushes, releases, recursive deletes and changes to frame 0 or the loop itself come to you.
 - **Live:** a band above the prompt shows the check, its progress and the time left.
 
@@ -27,7 +27,7 @@ A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.m
 | a linter | one whose rules are your requirements and your `CLAUDE.md`, run at the end of every turn |
 | code review | a reviewer who reads each change against the ticket and never sees the chat |
 | git hooks | Claude Code hooks: a tree snapshot at each prompt, a check of the diff at each turn's end |
-| ablation | each fit tested by removing the requirement and asking again, by [Gadfly](https://github.com/mirzahusadzic/gadfly)'s fixed trials |
+| ablation | each fit tested by removing the requirement and asking again, by Gadfly's fixed trials |
 
 
 <p align="center">
@@ -37,7 +37,7 @@ A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.m
   </picture>
 </p>
 
-<p align="center"><em>The same frames, filled in with one request. Given Claude's turn label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
+<p align="center"><em>The same frames, filled in with one request. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
 
 ### What you see
 
@@ -116,6 +116,25 @@ Tests need no API key and no network; the tests that run Gadfly need a checkout 
 ```sh
 python3 -m unittest discover -s tests
 claude plugin test .
+```
+
+---
+
+### Citing
+
+frame-loop's reader runs on Gadfly's trials. To cite the method, cite its paper:
+
+```bibtex
+@misc{husadzic2026loadbearing,
+  author    = {Husadzic, Mirza},
+  title     = {When Meaning Is Load-Bearing: Testing Whether
+               a Decision Rests on Its Declared Evidence},
+  year      = {2026},
+  publisher = {Zenodo},
+  note      = {Working paper},
+  doi       = {10.5281/zenodo.23962158},
+  url       = {https://doi.org/10.5281/zenodo.23962158}
+}
 ```
 
 ---
