@@ -146,7 +146,6 @@ export const register: Register = on => {
           </Box>
           <Box>
             <Text>{'  '}</Text>
-            {now.so_far ? <Text color="success">✓ {now.so_far} · </Text> : null}
             <Text>{step}{now.step ?? ''}</Text>
             <Text color="inactive"> · {count}{eta}</Text>
           </Box>

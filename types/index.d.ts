@@ -4,7 +4,6 @@ export type Live = {
   state: 'reading' | 'done'
   what?: string
   why?: string | null
-  so_far?: string | null
   step_started?: number | null
   answers?: number
   expected?: number | null

@@ -25,13 +25,12 @@ const seed = (on: any, value: unknown, dismissedAt = 0) => {
 
 test('a wait says what for, how far along, and how much is left, on every surface', async ($, on) => {
   seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
-             why: 'it is a large change', so_far: 'does what you asked', step: 'does it break any of your rules?',
+             why: 'it is a large change', step: 'does it break any of your rules?',
              n: 2, of: 2, started: 1, step_started: 30, answers: 6, expected: 12 })
   on('clock.now', () => ({ value: 60000 }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     expect((await ui.find({ type: 'Text', text: /because it is a large change/ }))?.text).toContain('0:59')
-    expect((await ui.find({ type: 'Text', text: /does what you asked/ }))?.text).toBe('✓ does what you asked · ')
     expect((await ui.find({ type: 'Text', text: /step 2 of 2/ }))?.text).toBe('step 2 of 2: does it break any of your rules?')
     expect((await ui.find({ type: 'Text', text: /answers/ }))?.text).toBe(' · 6 of about 12 answers · about 0:30 left')
     await ui.unmount()

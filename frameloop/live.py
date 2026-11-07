@@ -153,7 +153,6 @@ def _live_now() -> None:
         state="reading",
         what=state.LIVE.get("what", "checking"),
         why=state.LIVE.get("why"),
-        so_far=state.LIVE.get("so_far"),
         step=step.get("what"),
         n=step.get("n"),
         of=step.get("of"),
