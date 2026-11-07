@@ -1,0 +1,162 @@
+{
+ "project": "claude-frame-loop",
+ "version": 2,
+ "source": {
+  "file": "AGENTS.md",
+  "sha256": "1f0f40e29f81deeb756bf1d852520f79c87874d5ec92201a586fcdc43665adfe"
+ },
+ "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
+ "rules": [
+  {
+   "id": "R1",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "the reader sees only what privacy lists",
+   "quote": [
+    "The reader sees only what `docs/privacy.md` lists: never Claude's session, the prompts, the replies, or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R2",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "a refused or failed reading is never a pass",
+   "quote": [
+    "A refused or failed reading is never a pass."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R3",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "plan mode stays Claude Code's",
+   "quote": [
+    "Plan mode stays Claude Code's: a plan is read only to inform."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R4",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "shadow mode blocks nothing",
+   "quote": [
+    "Shadow mode blocks nothing, and its reads run in the background; enforce mode asks before the user's acts and sends Claude back on a ▲."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R5",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "frame 0, rules, tree and switch change only with the user",
+   "quote": [
+    "Frame 0, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R6",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "the user reads plain words",
+   "quote": [
+    "The user reads plain words: no JSON, ids or internal terms; \"requirement\", never \"ask\"."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R7",
+   "kind": "obligation",
+   "scope": [
+    "frameloop/*.py",
+    "hooks/*.tsx"
+   ],
+   "text": "a behavior change comes with a test",
+   "quote": [
+    "Behavior change: a test that fails on the old code, then the suite twice; band changes also `claude plugin test .`."
+   ],
+   "check": {
+    "changed": [
+     "tests/*"
+    ]
+   },
+   "accepted": true
+  },
+  {
+   "id": "R8",
+   "kind": "semantic",
+   "scope": [
+    "README.md",
+    "docs/*"
+   ],
+   "text": "docs follow the router's shape",
+   "quote": [
+    "Docs: README brief, details in `docs/`; docs-only changes need link and fact checks, not a full test run. Shape: top-level sections are `###` headings under a `---` rule, since GitHub underlines `#` and `##`; section leads of two or three sentences at most; tables only for tabular data, run-in lists otherwise; explanation before a code block, no comments inside; at most one alert per section; each link once per page."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R9",
+   "kind": "semantic",
+   "scope": [
+    "README.md",
+    "docs/*"
+   ],
+   "text": "docs describe the tool in the reader's terms",
+   "quote": [
+    "Docs voice: the docs describe the tool, in the third person and in the reader's terms; steps are imperatives; no sentence that carries no load."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R10",
+   "kind": "semantic",
+   "scope": [
+    "docs/images/*",
+    "scripts/figures.py"
+   ],
+   "text": "figures in the dolls' style, contrast checked",
+   "quote": [
+    "Figures: SVG in the dolls' style, light and dark, every colour checked for contrast against its box; no more than two charts on a page."
+   ],
+   "check": null,
+   "accepted": true
+  },
+  {
+   "id": "R11",
+   "kind": "principle",
+   "scope": [
+    "*"
+   ],
+   "text": "commits follow Conventional Commits at 72",
+   "quote": [
+    "Commits: a Conventional Commits subject of at most 72 characters, a blank line, then a body hard-wrapped at 72. Messages stay objective and about this project."
+   ],
+   "check": null,
+   "accepted": true
+  }
+ ]
+}

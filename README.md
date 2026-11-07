@@ -37,7 +37,7 @@ A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.m
   </picture>
 </p>
 
-<p align="center"><em>The same frames, filled in with one request. Given Claude's turn label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in <a href="docs/crossings.md">Crossings</a> and <a href="docs/recoil.md">Recoil</a>.</em></p>
+<p align="center"><em>The same frames, filled in with one request. Given Claude's turn label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
 
 ### What you see
 
@@ -61,38 +61,63 @@ A workflow linter for Claude Code: each change in [Claude's work](docs/privacy.m
 
 ### Install
 
-Needs Claude Code, Python 3.9+, uv, Node.js 20+ and an OpenRouter API key. The reader, Muse Spark 1.3 Contributor by default, is called through the Unified Model Router and Gadfly:
+Three pieces: the Unified Model Router, which the reader is called through; Gadfly, which runs the reader's trials; and the plugin.
+
+#### Router
+
+The router serves Muse Spark 1.3 and Muse Spark 1.3 Contributor from one OpenRouter API key, which its first install asks for:
 
 ```sh
 git clone https://github.com/mirzahusadzic/unified-model-router.git
-cd unified-model-router && node install.mjs && cd ..
-git clone https://github.com/mirzahusadzic/gadfly.git ~/gadfly
-git clone <this repository> claude-frame-loop
-claude --plugin-dir claude-frame-loop
+cd unified-model-router
+node install.mjs
+node install.mjs --verify
 ```
 
-Allowing the reader per project, the other tiers and every setting: [Setup](docs/setup.md).
+#### Gadfly
+
+The hooks run Gadfly through uv from a checkout in `~/gadfly`; `GADFLY_CHECKOUT` names another place:
+
+```sh
+git clone https://github.com/mirzahusadzic/gadfly.git ~/gadfly
+```
+
+#### Plugin
+
+At the prompt of a Claude Code session, then `y` to add the marketplace and a scope:
+
+```text
+/plugin install frame-loop --marketplace mirzahusadzic/claude-frame-loop
+```
+
+#### Allow the reader
+
+The default reader trains on what it reads, so nothing is sent until a project allows it: set `FRAME_LOOP_TRAINING_OK=1` in the project's `.claude/settings.local.json` `env`, and `FRAME_LOOP_LABELS_OK=1` for a repository GitHub does not confirm public. The other tier and every setting are in Setup, linked below.
 
 ---
 
-### Documentation
+### Use
 
-| Page | Covers |
+State the work as usual; Claude restates it as requirements and saves them once you confirm. From then on the band above the prompt shows each check while it runs, and one line under Claude's reply says how it went.
+
+| To | Do |
 | --- | --- |
-| Setup, linked above | requirements, the reader's path through the router, settings, verify |
-| [Quickstart](docs/quickstart.md) | one session, from the first prompt to done |
-| [Verdicts](docs/verdicts.md) | every line the loop prints, and what to do |
-| [Rules](docs/rules.md) | how the ways of working in `CLAUDE.md` and `AGENTS.md` become checks |
-| Privacy, linked in the first line | what leaves the machine, and what is refused first |
-| Crossings, linked above | the tree of work, a worked example, node files, authority, the premise |
-| Recoil, linked above | holes, fits, and how finished work climbs to frame 0 |
-| [Architecture](docs/architecture.md) | parts, data flow, hooks |
+| switch the loop off or on for the project | `/frame-loop`, or `/frame-loop off`, `/frame-loop on`; the footer shows "frame-loop off" |
+| see a check's details | press **details** in the band |
+| change what the work is for | say so in the chat; Claude proposes the change and saves it once you confirm |
+| add a rule | state the way of working in the chat; Claude offers the line for `AGENTS.md` |
 
 ---
 
 ### Develop
 
+Tests need no API key and no network; the tests that run Gadfly need a checkout and skip without one:
+
 ```sh
 python3 -m unittest discover -s tests
 claude plugin test .
 ```
+
+---
+
+[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · [Rules](docs/rules.md) · [Privacy](docs/privacy.md#models) · [Crossings](docs/crossings.md) · [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Setup](docs/setup.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [Apache-2.0](LICENSE)

@@ -1,0 +1,13 @@
+{
+  "name": "claude-frame-loop",
+  "owner": {
+    "name": "Mirza Husadzic"
+  },
+  "plugins": [
+    {
+      "name": "frame-loop",
+      "source": "./"
+    }
+  ],
+  "description": "frame-loop: a workflow linter for Claude Code"
+}

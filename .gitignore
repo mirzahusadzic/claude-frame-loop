@@ -1,3 +1,5 @@
 tests/.work/
 __pycache__/
-.frame-loop/
+.frame-loop/steps.jsonl
+.frame-loop/work/
+.frame-loop/switch
