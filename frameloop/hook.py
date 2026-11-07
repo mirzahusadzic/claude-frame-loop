@@ -615,15 +615,17 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
     return "\n".join(lines)
 
 
+def _unreadable(why: str) -> dict[str, Any]:
+    """An event the hook cannot read: said to the human, with no decision, since a decision
+    belongs to an event and this one's is unknown (an ask sent as PreToolUse to a Stop)."""
+    return {"systemMessage": f"frame-loop error: an unreadable event ({why})"}
+
+
 def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """answer(), failing closed: an error in enforce mode denies a plan and asks the
     human about any other act; in shadow mode it is only noted."""
     if not isinstance(event, dict):  # valid JSON, but no event: as unreadable as broken JSON
-        return _rise(
-            os.environ.get("FRAME_LOOP_MODE", "shadow"),
-            f"frame-loop error: an unreadable event (a {type(event).__name__}, not an object)",
-            "ask",
-        )
+        return _unreadable(f"a {type(event).__name__}, not an object")
     try:
         return answer(event)
     except Exception as error:  # noqa: BLE001  (any failure must close, not open)
@@ -654,9 +656,8 @@ def main() -> int:
         return _background(sys.argv[2])
     try:
         event = json.load(sys.stdin)
-    except ValueError as error:
-        reason = f"frame-loop error: an unreadable event ({error})"
-        print(json.dumps(_rise(os.environ.get("FRAME_LOOP_MODE", "shadow"), reason, "ask")))
+    except (ValueError, RecursionError) as error:  # broken, or nested past what Python reads
+        print(json.dumps(_unreadable(str(error) if isinstance(error, ValueError) else "nested too deep")))
         return 0
     out = safe_answer(event)
     if out is not None:

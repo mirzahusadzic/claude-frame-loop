@@ -523,21 +523,26 @@ class AttackTests(unittest.TestCase):
         for command in ("cat .claude/settings.json", f"head {FIXTURE}", "ls .claude"):
             self.assertIsNone(hook.answer(bash_event(command)), command)
 
-    def test_an_unreadable_event_fails_closed_in_enforce_mode(self):
+    def test_an_unreadable_event_is_said_with_no_decision(self):
+        """Sparky's second review: an unreadable event got an ask sent as PreToolUse, whatever
+        the event was, and JSON nested past what Python reads crashed with a traceback.
+        Mirza: a message only, no decision, since the event is unknown."""
         import subprocess
 
-        child = {**os.environ, **env(FRAME_LOOP_MODE="enforce")}
-        done = subprocess.run(
-            [sys.executable, str(ROOT / "frameloop/hook.py")],
-            input="{not json",
-            capture_output=True,
-            text=True,
-            env=child,
-        )
-        self.assertEqual(done.returncode, 0, done.stderr)
-        out = json.loads(done.stdout)
-        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
-        self.assertIn("error", out["systemMessage"])
+        for given in ("{not json", "[]", "[" * 20000):
+            with self.subTest(given[:12]):
+                child = {**os.environ, **env(FRAME_LOOP_MODE="enforce")}
+                done = subprocess.run(
+                    [sys.executable, str(ROOT / "frameloop/hook.py")],
+                    input=given,
+                    capture_output=True,
+                    text=True,
+                    env=child,
+                )
+                self.assertEqual((done.returncode, done.stderr), (0, ""))
+                out = json.loads(done.stdout)
+                self.assertIn("unreadable event", out["systemMessage"])
+                self.assertNotIn("hookSpecificOutput", out)
 
     def test_a_hook_error_fails_closed_in_enforce_mode(self):
         os.environ.update(env(FRAME_LOOP_MODE="enforce", FRAME_LOOP_FRAME0=str(broken_frame0())))
