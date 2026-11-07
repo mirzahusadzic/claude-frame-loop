@@ -1,0 +1,11 @@
+{
+  "id": "fixture",
+  "note": "A hand-built frame 0 for the tests. Each ask has one purpose, and its inversion restates the whole ask, inverted.",
+  "asks": [
+    {"id": "A1", "text": "the tool reads its settings from one file", "inversion": {"the tool reads its settings from one file": "the tool reads no settings from any file"}},
+    {"id": "A2", "text": "every change comes with a test that fails before it", "inversion": {"every change comes with a test that fails before it": "changes come with no tests"}},
+    {"id": "A3", "text": "the README says how to run the tool", "inversion": {"the README says how to run the tool": "the README says nothing about running the tool"}}
+  ],
+  "principles": [{"id": "P1", "text": "No new dependency is added."}],
+  "triggers": [{"id": "T1", "text": "A push or a delete goes to the human first."}]
+}

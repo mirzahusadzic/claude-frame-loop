@@ -1,0 +1,41 @@
+{
+ "id": "counting",
+ "parent": "root",
+ "grain": "the limiter",
+ "scope": [
+  "api/limits.py",
+  "tests/test_limits.py"
+ ],
+ "grant": {
+  "paths": "the scope above",
+  "commands": [
+   "python3 -m unittest"
+  ],
+  "spend": "none beyond the loop's reads"
+ },
+ "principles": [],
+ "triggers": [],
+ "asks": [
+  {
+   "id": "C1",
+   "quotes": "A1",
+   "owner": "children",
+   "text": "Requests are counted per client.",
+   "inversion": {
+    "Requests are counted per client.": "Requests are not counted at all."
+   }
+  }
+ ],
+ "promises": [
+  {
+   "concern": "latency",
+   "text": "counting adds under a millisecond to a request"
+  }
+ ],
+ "predictions": [
+  {
+   "for": "C1",
+   "text": "carried and firm within 3 runs"
+  }
+ ]
+}

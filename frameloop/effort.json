@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "note": "Effort only rises. The human's floor is FRAME_LOOP_EFFORT; the agent may raise it with an 'Effort:' line, never lower it; these rules raise it on facts from a turn's diff, never on a model's choice. A level not calibrated by a margin run for its model is marked uncalibrated on the gate's line (a reviewer's conditions, 2026-11-05).",
+  "raise_to": "high",
+  "rules": [
+    {"id": "deleted-file", "when": "the turn deletes a file"},
+    {"id": "dependency-manifest", "when": "the turn changes a dependency manifest or lock file",
+     "names": ["requirements.txt", "requirements-dev.txt", "pyproject.toml", "uv.lock", "poetry.lock", "Pipfile", "Pipfile.lock",
+               "package.json", "package-lock.json", "pnpm-lock.yaml", "yarn.lock", "Cargo.toml", "Cargo.lock",
+               "go.mod", "go.sum", "Gemfile", "Gemfile.lock"]},
+    {"id": "loop-settings", "when": "the turn changes Claude Code settings, hooks or frame 0",
+     "contains": [".claude/", "frame0"]},
+    {"id": "large-diff", "when": "the turn's diff is longer than this many characters", "chars": 8000}
+  ],
+  "calibrated": {
+    "openrouter/meta/muse-spark-1.3-contributor": {"low": "margin 1 (frame-loop 51f0ae6): 0/8 false alarms, 0/20 false passes",
+                                                   "high": "margin 2 (frame-loop d58d906): 0/8 false alarms, 0/20 false passes"}
+  }
+}

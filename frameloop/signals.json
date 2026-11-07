@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "note": "Free, deterministic signals on a step's diff. A claimed step whose every added line has no effect triggers one which-ask reading on its own diff; a trigger only adds a reading, never decides. Facts of the diff only.",
+  "no_effect": {
+    "cosmetic": "every added line is blank, a comment, or a reordering of removed lines",
+    "docs_only": "every changed path is documentation (*.md, *.rst, *.txt, docs/)",
+    "python_dead_code": "every added code line is an import whose name the added lines never use, or an assignment to a name they never read (unreachable code needs the whole file and is not judged)"
+  }
+}

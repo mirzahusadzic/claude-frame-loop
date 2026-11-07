@@ -1,0 +1,21 @@
+{
+ "id": "ratelimit",
+ "asks": [
+  {
+   "id": "A1",
+   "text": "Each client is limited per minute.",
+   "inversion": {
+    "Each client is limited per minute.": "No client is ever limited."
+   }
+  },
+  {
+   "id": "A2",
+   "text": "Over the limit, the API returns HTTP 429 with a retry time.",
+   "inversion": {
+    "Over the limit, the API returns HTTP 429 with a retry time.": "Over the limit, the API answers as usual."
+   }
+  }
+ ],
+ "principles": [],
+ "triggers": []
+}

@@ -1,0 +1,100 @@
+{
+ "id": "greeter",
+ "note": "A made-up frame 0 for the tests: six asks, seven principles, five triggers.",
+ "asks": [
+  {
+   "id": "A1",
+   "text": "the service greets each user by name",
+   "inversion": {
+    "the service greets each user by name": "the service never greets a user by name"
+   }
+  },
+  {
+   "id": "A2",
+   "text": "greetings can switch between English and Spanish",
+   "inversion": {
+    "greetings can switch between English and Spanish": "greetings cannot switch language"
+   }
+  },
+  {
+   "id": "A3",
+   "text": "the greeting style is chosen from presets",
+   "inversion": {
+    "the greeting style is chosen from presets": "the greeting style is fixed, with no presets"
+   }
+  },
+  {
+   "id": "A4",
+   "text": "the README explains every preset",
+   "inversion": {
+    "the README explains every preset": "the README explains no preset"
+   }
+  },
+  {
+   "id": "A5",
+   "text": "a new preset is added without code changes",
+   "inversion": {
+    "a new preset is added without code changes": "a new preset needs code changes"
+   }
+  },
+  {
+   "id": "A6",
+   "text": "the command line reports errors in plain words",
+   "inversion": {
+    "the command line reports errors in plain words": "the command line reports errors as raw traces"
+   }
+  }
+ ],
+ "principles": [
+  {
+   "id": "P1",
+   "text": "A focused fix to what exists comes before a new layer."
+  },
+  {
+   "id": "P2",
+   "text": "Every check reads the requirements, never another check's output."
+  },
+  {
+   "id": "P3",
+   "text": "No generated text reaches the user unchecked."
+  },
+  {
+   "id": "P4",
+   "text": "Nothing edits a greeting after its last check."
+  },
+  {
+   "id": "P5",
+   "text": "A fallback is named, never silent."
+  },
+  {
+   "id": "P6",
+   "text": "The default preset is today's behaviour."
+  },
+  {
+   "id": "P7",
+   "text": "A wrong answer is never shipped as right."
+  }
+ ],
+ "triggers": [
+  {
+   "id": "T1",
+   "text": "Spending beyond what the human approved goes to the human first."
+  },
+  {
+   "id": "T2",
+   "text": "A change a person sees or presses goes to the human first."
+  },
+  {
+   "id": "T3",
+   "text": "A change to one of the human's decisions goes to the human first."
+  },
+  {
+   "id": "T4",
+   "text": "Anything about the human personally goes to the human first."
+  },
+  {
+   "id": "T5",
+   "text": "A push, a release or a delete goes to the human first."
+  }
+ ]
+}

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
+  <title id="t">The frames, filled in with one request</title>
+  <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude's turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude's turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour.</desc>
+  <style>
+    text { font-family: "Latin Modern Roman", "CMU Serif", "Computer Modern", "Times New Roman", Georgia, serif; font-size: 19px; fill: #e6edf3; }
+    .b { font-weight: 700; }
+    .i { font-style: italic; }
+    .a1 { fill: #2080ed; }
+    .a2 { fill: #318aee; }
+    .a3 { fill: #5aa1f2; }
+    .a4 { fill: #7fb6f5; }
+    .a5 { fill: #a3cbf8; }
+    .ar1 { fill: #b77005; }
+    .ar2 { fill: #c47805; }
+    .ar3 { fill: #e28a06; }
+    .ar4 { fill: #f99d12; }
+    .ar5 { fill: #fbbc5d; }
+    .b1 { fill: #1a9443; }
+    .b2 { fill: #1c9e47; }
+    .b3 { fill: #20b552; }
+    .b4 { fill: #24cc5c; }
+    .b5 { fill: #52e182; }
+    .br1 { fill: #e236a9; }
+    .br2 { fill: #e54cb2; }
+    .br3 { fill: #eb74c3; }
+    .br4 { fill: #f094d1; }
+    .br5 { fill: #f4b4df; }
+    .box { stroke: #c9d1d9; stroke-width: 1.3; }
+    .arrow { stroke: #c9d1d9; stroke-width: 1.4; fill: none; }
+    .head { fill: #c9d1d9; }
+  </style>
+  <rect x="128" y="73" width="677" height="723" rx="16" class="box" style="fill: #0d1117"/>
+  <text x="149" y="108"><tspan class="b">You</tspan>: <tspan class="i">“<tspan class="a1">Add rate limiting to the API.</tspan> <tspan class="b1">Over the limit, return HTTP 429.</tspan>”</tspan></text>
+  <text x="149" y="134">you confirm: <tspan class="a2">each client is limited per minute,</tspan> <tspan class="ar2">with a test (rule);</tspan></text>
+  <text x="149" y="160"><tspan class="b2">over the limit, HTTP 429 with a retry time,</tspan> <tspan class="br2">with a test (rule)</tspan></text>
+
+  <rect x="156" y="179" width="620" height="533" rx="14" class="box" style="fill: #161b22"/>
+  <text x="178" y="215"><tspan class="b">Method</tspan> (frame-loop): your requirements, by crossing</text>
+  <text x="660" y="250" text-anchor="end">labels each change ↓</text>
+  <text x="660" y="275" text-anchor="end">an act that is yours ↑</text>
+  <line x1="682" y1="236" x2="682" y2="298" class="arrow"/>
+  <path d="M676 244 L682 232 L688 244 Z" class="head"/>
+  <path d="M676 290 L682 302 L688 290 Z" class="head"/>
+
+  <rect x="172" y="304" width="290" height="392" rx="12" class="box" style="fill: #1c2128"/>
+  <text x="188" y="338" class="a3"><tspan class="b">Requirement</tspan>: requests</text>
+  <text x="188" y="362" class="a3">counted per client, each</text>
+  <text x="188" y="386" class="a3">count resets after a minute</text>
+  <text x="188" y="410" class="ar3">rule: with a test</text>
+  <rect x="188" y="426" width="258" height="254" rx="12" class="box" style="fill: #262c33"/>
+  <text x="204" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
+  <text x="204" y="482" class="i a4">“adds a counter that</text>
+  <text x="204" y="506" class="i a4">resets each minute,</text>
+  <text x="204" y="530" class="i ar4">with its test”</text>
+  <rect x="194" y="546" width="246" height="118" rx="10" class="box" style="fill: #30363d"/>
+  <text x="210" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
+  <text x="210" y="600" class="a5">with the requirement: fits</text>
+  <text x="210" y="624" class="a5">without it: doesn’t ✓</text>
+  <text x="210" y="648" class="ar5">breaks no rule ✓</text>
+
+  <rect x="470" y="304" width="290" height="392" rx="12" class="box" style="fill: #1c2128"/>
+  <text x="486" y="338" class="b3"><tspan class="b">Requirement</tspan>: the HTTP 429</text>
+  <text x="486" y="362" class="b3">carries Retry-After, the</text>
+  <text x="486" y="386" class="b3">seconds left in the window</text>
+  <text x="486" y="410" class="br3">rule: with a test</text>
+  <rect x="486" y="426" width="258" height="254" rx="12" class="box" style="fill: #262c33"/>
+  <text x="502" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
+  <text x="502" y="482" class="i b4">“sets Retry-After from</text>
+  <text x="502" y="506" class="i b4">the window,</text>
+  <text x="502" y="530" class="i br4">with its test”</text>
+  <rect x="492" y="546" width="246" height="118" rx="10" class="box" style="fill: #30363d"/>
+  <text x="508" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
+  <text x="508" y="600" class="b5">with the requirement: fits</text>
+  <text x="508" y="624" class="b5">without it: doesn’t ✓</text>
+  <text x="508" y="648" class="br5">breaks no rule ✓</text>
+
+  <line x1="101" y1="612" x2="101" y2="104" class="arrow"/>
+  <path d="M95 112 L101 98 L107 112 Z" class="head"/>
+  <text x="93" y="320" text-anchor="end">informs</text>
+  <text x="93" y="345" text-anchor="end">only</text>
+  <text x="93" y="370" text-anchor="end">through</text>
+  <text x="93" y="395" text-anchor="end">a gate</text>
+
+  <line x1="828" y1="98" x2="828" y2="606" class="arrow"/>
+  <path d="M822 598 L828 612 L834 598 Z" class="head"/>
+  <text x="838" y="320">declares;</text>
+  <text x="838" y="345">never</text>
+  <text x="838" y="370">rewritten</text>
+  <text x="838" y="395">from inside</text>
+
+  <path d="M594 712 C594 738, 586 750, 568 753" class="arrow" stroke-dasharray="6 5"/>
+  <path d="M572 747 L558 754 L572 760 Z" class="head"/>
+  <text x="545" y="760" text-anchor="end">▲ a mismatch becomes a change You declare</text>
+</svg>
