@@ -85,8 +85,22 @@ class UnicodePathTests(unittest.TestCase):
         run("init", "-q")
         run("-c", "user.email=t@example.invalid", "-c", "user.name=t", "commit", "-q", "--allow-empty", "-m", "start")
         before = repo.snapshot(str(project))
-        (project / "café.py").write_text("print('ok')\n", encoding="utf-8")
+        (project / "src").mkdir()
+        (project / "src" / "café.py").write_text("print('ok')\n", encoding="utf-8")
         after = repo.snapshot(str(project))
-        step = turn.step_label(str(project), before, after, {"asks": [], "scope": ["café.py"]}, [])
-        self.assertEqual(step["paths"], ["café.py"])
+        frame0 = {
+            "asks": [],
+            "scope": ["src/*", "tests/*"],
+            "obligations": [
+                {
+                    "id": "O1",
+                    "scope": ["src/*"],
+                    "text": "a src change changes tests",
+                    "check": {"changed": ["tests/*"]},
+                }
+            ],
+        }
+        step = turn.step_label(str(project), before, after, frame0, [])
+        self.assertEqual(step["paths"], ["src/café.py"])
         self.assertFalse([s for s in step["signals"] if "not authorized" in s], step["signals"])
+        self.assertIn("O1 unmet", step["signals"])  # the owed check applies to the file, as to an ASCII one
