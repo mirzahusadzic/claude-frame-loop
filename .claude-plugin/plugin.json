@@ -1,6 +1,13 @@
 {
   "name": "frame-loop",
   "version": "0.1.0",
-  "description": "Checks Claude's work against what you asked for, and comes to you only when something doesn't fit",
+  "description": "Checks the work you and Claude do together against what you asked for, and comes to you only when something doesn't fit",
+  "author": {
+    "name": "Mirza Husadzic"
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/mirzahusadzic/claude-frame-loop",
+  "repository": "https://github.com/mirzahusadzic/claude-frame-loop",
+  "keywords": ["workflow", "linter", "requirements", "review", "hooks", "gadfly"],
   "types": "./types/index.d.ts"
 }
