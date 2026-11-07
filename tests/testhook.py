@@ -2612,6 +2612,64 @@ class CoreTests(unittest.TestCase):
         ):
             time.sleep(0.2)  # the background process removes its payload as it exits: no write after this test
 
+    def test_a_background_read_keeps_the_acts_that_need_the_person(self):
+        """The cold review (H3): in background mode, the plugin's default, the read started with an
+        empty live state, so a recursive delete dropped out of the band and the turn ended as a pass."""
+        live = WORK / f"live-bgacts-{uid(self)}"
+        tests = str(ROOT / "tests")
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:passing",
+            FRAME_LOOP_BACKGROUND="1",
+            FRAME_LOOP_LIVE=str(live),
+            PYTHONPATH=os.pathsep.join([tests, str(ROOT / "frameloop")]),
+        )
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": "rm -rf build"},
+            }
+        )
+        hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-declare --serves A1"},
+            }
+        )
+        (REPO / f"bgacts-{uid(self)}.py").write_text("print('x')\n" * 300, encoding="utf-8")
+        hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "done",
+                "stop_hook_active": False,
+            }
+        )
+        git("add", "-A")
+        git("commit", "-q", "-m", "turn")
+        deadline, shown = time.time() + 60, {}
+        while time.time() < deadline:  # the background read's own outcome carries its pid
+            path = live / f"{self.session}.json"
+            try:
+                shown = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                shown = {}
+            if shown.get("state") == "done" and shown.get("pid"):
+                break
+            time.sleep(0.2)
+        self.assertEqual(shown.get("decision"), "rise", shown)
+        self.assertTrue(any("deleted a folder" in x for x in shown.get("lines") or []), shown)
+
     def test_a_newer_background_read_replaces_one_still_running(self):
         """The first review: each turn started a background read of its own, however many
         still ran; a newer one now stops the older and reads from where it began."""

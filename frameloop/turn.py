@@ -220,6 +220,15 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     return {"systemMessage": tell}
 
 
+def _carried() -> dict[str, Any]:
+    acts, changed = _turn_acts(_this_turn())
+    return {
+        "acts": [act_words(a) for a in acts],
+        "guides": changed,
+        "lost": rules_lost(state.CWD) if changed else [],
+    }
+
+
 def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str, said: str) -> dict[str, Any]:
     """Shadow mode blocks nothing, so the turn need not wait for its read (Asked for: "it was 2
     min...that is unacceptable"): the read runs in a process of its own, the band shows it,
@@ -247,6 +256,9 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
                 "session": state.SESSION,
                 "node": state.NODE,
                 "why": state.LIVE.get("why"),
+                # The turn's acts, guides and lost rules: the read's outcome carries them to the band,
+                # as the foreground's does (the cold review, H3).
+                **_carried(),
             }
         ),
         encoding="utf-8",
@@ -275,6 +287,9 @@ def _background(payload_path: str) -> int:
     state.SESSION, state.CWD, state.NODE = payload["session"], payload["cwd"], payload.get("node")
     state.LIVE.clear()
     state.LIVE["background"] = os.getpid()
+    for key in ("acts", "guides", "lost"):  # what the turn did besides its change
+        if payload.get(key):
+            state.LIVE[key] = [tuple(x) if key == "acts" else x for x in payload[key]]
     plugin_defaults(payload["event"])
     try:
         frame0 = load_frame0()
@@ -301,17 +316,30 @@ def _background(payload_path: str) -> int:
     return 0
 
 
+def _this_turn() -> list[dict[str, Any]]:
+    """The session's records since its last stop: the turn so far."""
+    path = os.environ.get("FRAME_LOOP_LOG")
+    if not path or not Path(path).exists():
+        return []
+    mine = [r for r in rows(path) if r.get("session") == state.SESSION]
+    last = max((i for i, r in enumerate(mine) if r.get("event") == "stop"), default=-1)
+    return mine[last + 1 :]
+
+
+def _turn_acts(turn: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[Any]]:
+    """The turn's acts and the guides it changed."""
+    acts = [r for r in turn if r.get("event") in ("outward", "config")]
+    start = next((r for r in turn if r.get("event") == "guides"), None)
+    return acts, (guide_changes(start["lines"], state.CWD) if start else [])
+
+
 def _turn_summary() -> dict[str, Any] | None:
     path = os.environ.get("FRAME_LOOP_LOG")
     if not path or not Path(path).exists():
         return None
-    mine = [r for r in rows(path) if r.get("session") == state.SESSION]
-    last = max((i for i, r in enumerate(mine) if r.get("event") == "stop"), default=-1)
-    turn = mine[last + 1 :]
+    turn = _this_turn()
     read = [r for r in turn if r.get("event") in ("plan", "turn", "read", "proposal")]
-    acts = [r for r in turn if r.get("event") in ("outward", "config")]
-    start = next((r for r in turn if r.get("event") == "guides"), None)
-    changed = guide_changes(start["lines"], state.CWD) if start else []
+    acts, changed = _turn_acts(turn)
     _log({"event": "stop"})  # every turn closes in the record, a quiet one too
     if not read and not acts and not changed:
         return None
