@@ -5,9 +5,9 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.13+](https://img.shields.io/badge/python-3.13%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 ![macOS · Linux · Windows](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)
-![alpha 0.1.0](https://img.shields.io/badge/status-alpha%200.1.0-e5a50a)
+![alpha 0.1.1](https://img.shields.io/badge/status-alpha%200.1.1-e5a50a)
 
-Early alpha (0.1.0): used by its author so far; pin a version for stability. [Issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
+Early alpha (0.1.1): used by its author so far; pin a version for stability. [Issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
 
 A semantic workflow linter for Claude Code: your confirmed requirements and rules, checked every turn; only a mismatch reaches you. Checks run on [Gadfly](https://github.com/mirzahusadzic/gadfly): a fit counts only if it holds with the requirement and breaks without it ([paper](https://doi.org/10.5281/zenodo.23962158)).
 
