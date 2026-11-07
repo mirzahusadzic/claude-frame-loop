@@ -1538,7 +1538,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(lines.act_words(refused)[0], "Claude tried to change the loop's own files, and it did not go through")
 
     def test_a_plugin_keeps_each_projects_files_in_the_project(self):
-        """Installed as a plugin, nothing set: the loop's files go to <project>/.claude/frame-loop."""
+        """Installed as a plugin, nothing set: the loop's files go to <project>/.frame-loop."""
         fresh = Path(make_repo(WORK / f"fresh-{id(self)}"))
         for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
             os.environ.pop(name, None)
@@ -1548,6 +1548,17 @@ class CoreTests(unittest.TestCase):
         self.assertTrue((fresh / ".frame-loop").is_dir())
         self.assertNotIn("FRAME_LOOP_RULES", os.environ)  # no rules yet: none indexed
         self.assertIn("frame 0", json.dumps(out))
+
+    def test_a_plugin_reads_seven_calls_at_once_unless_set(self):
+        """The docs promised parallel reader calls, and the plugin made them one at a time."""
+        fresh = Path(make_repo(WORK / f"parallel-{id(self)}"))
+        os.environ.pop("FRAME_LOOP_PARALLEL", None)
+        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin"))
+        hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)})
+        self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "7")
+        os.environ["FRAME_LOOP_PARALLEL"] = "2"
+        hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)})
+        self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "2")
 
     def test_a_chain_of_markers_only_is_read_in_full(self):
         """Seen in the novice profile: Claude wrote `: frame-loop-read …; : frame-loop-declare …`

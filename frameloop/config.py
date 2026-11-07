@@ -85,6 +85,7 @@ def plugin_defaults(event: dict[str, Any]) -> None:
         if path.exists():
             os.environ.setdefault(name, str(path))
     os.environ.setdefault("FRAME_LOOP_LIVE", str(Path(real_home()) / ".claude" / "frame-loop" / "live"))
+    os.environ.setdefault("FRAME_LOOP_PARALLEL", "7")  # the reader calls at once, as tested on the release
     try:
         home.mkdir(parents=True, exist_ok=True)
     except OSError:
