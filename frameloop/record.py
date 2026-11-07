@@ -25,9 +25,20 @@ def _log(record: dict[str, Any]) -> None:
                              ensure_ascii=False) + "\n")
 
 
+_ROWS: dict[str, tuple[tuple[int, int], list[dict[str, Any]]]] = {}
+
+
 def rows(path: str | Path) -> list[dict[str, Any]]:
     """The records of a JSON-lines file. A line that is not a whole record, such as one
-    cut short by a crash mid-write, is passed over, never a reason every later hook fails."""
+    cut short by a crash mid-write, is passed over, never a reason every later hook fails.
+    A hook reads the record several times: it is parsed again only once it has changed."""
+    try:
+        seen = Path(path).stat()
+    except OSError:
+        return []
+    key, stamp = str(Path(path).resolve()), (seen.st_mtime_ns, seen.st_size)
+    if key in _ROWS and _ROWS[key][0] == stamp:
+        return list(_ROWS[key][1])
     found = []
     for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
         try:
@@ -36,7 +47,8 @@ def rows(path: str | Path) -> list[dict[str, Any]]:
             continue
         if isinstance(record, dict):
             found.append(record)
-    return found
+    _ROWS[key] = (stamp, found)
+    return list(found)
 
 
 def _records(kind: str) -> list[dict[str, Any]]:
