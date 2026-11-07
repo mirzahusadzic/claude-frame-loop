@@ -2646,7 +2646,7 @@ class CoreTests(unittest.TestCase):
             }
         )
         (REPO / f"bgacts-{uid(self)}.py").write_text("print('x')\n" * 300, encoding="utf-8")
-        hook.answer(
+        said = hook.answer(
             {
                 "hook_event_name": "Stop",
                 "session_id": self.session,
@@ -2657,6 +2657,8 @@ class CoreTests(unittest.TestCase):
         )
         git("add", "-A")
         git("commit", "-q", "-m", "turn")
+        # the line under the reply, at once, marks the act too, not only the band's outcome later
+        self.assertIn("▲ needs you: Claude deleted a folder", (said or {}).get("systemMessage", ""))
         deadline, shown = time.time() + 60, {}
         while time.time() < deadline:  # the background read's own outcome carries its pid
             path = live / f"{self.session}.json"
