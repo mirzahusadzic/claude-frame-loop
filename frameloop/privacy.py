@@ -63,7 +63,7 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
     if write:
         import writer
 
-        given = _masked(_without_declaration(text), frame0)
+        given = _masked(_without_declaration(text, kind), frame0)
         ids = [x["id"] for part in ("asks", "principles", "triggers", "obligations") for x in frame0.get(part, [])]
 
         def refused(made: dict[str, Any]) -> str | None:

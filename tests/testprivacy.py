@@ -195,3 +195,15 @@ class ReviewSecretTests(unittest.TestCase):
             sent, refusal = privacy.outgoing(diff, "the turn's change", "private", {"asks": []})
         self.assertIsNone(sent)
         self.assertIn("secret", refusal)
+
+
+class ReviewDiffLineTests(unittest.TestCase):
+    """The cold review, L3: diff lines whose words begin `reader:`, `serves:` or `effort:` were cut as
+    a declaration before the writer saw the change, so a YAML change lost its lines."""
+
+    def test_a_diff_keeps_its_lines_and_a_plan_loses_its_declaration(self):
+        import declare
+
+        diff = "--- a/c.yml\n+++ b/c.yml\n@@ -1,2 +1,2 @@\n-reader: old\n+reader: run\n effort: low\n"
+        self.assertEqual(declare._without_declaration(diff, "the turn's change"), diff)
+        self.assertNotIn("Serves", declare._without_declaration("Serves: A1\nAdd the test.", "a plan"))

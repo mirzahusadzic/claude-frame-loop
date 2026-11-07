@@ -59,7 +59,14 @@ def _declare_lines(command: str) -> list[str]:
     return [f"{keys[k]}: {', '.join(v)}" for k, v in values.items() if v]
 
 
-def _without_declaration(plan: str) -> str:
+DIFF_KINDS = ("the turn's change", "a completion")  # a diff declares nothing: a turn declares by marker
+
+
+def _without_declaration(plan: str, kind: str = "") -> str:
+    """A plan's text without its declaration lines ("Serves: A1"). A diff is left whole: its
+    lines are code, and `reader: run` in a YAML file is no declaration (the cold review, L3)."""
+    if kind in DIFF_KINDS:
+        return plan
     return "\n".join(line for line in plan.splitlines() if not _is_declaration(line))
 
 

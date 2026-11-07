@@ -152,7 +152,7 @@ def _read(
     faults = frames.frame0_faults(frame0)
     # The declaration never reaches the reader: its lines are cut, and every id of
     # frame 0 left in the text is masked.
-    step = {"id": step_id, "summary": _masked(_without_declaration(text), frame0), "facts": {"kind": kind}}
+    step = {"id": step_id, "summary": _masked(_without_declaration(text, kind), frame0), "facts": {"kind": kind}}
     if faults:
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if tier is None:
@@ -175,7 +175,7 @@ def _read(
             tier,
             tier_note,
         )
-    step["summary"] = _masked(_without_declaration(sent), frame0)
+    step["summary"] = _masked(_without_declaration(sent, kind), frame0)
     effort, notes, error = effort_for(said if said is not None else text, facts, tier)
     if error:
         return {"decision": gate.RISE, "reason": error}, tier, tier_note
@@ -312,7 +312,9 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
                 [{**s, "label": sent[s["id"]][0], "diff": ""} for s in steps]
                 if write
                 else [
-                    {**s, "diff": _masked(_without_declaration(sent[s["id"]][0]), frame0)} if s["id"] in sent else s
+                    {**s, "diff": _masked(_without_declaration(sent[s["id"]][0], "a completion"), frame0)}
+                    if s["id"] in sent
+                    else s
                     for s in steps
                 ]
             )  # masked, as every reading is
