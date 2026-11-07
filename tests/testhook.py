@@ -451,6 +451,16 @@ class AttackTests(unittest.TestCase):
         waited = hook.briefing(framezero.load_frame0(), "enforce")
         self.assertIn("the turn's end then waits", waited)
 
+    def test_the_briefing_says_frame0s_write_is_asked_only_in_enforce_mode(self):
+        """The claims ledger: the briefing told Claude the author is asked before frame 0 is
+        written, which holds in enforce mode only; in shadow mode the write is reported."""
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(WORK / "frame0-unwritten.json")))
+        self.assertIn("asks the author before that write lands", hook.briefing(unwritten, "enforce"))
+        shadow = hook.briefing(unwritten, "shadow")
+        self.assertNotIn("asks the author before", shadow)
+        self.assertIn("frame-loop reports it to them", shadow)
+
     def test_the_briefing_names_no_calibration_reader(self):
         """A setting naming a calibration tier is refused at every reading; the session's
         briefing named its Claude model as the reader all the same."""

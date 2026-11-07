@@ -504,7 +504,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 f"{os.environ.get('FRAME_LOOP_FRAME0')}: each ask as "
                 '{"id": "A1", "text": "<the author\'s words>", "inversion": '
                 '{"<that whole text>": "<the whole text, inverted>"}}, and principles and triggers as '
-                '{"id": "P1", "text": "..."}; frame-loop asks the author before that write lands.'
+                '{"id": "P1", "text": "..."}; '
+                + (
+                    "frame-loop asks the author before that write lands."
+                    if mode == "enforce"
+                    else "the write is the author's to see: frame-loop reports it to them."
+                )
             ]
             if frame0.get("unwritten")
             else ["Frame 0, asks:", *[f"- {a['id']}: {a['text']}" for a in frame0["asks"]]]
