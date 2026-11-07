@@ -3425,6 +3425,40 @@ class TreeHookTests(CoreTests):
         self.assertIn("configuration or record is touched", out["systemMessage"])
         self.assertIn("outside", out["systemMessage"])
 
+    def test_a_node_file_a_shell_command_writes_is_checked_too(self):
+        """The claims ledger: a node file written by a shell command rose as the loop's own
+        file, but its node was never checked; an edit's was."""
+        bad = {
+            **self.GREETER,
+            "id": "wide",
+            "parent": "greeter",
+            "scope": ["src/*"],
+            "asks": [{**self.GREETER["asks"][0], "id": "W1", "quotes": "N1"}],
+        }
+        wide = self.tree / "wide.json"
+        self.addCleanup(lambda: wide.unlink(missing_ok=True))
+        command = f"cat > {wide.name} <<'EOF'\n{json.dumps(bad)}\nEOF"
+
+        def call(event):
+            return hook.answer(
+                {
+                    "hook_event_name": event,
+                    "tool_name": "Bash",
+                    "session_id": self.session,
+                    "cwd": str(REPO),
+                    "tool_use_id": "node-sh",
+                    "tool_input": {"command": command},
+                    "tool_response": {"stdout": "", "stderr": ""},
+                }
+            )
+
+        call("PreToolUse")
+        wide.write_text(json.dumps(bad), encoding="utf-8")  # what the command did
+        out = call("PostToolUse")
+        self.assertIn("changed the loop's own files", out["systemMessage"])
+        self.assertIn("does not narrow its parent", out["systemMessage"])
+        self.assertIn("outside", out["systemMessage"])
+
     def test_a_node_with_no_scope_is_a_fault_and_never_the_whole_project(self):
         """The first review: a node that named no scope authorized every path."""
         loose = {k: v for k, v in self.GREETER.items() if k != "scope"}

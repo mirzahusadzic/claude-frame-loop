@@ -289,11 +289,18 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             capture(tool or "", tool_input, brought)
         if not changed:
             return None
+        faults = []
         for path in changed:
-            _log({"event": "config", "tool": "Bash", "path": path, "after": True})
+            # a node file a command wrote is checked as an edit to it is
+            found = _written_node_faults(path, frame0)
+            faults += [f"{_short_path(Path(path))}: {x}" for x in found]
+            _log(
+                {"event": "config", "tool": "Bash", "path": path, "after": True, **({"faults": found} if found else {})}
+            )
         said = (
             "frame-loop: L1: the command changed the loop's own files "
             f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."
+            + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else "")
         )
         return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
     if name == "Stop":
@@ -432,6 +439,16 @@ def _loop_files_at(event: dict[str, Any]) -> Path:
     call = re.sub(r"[^\w-]", "_", str(event.get("tool_use_id") or "call"))[:80]
     session = re.sub(r"[^\w-]", "_", state.SESSION or "none")
     return work / "loop-files" / f"{session}-{call}.json"
+
+
+def _written_node_faults(path: str, frame0: dict[str, Any]) -> list[str]:
+    """What keeps a node file a shell command wrote from narrowing its parent; nothing for
+    any other file, or one the command removed."""
+    try:
+        text = Path(path).read_text(encoding="utf-8") if Path(path).is_file() else None
+    except (OSError, UnicodeDecodeError):
+        return ["it cannot be read"]
+    return node_file_faults(path, "Write", {"content": text}, frame0) if text is not None else []
 
 
 def _keep_loop_files(event: dict[str, Any]) -> None:
