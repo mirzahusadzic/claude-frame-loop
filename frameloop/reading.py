@@ -320,6 +320,9 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             parts.append(f"{ask['id']} not read ({refusal})")
             continue
         effort, _, error = effort_for(said, None, tier)
+        if error:  # an effort floor that cannot be read is never read below, as for a step
+            parts.append(f"{ask['id']} not read ({error})")
+            continue
         frame = completion_frame(frame0, ask, frame_steps, tier, bool(os.environ.get("FRAME_LOOP_TREE")))
         if effort:
             frame["battery"]["reasoning"] = effort

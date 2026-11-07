@@ -1,0 +1,214 @@
+"""A reading (reading.py): a step through the reader and the gate, what it cost, and the
+completion reading when the work is presented, at the root and up a tree."""
+
+import json
+import os
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "frameloop"))
+sys.path.insert(0, str(ROOT / "tests"))
+import hook  # noqa: E402
+import reading  # noqa: E402
+import state  # noqa: E402
+import testhook  # noqa: E402
+from testhook import FIXTURE, PUBLIC, WORK, env, plan_event, uid  # noqa: E402
+
+FRAME0 = json.loads(FIXTURE.read_text(encoding="utf-8"))
+SEEN = []
+WALKED = {}
+
+
+def plain(frame, only=()):
+    """A passing reader in a module with no live view (no on_progress)."""
+    import testreading as loaded
+
+    loaded.SEEN.append(frame)
+    return testhook.passing(frame, only)
+
+
+def unsettled(frame, only=()):
+    """A completion reader that is carried but not firm, and reports no calls."""
+    return {"exit": 0, "firm": False, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+
+def walk(start, frames):
+    import testreading as loaded
+
+    return loaded.WALKED
+
+
+class Isolated(unittest.TestCase):
+    def setUp(self):
+        self.saved = dict(os.environ)
+        for name in [k for k in os.environ if k.startswith("FRAME_LOOP_")]:
+            del os.environ[name]  # nothing from the caller's session, such as its live folder
+        saved = state.SESSION, state.CWD, state.NODE, dict(state.LIVE)
+        self.addCleanup(self.restore, saved)
+        self.log = WORK / f"reading-{uid(self)}.jsonl"
+        os.environ.update(env(FRAME_LOOP_LOG=str(self.log), FRAME_LOOP_WORK=str(WORK / f"reading-{uid(self)}")))
+        self.session = f"reading-{uid(self)}"
+        state.SESSION, state.CWD, state.NODE = self.session, PUBLIC, None
+        SEEN.clear()
+
+    @staticmethod
+    def restore(saved):
+        state.SESSION, state.CWD, state.NODE = saved[:3]
+        state.LIVE.clear()
+        state.LIVE.update(saved[3])
+
+    def tearDown(self):
+        os.environ.clear()
+        os.environ.update(self.saved)
+
+
+class ReadStepTests(Isolated):
+    def step(self):
+        return {"id": "s", "summary": "Count requests per client.", "facts": {"kind": "a plan"}}
+
+    def test_without_a_reader_a_step_rises_unread(self):
+        """A step with no reader configured would pass by default."""
+        os.environ.pop("FRAME_LOOP_READER", None)
+        self.assertEqual(
+            reading.read_step(FRAME0, self.step(), ["A1"], "private"),
+            {"decision": "rise", "reason": "no reader configured: not read"},
+        )
+
+    def test_a_reader_with_no_live_view_reads_at_its_tiers_effort(self):
+        """A reader module without on_progress would crash the reading, or have an effort forced on it."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:plain"
+        import testreading as loaded
+
+        loaded.SEEN.clear()
+        out = reading.read_step(FRAME0, self.step(), ["A1"], "private")
+        self.assertEqual(out["decision"], "pass", out)
+        self.assertEqual({f["battery"]["reasoning"] for f in loaded.SEEN}, {"high"})
+        self.assertFalse(hasattr(loaded, "on_progress"))
+
+    def test_a_frame0_of_asks_only_rises_on_its_fit_alone(self):
+        """A fit that fails with no rules to read would pass on the rules question that was never asked."""
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:drifting", FRAME_LOOP_FRAME0=str(ROOT / "tests/fixtures/ratelimit/frame0.json")
+        )
+        out = hook.answer(plan_event("Serves: A1\nCount requests per client and reset each minute."))
+        context = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("which-ask: unresolved: the fit does not rest on its declared ask", context)
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(rows[-1]["decision"], "rise")
+        self.assertNotIn("fit", rows[-1])
+
+    def test_what_a_reading_cost_counts_only_whole_numbers(self):
+        """A count Gadfly left null or nested would crash the line, or be summed as a number."""
+        spent = reading._spent(
+            {"made": 4, "usage": {"input_tokens": 10, "cost": None, "detail": {"x": 1}}},
+            {"made": "?", "usage": {"input_tokens": 5}, "unthought": {"calls": 3}},
+        )
+        self.assertEqual(spent, {"calls": 4, "input_tokens": 15, "reasoned_calls": 3, "unthought": 0})
+
+
+class CompletionTests(Isolated):
+    def setUp(self):
+        super().setUp()
+        os.environ["FRAME_LOOP_READER"] = "testhook:completing"
+
+    def claim(self, step_id, asks, diff="+    return settings.read('one.toml')\n"):
+        path = WORK / f"reading-{uid(self)}-{step_id}.diff"
+        path.write_text(diff, encoding="utf-8")
+        row = {"session": self.session, "event": "step", "id": step_id, "text": "a step", "claims": asks}
+        with self.log.open("a", encoding="utf-8") as out:
+            out.write(json.dumps({**row, "diff_file": str(path)}) + "\n")
+
+    def complete(self):
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": PUBLIC,
+                "tool_input": {"command": ": frame-loop-read --complete"},
+            }
+        )
+        return out["hookSpecificOutput"]["additionalContext"]
+
+    def test_with_no_step_there_is_nothing_to_read(self):
+        """A session with no step would be read as every ask unfulfilled, or as done."""
+        self.assertEqual(
+            self.complete(), "frame-loop · completion · nothing to read: no step was labelled in this session"
+        )
+
+    def test_without_a_reader_or_an_allowed_tier_no_ask_is_read(self):
+        """An ask with no reader, or a training tier not allowed, would be read as done or sent anyway."""
+        self.claim("S1", ["A1"])
+        os.environ.pop("FRAME_LOOP_READER")
+        self.assertIn("A1 not read (no reader configured) · A2: nothing claims it", self.complete())
+        os.environ.update(FRAME_LOOP_READER="testhook:completing", FRAME_LOOP_TIER="contributor")
+        self.assertIn("A1 not read (reader tier contributor trains on its inputs", self.complete())
+
+    def test_an_unknown_effort_floor_reads_no_ask(self):
+        """Found here: a completion read below an effort floor it could not read, which a step refuses."""
+        self.claim("S1", ["A1"])
+        os.environ["FRAME_LOOP_EFFORT"] = "xhihg"
+        testhook.SEEN.clear()
+        self.assertIn("A1 not read (unknown effort 'xhihg': not read)", self.complete())
+        self.assertEqual(testhook.SEEN, [])
+
+    def test_a_reading_that_is_not_firm_is_not_done_and_fills_nothing(self):
+        """A carried but unsettled reading would mark the ask done and fill it in the record."""
+        self.claim("S1", ["A1"])
+        os.environ["FRAME_LOOP_READER"] = "testreading:unsettled"
+        text = self.complete()
+        self.assertIn("A1 ✗ (carried, not firm)", text)
+        self.assertNotIn("calls", text.split("\n")[1])
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertFalse([r for r in rows if r.get("event") == "filled"])
+        self.assertEqual(rows[-1]["parts"][0], "A1 ✗ (carried, not firm)")
+
+
+class TreeCompletionTests(Isolated):
+    """At the root of a tree, a completion fills the hole Gadfly's walk names, and the
+    host rule says when frame 0 is complete."""
+
+    def setUp(self):
+        super().setUp()
+        frame0 = {**FRAME0, "asks": FRAME0["asks"][:1]}
+        self.frame0 = WORK / f"reading-frame0-{uid(self)}.json"
+        self.frame0.write_text(json.dumps(frame0), encoding="utf-8")
+        tree = WORK / f"reading-tree-{uid(self)}"
+        tree.mkdir()
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:completing",
+            FRAME_LOOP_FRAME0=str(self.frame0),
+            FRAME_LOOP_TREE=str(tree),
+            FRAME_LOOP_ROUTER="testreading:walk",
+        )
+        CompletionTests.claim(self, "S1", ["A1"])
+
+    def test_one_hole_named_fills_it_and_frame0_is_complete(self):
+        """A fill the walk names would be lost, and frame 0 never said complete."""
+        import testreading as loaded
+
+        loaded.WALKED = {"fits": [{"frame": "node-root", "holes": ["done-A1"]}], "frontier": []}
+        text = CompletionTests.complete(self)
+        self.assertIn("A1 ✓ · frame 0 complete", text)
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        filled = [r for r in rows if r.get("event") == "filled"]
+        self.assertEqual([(r["node"], r["ask"], r["routed"]) for r in filled], [("root", "A1", "gadfly walk")])
+
+    def test_a_walk_with_no_fit_stops_the_climb_and_fills_nothing(self):
+        """A completion the walk cannot place would be filled by a guess and climb."""
+        import testreading as loaded
+
+        loaded.WALKED = {"fits": [], "frontier": []}
+        text = CompletionTests.complete(self)
+        self.assertIn("A1 ✓ · climb stopped: the walk found 0 holes for it, not one", text)
+        self.assertNotIn("frame 0 complete", text)
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(
+            [r["why"] for r in rows if r.get("event") == "climb-stopped"], ["the walk found 0 holes for it, not one"]
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()
