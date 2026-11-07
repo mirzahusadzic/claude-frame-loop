@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -121,3 +122,19 @@ class ConcurrentSnapshotTests(unittest.TestCase):
         self.assertEqual(len(set(trees)), 1, trees)
         self.assertIsNotNone(trees[0])
         self.assertEqual(sorted((project / ".git").glob("frame-loop-index-*")), [])
+
+
+class DeadlineTests(unittest.TestCase):
+    """Sparky's second review: a git call had no deadline, so a clean filter or a lock held
+    a hook past Claude Code's timeout, and the hook gave no answer at all."""
+
+    def test_a_git_call_that_hangs_ends_as_no_snapshot(self):
+        project = Path(make_repo(WORK / f"deadline-{uid(self)}"))
+        subprocess.run(["git", "config", "filter.slow.clean", "sleep 20; cat"], cwd=project, check=True)
+        (project / ".gitattributes").write_text("*.txt filter=slow\n", encoding="utf-8")
+        (project / "notes.txt").write_text("a line\n", encoding="utf-8")
+        state.SESSION = f"deadline-{uid(self)}"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_GIT_TIMEOUT": "1"}):
+            started = time.monotonic()
+            self.assertIsNone(repo.snapshot(str(project)))
+            self.assertLess(time.monotonic() - started, 10)

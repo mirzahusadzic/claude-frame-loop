@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -58,8 +59,6 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
     if how is None:  # never a pass: the gate reads an error as not read
         return subprocess.CompletedProcess(args, 127, json.dumps({"error": {"message": MISSING}}), "")
     command, where = how[0] + args, how[1]
-    if on_progress is None or watch is None:
-        return subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=where)
     proc = subprocess.Popen(
         command,
         stdout=subprocess.PIPE,
@@ -68,7 +67,11 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
         encoding="utf-8",
         errors="replace",
         cwd=where,
+        # its own process group, so a run past its deadline goes with every process it started
+        **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}),
     )
+    if on_progress is None or watch is None:
+        return _within_deadline(proc, command)
     stop = threading.Event()
 
     def poll() -> None:
@@ -86,10 +89,39 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
 
     watcher = threading.Thread(target=poll, daemon=True)
     watcher.start()
-    out, err = proc.communicate()
-    stop.set()
-    watcher.join(2)
-    return subprocess.CompletedProcess(command, proc.returncode, out, err)
+    try:
+        return _within_deadline(proc, command)
+    finally:
+        stop.set()
+        watcher.join(2)
+
+
+def _read_timeout() -> float:
+    """Seconds a Gadfly run may take: inside the 600 s Claude Code gives the hooks that
+    read, and a bound for a read in the background, which nothing else stops."""
+    try:
+        return max(1.0, float(os.environ.get("FRAME_LOOP_READ_TIMEOUT") or 540))
+    except ValueError:
+        return 540.0
+
+
+def _within_deadline(proc: subprocess.Popen, command: list[str]) -> subprocess.CompletedProcess:
+    """The run's output, or, past its deadline, its whole process group stopped and an
+    error the gate reads as not read."""
+    try:
+        out, err = proc.communicate(timeout=_read_timeout())
+        return subprocess.CompletedProcess(command, proc.returncode, out, err)
+    except subprocess.TimeoutExpired:
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=30)
+            else:
+                os.killpg(proc.pid, signal.SIGKILL)
+        except (OSError, subprocess.SubprocessError):
+            proc.kill()
+        proc.communicate()
+        said = f"the reader gave no answer within {_read_timeout():g} s, so it was stopped"
+        return subprocess.CompletedProcess(command, 124, json.dumps({"error": {"message": said}}), "")
 
 
 def _home() -> str:

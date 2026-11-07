@@ -21,19 +21,33 @@ def project_root(cwd: str | None) -> Path:
     return (Path(top.stdout.strip()) if top is not None and top.returncode == 0 else here).resolve()
 
 
+def _git_timeout() -> float:
+    """Seconds a git call may take: a clean filter or a lock can hold one forever, and a
+    hook that waits past Claude Code's timeout gives no answer at all."""
+    try:
+        return max(1.0, float(os.environ.get("FRAME_LOOP_GIT_TIMEOUT") or 20))
+    except ValueError:
+        return 20.0
+
+
 def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.CompletedProcess:
     env = {**os.environ, "GIT_INDEX_FILE": index} if index else None
-    return subprocess.run(
-        # Paths as they are: git otherwise quotes a name that is not plain ASCII ("caf\303\251.py"),
-        # and it then matches no scope, rule or check (the cold review, M3).
-        ["git", "-c", "core.quotePath=false", *args],
-        cwd=cwd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        env=env,
-    )
+    command = ["git", "-c", "core.quotePath=false", *args]
+    try:
+        return subprocess.run(
+            # Paths as they are: git otherwise quotes a name that is not plain ASCII ("caf\303\251.py"),
+            # and it then matches no scope, rule or check (the cold review, M3).
+            command,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            env=env,
+            timeout=_git_timeout(),
+        )
+    except subprocess.TimeoutExpired:  # a failed call: no snapshot, so the change is not read
+        return subprocess.CompletedProcess(command, 124, "", f"git took longer than {_git_timeout():g} s")
 
 
 def snapshot(cwd: str) -> str | None:

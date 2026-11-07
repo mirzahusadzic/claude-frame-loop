@@ -1,6 +1,8 @@
+import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -195,3 +197,24 @@ class GadflyOutputTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DeadlineTests(unittest.TestCase):
+    """Sparky's second review: a Gadfly run had no deadline; a read in the background, the
+    plugin's default, waited forever, and the band said "reading" until the next turn."""
+
+    def test_a_run_past_its_deadline_is_stopped_and_not_read(self):
+        hang = [sys.executable, "-c", "import time; time.sleep(60)"]
+        for progress in (None, lambda n: None):  # with and without the band's progress
+            with (
+                self.subTest(band=progress is not None),
+                mock.patch.object(reader, "launcher", return_value=(hang, None)),
+                mock.patch.object(reader, "on_progress", progress),
+                mock.patch.dict(os.environ, {"FRAME_LOOP_READ_TIMEOUT": "1"}),
+            ):
+                started = time.monotonic()
+                done = reader._gadfly(["run"], watch=Path(tempfile.mkdtemp(prefix="frame-loop-deadline-")))
+                self.assertLess(time.monotonic() - started, 15)
+                self.assertEqual(done.returncode, 124)
+                self.assertIn("no answer within 1 s", done.stdout)
+                self.assertTrue(gate._failed({**json.loads(done.stdout), "exit": done.returncode}))
