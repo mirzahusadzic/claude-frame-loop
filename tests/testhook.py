@@ -102,6 +102,20 @@ def _fake_gh() -> str:
 FAKE_GH = _fake_gh()
 
 
+def clear_inherited() -> None:
+    """The caller's own FRAME_LOOP_* settings never reach a test: an inherited reader would make a
+    real reader call, and an inherited tier would change what a test reads (the cold review)."""
+    for name in [n for n in os.environ if n.startswith("FRAME_LOOP_")]:
+        del os.environ[name]
+
+
+# Once, in the test process as it loads: a test's own settings are its own, and a hook process a
+# test starts, which loads this module as its fake reader, keeps the settings it was given.
+if not os.environ.get("FLTESTS_PROCESS_STARTED"):
+    clear_inherited()
+    os.environ["FLTESTS_PROCESS_STARTED"] = "1"
+
+
 def env(**extra):
     base = {
         "FRAME_LOOP_TIER": "private",  # the shipped default trains on inputs; tests read on one that does not
@@ -2218,6 +2232,26 @@ class CoreTests(unittest.TestCase):
             {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
         )
         self.assertIn(TEST_HOME.resolve(), Path(os.environ["FRAME_LOOP_LIVE"]).resolve().parents)
+
+    def test_a_caller_setting_never_reaches_a_test(self):
+        """The cold review: with FRAME_LOOP_READER=reader:run in the caller's environment, a test ran
+        the live reader and wrote a frame into the repository, and this one failed."""
+        child = {**os.environ, "FRAME_LOOP_READER": "reader:run", "FRAME_LOOP_TIER": "contributor"}
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "unittest",
+                "testhook.AttackTests.test_a_training_tier_is_not_read_without_the_humans_allowance",
+            ],
+            cwd=ROOT / "tests",
+            env=child,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=120,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr[-2000:])
 
     def test_a_plugin_names_its_reader_unless_set(self):
         """The first review: the plugin set no reader, so every reading said "no reader
