@@ -190,6 +190,24 @@ def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
     return "".join(kept) + command[at:], bodies
 
 
+def substitutions(command: str) -> list[str]:
+    """The commands the shell runs inside heredocs whose delimiter is not quoted: there it
+    expands `$(…)` and backticks before the program reads a line (the cold review, H1)."""
+    found = []
+    for heredoc in HEREDOC.finditer(command):
+        if heredoc.group(1):  # <<'EOF' or <<"EOF": the text is data, nothing is expanded
+            continue
+        body, i = heredoc.group(3), 0
+        while i < len(body):
+            if body.startswith("$(", i) or body[i] == "`":
+                end = _closing(body, i)
+                found.append(body[i + (2 if body[i] == "$" else 1) : end])
+                i = end + 1
+            else:
+                i += 1
+    return [x for x in found if x.strip()]
+
+
 def outward(command: str, depth: int = 0) -> str | None:
     """The outward or irreversible act a shell command runs, if any."""
     found = None
@@ -200,6 +218,8 @@ def outward(command: str, depth: int = 0) -> str | None:
             found = found or outward(body, depth + 1)
     for part in _split(text):
         found = found or _act(_words(part), depth)
+    for inner in substitutions(command) if depth < 3 else []:
+        found = found or outward(inner, depth + 1)
     return found
 
 

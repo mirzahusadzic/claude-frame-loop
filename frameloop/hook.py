@@ -165,12 +165,13 @@ def _read_on_demand(command: str) -> dict[str, Any]:
 
 def _marker_only(command: str) -> bool:
     """A marker is a command of its own: `: frame-loop-…` and its words, and for a reading
-    at most a heredoc that ends the command; never a redirect, a pipe, a `&`, a chain, a
+    at most a heredoc with a quoted delimiter that ends the command; never a redirect, a pipe,
+    a `&`, a chain, a
     substitution or a line after the heredoc, which would run unchecked."""
     text = command.strip()
     body = F.HEREDOC.search(text)
     if body:
-        if text[body.end() :].strip() or not re.fullmatch(r"<<-?\s*(['\"]?)\w+\1\s*", body.group(0).split("\n", 1)[0]):
+        if text[body.end() :].strip() or not re.fullmatch(r"<<-?\s*(['\"])\w+\1\s*", body.group(0).split("\n", 1)[0]):
             return False
         text = text[: body.start()]
     if "\n" in text.strip() or len(F._split(text)) != 1:

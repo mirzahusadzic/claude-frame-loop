@@ -151,6 +151,8 @@ def _read_only(command: str) -> bool:
     text, bodies = F.heredocs(command)
     if any(F.program((F._words(reader) or [""])[0]) not in DATA_SINKS for reader, _ in bodies):
         return False  # a heredoc a program runs
+    if F.substitutions(command):
+        return False  # commands the shell runs inside a heredoc whose delimiter is not quoted
     for part in F._split(text):
         tokens = _tokens(part)
         for k, token in enumerate(tokens):
@@ -189,6 +191,8 @@ def shell_touches_config(command: str) -> bool:
     if _read_only(command):
         return False
     text, bodies = F.heredocs(command)
+    ran = F.substitutions(command)  # run by the shell inside an unquoted heredoc: words to check too
+    text = "\n".join([text, *ran])
     code = "\n".join(
         [text] + [body for reader, body in bodies if F.program((F._words(reader) or [""])[0]) not in DATA_SINKS]
     )

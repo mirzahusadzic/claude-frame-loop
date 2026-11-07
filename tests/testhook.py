@@ -1190,7 +1190,7 @@ class CoopTests(unittest.TestCase):
         os.environ.update(
             env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_LOG=str(self.log), FRAME_LOOP_WORK=str(WORK))
         )
-        for op, end in (("<<EOF", "EOF"), ('<<"END"', "END"), ("<<-X", "\tX")):
+        for op, end in (("<<'EOF'", "EOF"), ('<<"END"', "END"), ("<<-'X'", "\tX")):
             seen = loaded_seen()
             command = f": frame-loop-read --serves A1 {op}\nthe proposal text\n{end}"
             hook.answer(
@@ -1203,6 +1203,35 @@ class CoopTests(unittest.TestCase):
                 }
             )
             self.assertIn("the proposal text", seen[0]["inputs"][0]["text"], op)
+
+    def test_a_command_inside_an_unquoted_heredoc_is_never_hidden(self):
+        """The cold review (H1): bash runs `$(…)` inside a heredoc whose delimiter is not quoted; a
+        marker with one hid a push, and `cat <<EOF` with one switched the loop off unseen."""
+        os.environ.update(env(FRAME_LOOP_MODE="enforce", FRAME_LOOP_LOG=str(self.log), FRAME_LOOP_WORK=str(WORK)))
+
+        def pre(command):
+            return (
+                hook.answer(
+                    {
+                        "hook_event_name": "PreToolUse",
+                        "tool_name": "Bash",
+                        "session_id": "h1",
+                        "cwd": str(REPO),
+                        "tool_input": {"command": command},
+                    }
+                )
+                or {}
+            )
+
+        for command in (
+            ": frame-loop-read --serves A1 <<EOF\n$(git push origin main)\nEOF",
+            "cat <<EOF > notes.md\n`git push origin main`\nEOF",
+            ": frame-loop-read --serves A1 <<EOF\n$(echo off > .frame-loop/switch)\nEOF",
+            "cat <<EOF\n$(echo off > .frame-loop/switch)\nEOF",
+        ):
+            out = pre(command)
+            self.assertEqual((out.get("hookSpecificOutput") or {}).get("permissionDecision"), "ask", command)
+        self.assertEqual(pre("cat <<'EOF' > notes.md\n$(git push origin main) is only text here\nEOF"), {})
 
     def test_a_reading_run_by_the_script_keeps_its_session_and_folder(self):
         # The router test: hook.py runs as __main__, and read.py's `import hook` loaded a
