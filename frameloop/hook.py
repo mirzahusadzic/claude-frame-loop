@@ -200,7 +200,8 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
         if event.get("hook_event_name") == "SessionStart":
             return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
-                    "frame-loop is switched off for this project (/frame-loop on turns it back on): "
+                    "frame-loop is switched off for this project "
+                    "(/frame-loop on turns it back on): "
                     "nothing is checked or read, and no marker is needed."}}
         return None
     out = _answer(event)
@@ -310,10 +311,12 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             known = _tree_nodes(frame0) if os.environ.get("FRAME_LOOP_TREE") else {}
             if wanted not in known:
                 return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
-                        f"frame-loop: no node {wanted!r} (nodes: {', '.join(known) or 'no tree set'})"}}
+                        f"frame-loop: no node {wanted!r} "
+                        f"(nodes: {', '.join(known) or 'no tree set'})"}}
             if known[wanted].get("circle"):
                 return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
-                        f"frame-loop: node {wanted} is not engaged: its parents run in a circle, so no path "
+                        f"frame-loop: node {wanted} is not engaged: "
+                        "its parents run in a circle, so no path "
                         "leads to frame 0; ask the author to mend the tree"}}
             state.NODE = wanted
             _log({"event": "engage", "id": wanted})

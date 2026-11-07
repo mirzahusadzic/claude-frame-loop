@@ -40,8 +40,10 @@ def node(**over):
                 "quotes": "A1",
                 "owner": "leaves",
                 "inversion": {
-                    "hello.py takes a --name option and greets by it":
-                        "hello.py takes no --name option and never greets by name"
+                    "hello.py takes a --name option and greets by it": (
+                        "hello.py takes no --name option "
+                        "and never greets by name"
+                    )
                 },
             }
         ],
