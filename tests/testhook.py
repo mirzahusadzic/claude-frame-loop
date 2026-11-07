@@ -1420,7 +1420,7 @@ class CoreTests(unittest.TestCase):
         steps = [p[0] for p in loaded.PEEKED]
         self.assertEqual([x["state"] for x in steps], ["reading"] * len(steps))
         self.assertTrue(all(x["step"] == "does it do what you asked, and does it break any of your rules?" for x in steps), steps)
-        self.assertTrue(all(x["what"] == "checking Claude's change against your requirements" and x["started"] for x in steps), steps)
+        self.assertTrue(all(x["what"] == "checking the change against your requirements" and x["started"] for x in steps), steps)
         self.assertTrue(all(x["why"] == "it touches files none of your rules cover" for x in steps), steps)  # what the wait is for
         self.assertEqual(len(steps), 2)  # the two questions ran at once, in one step
         self.assertTrue(all(x["answers"] >= 3 for x in steps), steps)  # counted as they come in, summed

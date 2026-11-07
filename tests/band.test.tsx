@@ -21,7 +21,7 @@ const seed = (on: any, value: unknown, dismissedAt = 0) => {
 }
 
 test('a wait says what for, how far along, and how much is left, on every surface', async ($, on) => {
-  seed(on, { session: 's', at: 1, state: 'reading', what: "checking Claude's change against your asks",
+  seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
              why: 'it is a large change', so_far: 'does what you asked', step: 'does it break any of your rules?',
              n: 2, of: 2, started: 1, step_started: 30, answers: 6, expected: 12 })
   on('clock.now', () => ({ value: 60000 }))
@@ -98,7 +98,7 @@ test('the switch: /frame-loop off writes the project switch', async ($, on) => {
 })
 
 test('past the usual count, the band never says almost done', async ($, on) => {
-  seed(on, { session: 's', at: 1, state: 'reading', what: "checking Claude's change against your requirements",
+  seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
              step: 'does it do what you asked?', n: 1, of: 2, started: 1, step_started: 30, answers: 40, expected: 36 })
   on('clock.now', () => ({ value: 160000 }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })

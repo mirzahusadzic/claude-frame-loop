@@ -28,7 +28,7 @@ def snapshot(cwd: str) -> str | None:
     """The working tree as a git tree, tracked and untracked files alike, through an
     index of the loop's own inside .git: the user's index and files are never touched.
     The loop's own files are left out: the log, the work folder, and frame 0, the rules
-    and the tree, which are the author's, never Claude's work (a change to them reaches the
+    and the tree, which are the author's alone (a change to them reaches the
     author as an act). None outside a git repository."""
     top = _git(cwd, "rev-parse", "--show-toplevel")
     if top.returncode != 0:

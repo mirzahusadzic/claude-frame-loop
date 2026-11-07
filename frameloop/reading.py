@@ -126,7 +126,7 @@ def _read(frame0: dict[str, Any], text: str, declared: list[str], kind: str,
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if tier is None:
         return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
-    state.LIVE["what"] = "checking " + {"the turn's change": "Claude's change", "a plan": "Claude's plan",
+    state.LIVE["what"] = "checking " + {"the turn's change": "the change", "a plan": "Claude's plan",
                                    "a proposal": "Claude's proposal"}.get(kind, kind) + " against your requirements"
     if _writer() is not None:
         _live_step("putting the change into plain words", key="label")
