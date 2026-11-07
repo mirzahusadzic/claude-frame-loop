@@ -45,4 +45,4 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 
 ### Not checked
 
-The checks guard what a reading sends, not what Claude writes into the project, and not a paraphrase of a private file. Prompts, web results and subagents' reports are not held as lines read from outside; neither are lines under 24 characters. Code: `outgoing`, `mask_private`, `outbound_faults`, `tier_for` and `not_public` in `frameloop/hook.py`; `haiku` and `copied` in `frameloop/writer.py`; Gadfly's `midwife/withhold.py`.
+The checks guard what a reading sends, not what Claude writes into the project, and not a paraphrase of a private file. Prompts, web results and subagents' reports are not held as lines read from outside; neither are lines under 24 characters. Code: `outgoing`, `mask_private`, `outbound_faults`, `tier_for` and `not_public` in `frameloop/privacy.py`; `haiku` and `copied` in `frameloop/writer.py`; Gadfly's `midwife/withhold.py`.

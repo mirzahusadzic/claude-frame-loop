@@ -13,12 +13,22 @@ A Claude Code plugin that checks Claude's work against the user's requirements t
 | Task | Source |
 | --- | --- |
 | a hook event in, an answer out | `frameloop/hook.py` |
+| the answer's shared state: session, project, node, live view | `frameloop/state.py` |
+| frame 0, its rules and the tree's nodes | `frameloop/framezero.py` |
+| a reading of a plan, a proposal or a change; completion | `frameloop/reading.py` |
+| a turn: its start, label, signals, background read and summary | `frameloop/turn.py` |
+| what a reading may send | `frameloop/privacy.py` |
+| the lines the user reads | `frameloop/lines.py` |
+| the band's live state | `frameloop/live.py` |
+| obligations and their checks | `frameloop/obligations.py` |
+| the loop's own files and the guard on them | `frameloop/config.py` |
+| the steps log; the agent's declaration; git and the snapshot | `frameloop/record.py`, `frameloop/declare.py`, `frameloop/repo.py` |
 | the frames the reader is asked | `frameloop/frames.py` |
 | reader tiers | `frameloop/readers.py` |
 | running Gadfly, counting answers | `frameloop/reader.py` |
 | fixed rules over the answers | `frameloop/gate.py` |
 | plain-words labels | `frameloop/writer.py` |
-| free signals and effort | `frameloop/signals.py`, `frameloop/signals.json`, `frameloop/effort.json` |
+| free signals and effort | `frameloop/signals.py`, `frameloop/signals.json`, `frameloop/effort.py`, `frameloop/effort.json` |
 | acts that are the user's | `frameloop/facts.py` |
 | the tree and the climb | `frameloop/tree.py` |
 | a reading Claude asks for | `frameloop/ondemand.py` |
