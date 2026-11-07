@@ -3,7 +3,7 @@
  "version": 2,
  "source": {
   "file": "AGENTS.md",
-  "sha256": "492476c3ad0499d183234f68009a37d7a3f08821a172327eda6523dc7c1be6e8"
+  "sha256": "32f4b6cb7457f0a5361d4ccc5eb79b740657ae4231439b2c4822b2fb2e68a999"
  },
  "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
  "rules": [

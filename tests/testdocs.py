@@ -184,6 +184,15 @@ class DocsTests(unittest.TestCase):
         self.assertIn("frame 0's ids in the change are masked", privacy)
         self.assertIn("go with their ids, which the reader answers with", privacy)
 
+    def test_the_suite_runs_on_the_python_it_needs(self):
+        """A bare `python3` is 3.9 on a stock Mac, where the suite fails; CI's command names 3.13."""
+        command = "uv run --no-project --python 3.13 python -m unittest discover -s tests"
+        self.assertIn(command, (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8"))
+        for name in ("README.md", "AGENTS.md", "CONTRIBUTING.md"):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertIsNone(re.search(r"(?<![\w/.-])python3 -m unittest", text), name)
+            self.assertIn(command, text, name)
+
     def test_no_markdown_link_inside_html(self):
         """A Markdown link inside an HTML block, such as the figure's caption, shows as raw text."""
         for page in PAGES:

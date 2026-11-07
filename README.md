@@ -90,7 +90,7 @@ Private code: `"FRAME_LOOP_TIER": "private"` instead; keeps no data, costs more.
 No API key, no network; CI on macOS, Linux and Windows, Python 3.13 to 3.15; branch coverage held at 99%:
 
 ```sh
-python3 -m unittest discover -s tests
+uv run --no-project --python 3.13 python -m unittest discover -s tests
 claude plugin test .
 sh scripts/coverage.sh
 ```

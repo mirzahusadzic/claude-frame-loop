@@ -8,6 +8,6 @@ Changes follow [AGENTS.md](AGENTS.md): what to preserve, how to validate, and ho
 
 ### Before a pull request
 
-- A behavior change comes with a test that fails on the old code; run `python3 -m unittest discover -s tests` twice, and `claude plugin test .` for the band.
+- A behavior change comes with a test that fails on the old code; run `uv run --no-project --python 3.13 python -m unittest discover -s tests` twice, and `claude plugin test .` for the band.
 - Docs changes keep the shape in AGENTS.md; check every link.
 - Commits use Conventional Commits, subject at most 72 characters, body wrapped at 72.
