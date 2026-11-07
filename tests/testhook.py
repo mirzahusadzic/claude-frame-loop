@@ -1874,6 +1874,29 @@ class CoreTests(unittest.TestCase):
             [r for r in record._records_all() if r.get("event") == "declare" and r.get("session") == self.session]
         )
 
+    def test_a_marker_with_a_redirect_a_background_or_a_trailer_is_not_read(self):
+        """The first review: a marker took `> frame0`, `& git push` or a line after its
+        heredoc as its own, and the act it hid was never checked."""
+        frame0 = os.environ["FRAME_LOOP_FRAME0"]
+
+        def bash(command):
+            return hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
+                                "cwd": str(REPO), "tool_input": {"command": command}})
+
+        hidden = {f": frame-loop-declare --serves A1 > {frame0}": "loop's own",
+                  ": frame-loop-declare --serves A1 & git push origin main": "git push",
+                  ": frame-loop-read --serves A1 <<'EOF'\nadd a test\nEOF\ngit push origin main": "git push",
+                  ": frame-loop-read --serves A1 <<'EOF' > notes.md\nadd a test\nEOF": "not read"}
+        for command, act in hidden.items():
+            out = bash(command)
+            told = json.dumps(out, ensure_ascii=False)
+            self.assertIn("not read", told, command)
+            self.assertIn(act, told, command)
+        self.assertFalse(
+            [r for r in record._records_all() if r.get("event") in ("declare", "proposal")
+             and r.get("session") == self.session]
+        )
+
     def test_the_writer_labels_the_whole_change_never_the_readers_cut(self):
         """Seen on the loop's own release: a big turn's diff was cut at the reader's cap
         before Haiku labelled it, so the label described 3 of its files. The writer reads

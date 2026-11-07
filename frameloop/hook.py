@@ -153,6 +153,27 @@ def _read_on_demand(command: str) -> dict[str, Any]:
             "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
 
 
+def _marker_only(command: str) -> bool:
+    """A marker is a command of its own: `: frame-loop-…` and its words, and for a reading
+    at most a heredoc that ends the command; never a redirect, a pipe, a `&`, a chain, a
+    substitution or a line after the heredoc, which would run unchecked."""
+    text = command.strip()
+    body = F.HEREDOC.search(text)
+    if body:
+        if text[body.end():].strip() or not re.fullmatch(r"<<-?\s*(['\"]?)\w+\1\s*", body.group(0).split("\n", 1)[0]):
+            return False
+        text = text[:body.start()]
+    if "\n" in text.strip() or len(F._split(text)) != 1:
+        return False
+    try:
+        lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        words = list(lexer)
+    except ValueError:
+        return False
+    return not any(set(w) <= set("();<>|&") for w in words)
+
+
 def _rise(mode: str, reason: str, decision: str) -> dict[str, Any]:
     """A rise for a tool call. The human hears it too (systemMessage), whatever the
     agent then says."""
@@ -260,7 +281,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     if tool == "Bash":
         command = tool_input.get("command", "")
         parts = [x for x in re.split(r"\s*(?:&&|;|\n)\s*", command.strip()) if x] if "<<" not in command else [command]
-        if len(parts) > 1 and all(x.startswith(": frame-loop-") for x in parts):
+        if len(parts) > 1 and all(x.startswith(": frame-loop-") and _marker_only(x) for x in parts):
             # Only markers, chained: each is read, declarations before a reading.
             outs = [_answer({**event, "tool_input": {**tool_input, "command": x}})
                     for x in sorted(parts, key=lambda x: x.startswith(": frame-loop-read"))]
@@ -275,8 +296,10 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         # A marker chained with other commands, before or after them, is not read, and
         # the rest of the chain is checked as any command is.
         mixed = len(parts) > 1 and any(x.startswith(": frame-loop-") for x in parts)
+        mixed = mixed or (command.strip().startswith(": frame-loop-") and not _marker_only(command))
         stray = ("frame-loop: the marker was not read: a marker is a command of its own, never after "
-                 "`cd … &&` or in a chain; run it alone.") if mixed or MARKER_IN_CHAIN.search(command) else ""
+                 "`cd … &&`, in a chain, with a redirect or `&`, or with a line after its heredoc; run it "
+                 "alone.") if mixed or MARKER_IN_CHAIN.search(command) else ""
         if stray:
             pass
         elif command.strip().startswith(": frame-loop-read"):
