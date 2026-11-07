@@ -1476,6 +1476,17 @@ class CoreTests(unittest.TestCase):
         git("commit", "-q", "--allow-empty", "-m", "turn")
         return out["systemMessage"] if out else ""
 
+    def test_a_torn_record_line_never_breaks_a_hook(self):
+        """The first review: a record line cut short mid-write made every later hook fail."""
+        os.environ.update(FRAME_LOOP_READER="testhook:passing")
+        log = Path(os.environ["FRAME_LOOP_LOG"])
+        with log.open("a", encoding="utf-8") as out:
+            out.write('{"at": 1, "session": "' + self.session + '", "event": "turn-st')
+            out.write("\n")
+        line = self.turn({"hello.py": f"print('torn {uid(self)}')\n"}, "Serves: A1")
+        self.assertNotIn("error", line)
+        self.assertIn("step", line)
+
     def test_a_project_that_is_not_a_git_repository_says_so_once(self):
         """The first review: outside git no change was read, and the line saying so was
         dropped, so the author saw nothing at all."""
