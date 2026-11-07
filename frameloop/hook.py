@@ -265,7 +265,12 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         _live_interrupted()
     frame0 = load_frame0()
     if name == "SessionStart":
-        return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": briefing(frame0, mode)}}
+        said = briefing(frame0, mode)
+        missing = _gadfly_missing()
+        if missing:  # said at the start, not found at the first reading (an agent's report)
+            said += f"\n{missing} Tell the author, with that line; until then nothing is read."
+        out: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": said}}
+        return {**out, "systemMessage": f"frame-loop ■ not read: {missing}"} if missing else out
     if name == "UserPromptSubmit":
         prompt = event.get("prompt") or ""
         if _training_on() and "<cross-session-message" in prompt:
@@ -441,6 +446,15 @@ def _loop_files_at(event: dict[str, Any]) -> Path:
     call = re.sub(r"[^\w-]", "_", str(event.get("tool_use_id") or "call"))[:80]
     session = re.sub(r"[^\w-]", "_", state.SESSION or "none")
     return work / "loop-files" / f"{session}-{call}.json"
+
+
+def _gadfly_missing() -> str | None:
+    """With the live reader (reader:run), the install line when Gadfly cannot be started."""
+    if (os.environ.get("FRAME_LOOP_READER") or "").split(":")[0] != "reader":
+        return None
+    import reader
+
+    return reader.MISSING if reader.launcher() is None else None
 
 
 def _written_node_faults(path: str, frame0: dict[str, Any]) -> list[str]:

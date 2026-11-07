@@ -456,6 +456,20 @@ class AttackTests(unittest.TestCase):
         waited = hook.briefing(framezero.load_frame0(), "enforce")
         self.assertIn("the turn's end then waits", waited)
 
+    def test_a_session_with_no_gadfly_is_told_so_at_its_start(self):
+        """An agent's report: every reading in a session ended "Gadfly is not installed", found
+        only at the first reading; the session's start never said so, nor how to install it."""
+        import reader
+
+        os.environ.update(env(FRAME_LOOP_READER="reader:run"))
+        start = {"hook_event_name": "SessionStart", "source": "startup", "session_id": "g", "cwd": str(REPO)}
+        with unittest.mock.patch.object(reader, "launcher", return_value=None):
+            out = hook.answer(start)
+        self.assertEqual(" ".join(out["systemMessage"].split()), f"frame-loop ■ not read: {reader.MISSING}")
+        self.assertIn("uv tool install 'midwife>=0.13.1'", out["hookSpecificOutput"]["additionalContext"])
+        with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
+            self.assertNotIn("systemMessage", hook.answer(start) or {})
+
     def test_the_briefing_says_what_makes_a_line_a_rule(self):
         """An agent's report: asked to compile a project's rules, it offered the author's
         corrections of its conduct, lines no change can keep or break, and sorted none
