@@ -997,6 +997,15 @@ class WriterTests(unittest.TestCase):
             self.assertIn(why, out["systemMessage"], spec)
             self.assertEqual(seen, [], spec)
 
+    def test_without_a_reader_the_writer_is_never_called(self):
+        """The first review: with no reader set, the change still went to the writer."""
+        os.environ.pop("FRAME_LOOP_READER")
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:recording"
+        WRITTEN.clear()
+        out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
+        self.assertIn("no reader", out["systemMessage"])
+        self.assertEqual(WRITTEN, [])
+
     def test_a_label_that_copies_is_rewritten_once_and_checked_again(self):
         """Seen on the loop's own release: Haiku echoed a docstring's phrase, and the reading
         was lost. One rewrite, told which phrases it repeated, faces the same check."""
@@ -1614,6 +1623,21 @@ class CoreTests(unittest.TestCase):
             {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
         )
         self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "2")
+
+    def test_a_plugin_names_its_reader_unless_set(self):
+        """The first review: the plugin set no reader, so every reading said "no reader
+        configured"."""
+        fresh = Path(make_repo(WORK / f"reader-{id(self)}"))
+        os.environ.pop("FRAME_LOOP_READER", None)
+        os.environ.update(
+            FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin")
+        )
+        event = {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
+        hook.answer(event)
+        self.assertEqual(os.environ["FRAME_LOOP_READER"], "reader:run")
+        os.environ["FRAME_LOOP_READER"] = "testhook:passing"
+        hook.answer(event)
+        self.assertEqual(os.environ["FRAME_LOOP_READER"], "testhook:passing")
 
     def test_a_chain_of_markers_only_is_read_in_full(self):
         """Seen in the novice profile: Claude wrote `: frame-loop-read …; : frame-loop-declare …`
