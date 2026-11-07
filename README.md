@@ -1,4 +1,4 @@
-# frame-loop
+# <img src="assets/icon.svg" width="36" height="36" alt="" align="top"> frame-loop
 
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
