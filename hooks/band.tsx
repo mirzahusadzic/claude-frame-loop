@@ -49,7 +49,11 @@ export const register: Register = on => {
     const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) // Windows may set only the latter
     // Where the hooks write it: FRAME_LOOP_LIVE when the settings name a folder, as the hook reads it.
     const folder = (await $.env.get('FRAME_LOOP_LIVE')) || `${home}/.claude/frame-loop/live`
-    switchPath = `${e.cwd}/.frame-loop/switch`
+    // The project's switch, where the hooks read it: CLAUDE_PROJECT_DIR when it names a
+    // folder that is there, else the directory the session started in.
+    const project = await $.env.get('CLAUDE_PROJECT_DIR')
+    const isThere = project ? await $.fs.exists(project).catch(() => false) : false
+    switchPath = `${isThere ? project : e.cwd}/.frame-loop/switch`
     await $.command.register({
       name: 'frame-loop',
       description: 'Switch frame-loop on or off for this project: /frame-loop, /frame-loop on, /frame-loop off',

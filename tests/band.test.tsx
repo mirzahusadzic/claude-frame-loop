@@ -82,22 +82,29 @@ test('a rise after a check mark shows the line that needs the author', async ($,
   await ui.unmount()
 })
 
-test('the switch: /frame-loop off writes the project switch', async ($, on) => {
-  const store = seed(on, null)
-  const written: Record<string, string> = {}
-  on('fs.write', (_: unknown, e: { path: string; text: string }) => { written[posix(e.path)] = e.text; return { value: undefined } })
-  on('command.run', () => ({ text: 'engine' }))
-  on('command.register', () => ({ value: { command: 'frame-loop' } }))
-  on('env.get', () => ({ value: '/home/u' }))
-  on('session.id', () => ({ value: 's' }))
-  on('clock.every', () => ({ value: undefined }))
-  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
-  const out = await $.command.run({ command: 'frame-loop', args: 'off' })
-  expect(out.text).toBe('frame-loop is off for this project: nothing is checked or read.')
-  expect(written).toEqual({ '/proj/.frame-loop/switch': 'off\n' })
-  expect(store.off?.value).toBe(true)
-})
+// The hooks read the switch under CLAUDE_PROJECT_DIR when it names a folder that is there,
+// else under the session's directory: the band writes it where they read it.
+for (const [why, projectDir, where] of [['no project folder is named', undefined, '/proj'],
+                                        ['the project folder is named', '/project', '/project'],
+                                        ['the folder named is not there', '/gone', '/proj']] as const) {
+  test(`the switch: /frame-loop off writes the project switch when ${why}`, async ($, on) => {
+    const store = seed(on, null)
+    const written: Record<string, string> = {}
+    on('fs.write', (_: unknown, e: { path: string; text: string }) => { written[posix(e.path)] = e.text; return { value: undefined } })
+    on('fs.exists', (_: unknown, e: { path: string }) => ({ value: posix(e.path) === '/project' }))
+    on('command.run', () => ({ text: 'engine' }))
+    on('command.register', () => ({ value: { command: 'frame-loop' } }))
+    on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'CLAUDE_PROJECT_DIR' ? projectDir : '/home/u' }))
+    on('session.id', () => ({ value: 's' }))
+    on('clock.every', () => ({ value: undefined }))
+    on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+    await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+    const out = await $.command.run({ command: 'frame-loop', args: 'off' })
+    expect(out.text).toBe('frame-loop is off for this project: nothing is checked or read.')
+    expect(written).toEqual({ [`${where}/.frame-loop/switch`]: 'off\n' })
+    expect(store.off?.value).toBe(true)
+  })
+}
 
 test('past the usual count, the band never says almost done', async ($, on) => {
   seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
