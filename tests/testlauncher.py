@@ -47,6 +47,17 @@ class LauncherTests(unittest.TestCase):
             [self.shell, str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env, timeout=30
         )
         self.assertEqual((done.returncode, done.stderr), (0, ""), done.stdout)
+        if not done.stdout.strip() and event.get("hook_event_name") != "PreToolUse":  # say why, from a trace
+            traced = subprocess.run(
+                [self.shell, "-x", str(RUN)],
+                input=json.dumps(event),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+                timeout=30,
+            )
+            self.fail(f"no answer from run.sh; its trace:\n{traced.stderr[-3000:]}")
         return done.stdout
 
     def test_gadflys_interpreter_wins_over_an_older_python3(self):

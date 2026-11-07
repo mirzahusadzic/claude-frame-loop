@@ -2331,7 +2331,7 @@ class CoreTests(unittest.TestCase):
                 try:
                     text = path.read_text(encoding="utf-8")
                     json.loads(text)
-                except FileNotFoundError:
+                except (FileNotFoundError, PermissionError):  # Windows: not readable while it is replaced
                     pass
                 except ValueError:
                     broken.append(1)

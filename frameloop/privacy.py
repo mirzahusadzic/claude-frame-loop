@@ -285,7 +285,9 @@ def _path_words(command: str) -> list[str]:
             pass
     words += re.split(r"[\s'\"=<>|;&()]+", command)
     expanded = [w.replace("${HOME}", home).replace("$HOME", home) for w in words]
-    return list(dict.fromkeys(w for w in expanded if "/" in w or w.startswith("~")))
+    return list(
+        dict.fromkeys(w for w in expanded if "/" in w or "\\" in w or w.startswith("~") or re.match(r"[A-Za-z]:", w))
+    )
 
 
 def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:

@@ -44,6 +44,19 @@ def _alive(pid: Any) -> bool:
         return False
 
 
+def _replace(tmp: Path, path: Path) -> None:
+    """Moves a written file into place. Windows refuses while another process reads the
+    target, so it tries again for a moment before giving up."""
+    for attempt in range(5):
+        try:
+            tmp.replace(path)
+            return
+        except PermissionError:
+            if os.name != "nt" or attempt == 4:
+                raise
+            time.sleep(0.02)
+
+
 def detached() -> dict[str, Any]:
     """How a background read starts: a session of its own on POSIX, a new process group
     with no console on Windows, so the hook returns and the read lives on."""
@@ -86,7 +99,7 @@ def _live(**fields: Any) -> None:
             json.dumps({"session": state.SESSION, "at": time.time(), **pid, **fields}, ensure_ascii=False),
             encoding="utf-8",
         )
-        tmp.replace(path)
+        _replace(tmp, path)
     except OSError:
         pass
     finally:
@@ -179,6 +192,6 @@ def _ran(read: dict[str, Any]) -> None:
     tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:  # whole or not at all: another session reading it never sees half a file
         tmp.write_text(json.dumps(known), encoding="utf-8")
-        tmp.replace(path)
+        _replace(tmp, path)
     except OSError:
         tmp.unlink(missing_ok=True)

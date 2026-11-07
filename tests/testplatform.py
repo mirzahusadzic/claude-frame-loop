@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "frameloop"))
 import config  # noqa: E402
 import facts  # noqa: E402
 import live  # noqa: E402
+import privacy  # noqa: E402
 import state  # noqa: E402
 
 
@@ -64,6 +65,13 @@ class SpellingTests(unittest.TestCase):
             for write in ("echo off > .frame-loop\\switch", "copy x .claude\\settings.json"):
                 self.assertTrue(config.shell_touches_config(write), write)
             self.assertFalse(config.shell_touches_config("cat .frame-loop\\frame0.json | head"))
+
+    def test_a_shell_read_of_a_windows_path_is_seen(self):
+        """Windows CI: `cat C:\\Users\\x\\notes.py` read a file outside the project unheld, as
+        only words with a forward slash were taken for paths."""
+        words = privacy._path_words("cat C:\\Users\\RUNNER~1\\notes.py && type D:\\a\\b.txt")
+        self.assertIn("C:\\Users\\RUNNER~1\\notes.py", words)
+        self.assertIn("D:\\a\\b.txt", words)
 
 
 class EncodingTests(unittest.TestCase):
