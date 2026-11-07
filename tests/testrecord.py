@@ -74,3 +74,14 @@ class LogTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class GuideEncodingTests(unittest.TestCase):
+    """The cold review, M5: a guide saved in cp1252 made the prompt hook fail with UnicodeDecodeError."""
+
+    def test_a_guide_in_another_encoding_is_read(self):
+        import turn
+
+        guide = Path(tempfile.mkdtemp()) / "CLAUDE.md"
+        guide.write_bytes("- Café rules: résumé\n- second line\n".encode("cp1252"))
+        self.assertEqual(len(turn._guide_lines(str(guide))), 2)

@@ -96,7 +96,7 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
         ]
     source = rules.get("source") or {}
     guide = root / source.get("file", "AGENTS.md")
-    words = " ".join(guide.read_text(encoding="utf-8").split()) if guide.is_file() else ""
+    words = " ".join(guide.read_text(encoding="utf-8", errors="replace").split()) if guide.is_file() else ""
     files = _git(str(root), "ls-files").stdout.splitlines()
     for r in rules.get("rules", []):
         if not r.get("accepted"):

@@ -50,7 +50,9 @@ def _guide_lines(path: str) -> list[str]:
     """A guide's lines as short hashes: enough to count what a turn added and removed,
     and no guide text in the log."""
     p = Path(path)
-    return [_hash(x)[:16] for x in p.read_text(encoding="utf-8").splitlines()] if p.is_file() else []
+    # A guide saved in another encoding is still read, never a crash at the prompt (the cold review, M5).
+    text = p.read_text(encoding="utf-8", errors="replace") if p.is_file() else ""
+    return [_hash(x)[:16] for x in text.splitlines()]
 
 
 def guide_changes(before: dict[str, list[str]], cwd: str) -> list[str]:

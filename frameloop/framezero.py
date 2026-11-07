@@ -76,7 +76,7 @@ def rules_lost(cwd: str) -> list[str]:
         return []
     source = rules.get("source") or {}
     guide = project_root(cwd) / source.get("file", "AGENTS.md")
-    words = " ".join(guide.read_text(encoding="utf-8").split()) if guide.is_file() else ""
+    words = " ".join(guide.read_text(encoding="utf-8", errors="replace").split()) if guide.is_file() else ""
     return [
         r["id"]
         for r in rules.get("rules", [])
