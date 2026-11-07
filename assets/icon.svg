@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<rect width="512" height="512" rx="96" fill="#311420"/>
+<rect x="56" y="56" width="400" height="400" rx="28" fill="none" stroke="#ffa19c" stroke-width="16" stroke-linejoin="round"/>
+<path transform="translate(360,125)" d="M0 0 l20 20 l40 -46" fill="none" stroke="#fff2ed" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+<path transform="translate(96,413)" d="M0 0 l26 -46 l26 46 z" fill="#fff2ed"/>
+<rect x="368" y="368" width="44" height="44" rx="4" fill="#fff2ed"/>
+<g style="color:#b2f3cc" transform="translate(252 252) rotate(-45) scale(11) translate(-12 -11.1)">
+<defs><mask id="melon-2-segments"><rect width="24" height="24" fill="#fff"/>
+<path d="M9.4 7.25Q12 7.75 14.6 7.25M9.6 11.75Q12 12.25 14.4 11.75" stroke="#000" stroke-width="0.55"/>
+<path d="M12 3 12 7" stroke="#000" stroke-width="0.4"/></mask></defs>
+<g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+<path stroke-width="0.7" fill="currentColor" fill-opacity="0.3" d="M10.6 9.2C7.2 9.6 3.4 14.6 3.2 19.8 5.6 20.4 9.2 16 10.8 11.4ZM13.4 9.2C16.8 9.6 20.6 14.6 20.8 19.8 18.4 20.4 14.8 16 13.2 11.4Z"/>
+<path stroke-width="0.9" d="M10.4 8.6 8.6 7.2 8 5.4M13.6 8.6 15.4 7.2 16 5.4M10.2 10.4 6.9 10.6 5.6 12.6M13.8 10.4 17.1 10.6 18.4 12.6M10.4 11.8 8.8 14.6 8.6 17.4M13.6 11.8 15.2 14.6 15.4 17.4"/>
+<g fill="currentColor" stroke="none" mask="url(#melon-2-segments)">
+<path d="M12 11.6C14.9 11.6 15.6 15.4 14.6 18 13.9 19.7 10.1 19.7 9.4 18 8.4 15.4 9.1 11.6 12 11.6Z"/>
+<ellipse cx="12" cy="9.6" rx="2.5" ry="2.4"/>
+<path d="M12 3C9.2 2.8 7.4 4.3 7.7 6 8 7.3 10.6 7.6 12 7.1 13.4 7.6 16 7.3 16.3 6 16.6 4.3 14.8 2.8 12 3Z"/></g>
+<path stroke-width="0.9" d="M11.3 3.3 10.7 1.8M12.7 3.3 13.3 1.8"/></g>
+</g>
+</svg>
