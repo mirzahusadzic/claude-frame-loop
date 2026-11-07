@@ -161,7 +161,7 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     diff = _git(cwd, "diff", "--stat", "--patch", before, after).stdout
     status = [
         line.split("\t")
-        for line in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines()
+        for line in _git(cwd, "diff", "--name-status", "--no-renames", before, after).stdout.splitlines()
         if "\t" in line
     ]
     facts = {"deleted": [x[-1] for x in status if x[0].startswith("D")],

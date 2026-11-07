@@ -2110,6 +2110,23 @@ class TreeHookTests(CoreTests):
         line = self.turn({"README.md": f"usage {uid(self)}\n"}, "done")
         self.assertIn("not authorized", line)  # it inherits its parent's scope
 
+    def test_a_rename_keeps_the_path_it_left(self):
+        """The first review: a rename kept only its new path, so moving a file from outside
+        the node's scope into it was authorized."""
+        name = f"docs/moved-{uid(self)}.md"
+        self.turn({name: "a page long enough for git to call its move a rename\n" * 20}, "done")
+        self.marker(": frame-loop-node greeter")
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO),
+                     "prompt": "go"})
+        (REPO / "tests").mkdir(exist_ok=True)
+        (REPO / name).rename(REPO / "tests" / Path(name).name)
+        out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
+                           "last_assistant_message": "done", "stop_hook_active": False})
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
+        self.assertIn("not authorized", out["systemMessage"])
+        self.assertIn(name, json.dumps(out))
+
     def test_a_tree_whose_parents_run_in_a_circle_never_crashes_a_hook(self):
         """The first review: a parent cycle recursed until Python gave up, in every hook."""
         for nid, parent in (("ping", "pong"), ("pong", "ping")):

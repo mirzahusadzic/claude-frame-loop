@@ -90,13 +90,12 @@ def _turn_start(event: dict[str, Any]) -> None:
 def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims: list[str]) -> dict[str, Any]:
     """A turn's free, deterministic label: its files and size, the asks it claims, what
     it owes, and its signals. No model is involved."""
-    status = [
-        row.split("\t") for row in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines() if "\t" in row
-    ]
+    # A rename is a delete and an add, so the path it left counts for scope and checks.
+    listed = _git(cwd, "diff", "--name-status", "--no-renames", before, after).stdout
+    status = [row.split("\t") for row in listed.splitlines() if "\t" in row]
     paths = [x[-1] for x in status]
-    numstat = [
-        row.split("\t") for row in _git(cwd, "diff", "--numstat", before, after).stdout.splitlines() if "\t" in row
-    ]
+    counted = _git(cwd, "diff", "--numstat", "--no-renames", before, after).stdout
+    numstat = [row.split("\t") for row in counted.splitlines() if "\t" in row]
     added = sum(int(x[0]) for x in numstat if x[0].isdigit())
     removed = sum(int(x[1]) for x in numstat if x[1].isdigit())
     diff = _git(cwd, "diff", "--patch", before, after).stdout
