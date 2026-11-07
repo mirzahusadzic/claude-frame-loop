@@ -1570,6 +1570,24 @@ class CoreTests(unittest.TestCase):
         self.assertNotIn("switch", out)
         self.assertEqual(len([r for r in record._records_all() if r.get("event") == "step"]), steps)
 
+    def test_a_turns_label_makes_the_same_git_calls_for_any_number_of_files(self):
+        """The first review: the label ran one `git diff` per changed file (3 + N calls)."""
+        import turn
+        calls = []
+        for n in (2, 12):
+            hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO),
+                         "prompt": "go"})
+            for k in range(n):
+                (REPO / "many" / f"f{k}.py").parent.mkdir(exist_ok=True)
+                (REPO / "many" / f"f{k}.py").write_text(f"print({n}, {k}, '{uid(self)}')\n")
+            with unittest.mock.patch.object(turn, "_git", wraps=turn._git) as git_calls:
+                hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
+                             "last_assistant_message": "done", "stop_hook_active": False})
+            calls.append(git_calls.call_count)
+            git("add", "-A")
+            git("commit", "-q", "-m", "turn")
+        self.assertEqual(calls[0], calls[1], calls)
+
     def test_a_turns_lines_wrap_and_are_never_cut(self):
         """Seen on the loop's release: "signal: … (large-" and "padding?" lost their ends to
         a cut at 100 characters made before the lines were wrapped."""

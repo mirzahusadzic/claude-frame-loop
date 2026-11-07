@@ -9,6 +9,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -88,6 +89,17 @@ def _turn_start(event: dict[str, Any]) -> None:
         _log({"event": "turn-start", "tree": snapshot(event.get("cwd") or os.getcwd())})
 
 
+def _per_file(diff: str) -> dict[str, str]:
+    """A patch split into each file's part, by its path (the old one for a deleted file)."""
+    parts: dict[str, str] = {}
+    for chunk in re.split(r"(?m)^(?=diff --git )", diff):
+        head = re.match(r"diff --git a/(.*?) b/(.*)", chunk)
+        if head:
+            gone = "\n+++ /dev/null" in chunk
+            parts[head.group(1) if gone else head.group(2)] = chunk
+    return parts
+
+
 def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims: list[str]) -> dict[str, Any]:
     """A turn's free, deterministic label: its files and size, the asks it claims, what
     it owes, and its signals. No model is involved."""
@@ -99,7 +111,7 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     numstat = [row.split("\t") for row in counted.splitlines() if "\t" in row]
     added = sum(int(x[0]) for x in numstat if x[0].isdigit())
     removed = sum(int(x[1]) for x in numstat if x[1].isdigit())
-    diff = _git(cwd, "diff", "--patch", before, after).stdout
+    diff = _git(cwd, "diff", "--patch", "--no-renames", before, after).stdout
     root = project_root(cwd)
     owed_line, owed_faults = obligations_line(frame0, root, paths, [], status)
     found = [f.split(" (")[0].replace("owed ", "").replace(" not met", " unmet") for f in owed_faults]
@@ -112,7 +124,7 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     uncovered = [p for p in paths if not any(fnmatch.fnmatch(p, g) for g in known)]
     if uncovered:
         found.append(f"an area no rule covers ({uncovered[0]})")
-    per_file = [_git(cwd, "diff", "--patch", before, after, "--", p).stdout for p in paths]
+    per_file = [_per_file(diff).get(p, "") for p in paths]  # one diff, split by file: no git call per file
     # A docs edit has no effect on code, but it is the work when the node or a rule
     # scopes the docs (the docs branch): only unscoped paths can be "no effect".
     if claims and paths and all(S.no_effect(p, d) and not any(fnmatch.fnmatch(p, g) for g in scoped)
