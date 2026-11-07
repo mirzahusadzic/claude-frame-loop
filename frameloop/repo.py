@@ -7,14 +7,13 @@ from __future__ import annotations
 
 import os
 import shutil
-import signal
 import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any
 
 import state
+from procs import bounded
 
 
 def project_root(cwd: str | None) -> Path:
@@ -38,51 +37,6 @@ def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.Completed
     # and it then matches no scope, rule or check (the cold review, M3).
     command = ["git", "-c", "core.quotePath=false", *args]
     return bounded(command, _git_timeout(), cwd=cwd, env=env, what="git")
-
-
-def bounded(command: list[str], seconds: float, *, what: str, **given: Any) -> subprocess.CompletedProcess:
-    """A program's run within a deadline. Past it the program and every process it started
-    are stopped, and the run ends at once as failed, exit 124: on Windows a killed program's
-    child (a git filter, a sleep) keeps its pipes open, and waiting on them waits it out."""
-    proc = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        stdin=given.pop("stdin", subprocess.DEVNULL),
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        **({"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if os.name == "nt" else {"start_new_session": True}),
-        **given,
-    )
-    try:
-        out, err = proc.communicate(timeout=seconds)
-        return subprocess.CompletedProcess(command, proc.returncode, out, err)
-    except subprocess.TimeoutExpired:
-        stop_tree(proc)
-        try:
-            proc.communicate(timeout=5)
-        except subprocess.TimeoutExpired:  # a child still holds the pipes: leave them, never wait
-            for pipe in (proc.stdout, proc.stderr):
-                try:
-                    pipe.close()
-                except OSError:
-                    pass
-        return subprocess.CompletedProcess(command, 124, "", f"{what} took longer than {seconds:g} s")
-
-
-def stop_tree(proc: subprocess.Popen) -> None:
-    """Stop a program started in its own process group, with every process it started."""
-    try:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, timeout=30)
-        else:
-            os.killpg(proc.pid, signal.SIGKILL)
-    except (OSError, subprocess.SubprocessError):
-        try:
-            proc.kill()
-        except OSError:
-            pass
 
 
 def snapshot(cwd: str) -> str | None:
