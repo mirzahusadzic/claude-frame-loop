@@ -59,7 +59,8 @@ def _live_interrupted() -> None:
     try:
         shown = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
         if shown.get("state") == "reading" and not _alive(shown.get("pid")):  # a background read lives on
-            _live(state="done", decision="quiet", lines=["frame-loop · the last check was interrupted"], detail=[])
+            _live(state="done", decision="interrupted", lines=["frame-loop · the last check was interrupted"],
+                  detail=[])
     except (OSError, ValueError):
         pass
 

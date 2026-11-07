@@ -27,14 +27,20 @@ const clock = (seconds: number) =>
 // and never dimColor, whose contrast the terminal decides. Words are the theme's text.
 export const COLOURS = { text: ['success', 'error', 'inactive'], mark: ['success', 'error', 'inactive', 'permission'] }
 
+// A check mark only for what was checked: an act reported, an interrupted check or an
+// outcome this band does not know is never shown as fine.
 const outcome = (decision: string | undefined) =>
   decision === 'pass'
     ? { mark: '✓', color: 'success', word: 'fits what you asked', wordColor: 'success' }
-    : decision === 'rise'
-      ? { mark: '▲', color: 'permission', word: 'needs you', wordColor: undefined }
-      : decision === 'block'
-        ? { mark: '■', color: 'error', word: 'not read', wordColor: 'error' }
-        : { mark: '✓', color: 'success', word: 'checked: nothing needed a closer look', wordColor: 'success' }
+    : decision === 'quiet'
+      ? { mark: '✓', color: 'success', word: 'checked: nothing needed a closer look', wordColor: 'success' }
+      : decision === 'rise'
+        ? { mark: '▲', color: 'permission', word: 'needs you', wordColor: undefined }
+        : decision === 'block'
+          ? { mark: '■', color: 'error', word: 'not read', wordColor: 'error' }
+          : decision === 'noted'
+            ? { mark: '·', color: 'inactive', word: 'noted', wordColor: undefined }
+            : { mark: '·', color: 'inactive', word: 'not checked', wordColor: 'inactive' }
 
 let switchPath = ''
 

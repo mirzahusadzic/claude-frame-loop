@@ -1759,7 +1759,28 @@ class CoreTests(unittest.TestCase):
         hook.answer(
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
-        self.assertEqual(json.loads((live / f"{self.session}.json").read_text())["state"], "done")
+        shown = json.loads((live / f"{self.session}.json").read_text())
+        self.assertEqual(shown["state"], "done")
+        self.assertEqual(shown["decision"], "interrupted")  # the first review: "quiet", shown as a green check
+
+    def test_an_act_reported_is_never_shown_as_checked(self):
+        """The first live use: a push in a turn with nothing to read showed a green check
+        beside "Claude pushed to GitHub"; and the details of a command stopped at its heredoc."""
+        live = WORK / f"live-act-{uid(self)}"
+        live.mkdir()
+        os.environ["FRAME_LOOP_LIVE"] = str(live)
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        command = "cat <<'EOF' > notes.md\nnotes\nEOF\ngit push origin main"
+        hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
+                     "cwd": str(REPO), "tool_input": {"command": command}})
+        hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
+                     "last_assistant_message": "pushed", "stop_hook_active": False})
+        shown = json.loads((live / f"{self.session}.json").read_text())
+        self.assertEqual(shown["decision"], "noted", shown)
+        act = next(r for r in record._records_all() if r.get("event") == "outward" and r.get("session") == self.session)
+        self.assertIn("git push origin main", lines.act_words(act)[2])
 
     def test_a_docs_edit_under_a_docs_rule_starts_no_read(self):
         """Seen on the loop's release: every docs edit was read for two minutes, on three

@@ -107,3 +107,17 @@ test('past the usual count, the band never says almost done', async ($, on) => {
   expect(line.includes('almost done')).toBe(false)
   await ui.unmount()
 })
+
+// An act reported, an interrupted check or an outcome the band does not know is never a check mark.
+for (const [decision, line] of [['noted', 'frame-loop · Claude pushed to GitHub'],
+                                ['interrupted', 'frame-loop · the last check was interrupted'],
+                                ['something new', '']] as const) {
+  test(`the outcome "${decision}" is never a check mark`, async ($, on) => {
+    seed(on, { session: 's', at: 50, state: 'done', decision, started: 10, lines: line ? [line] : [] })
+    on('clock.now', () => ({ value: 60000 }))
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect(await ui.find({ type: 'Text', text: /✓/ })).toBeFalsy()
+    expect((await ui.find({ type: 'Text', text: /^· $/ }))?.text).toBe('· ')
+    await ui.unmount()
+  })
+}

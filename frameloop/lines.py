@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import facts as F
 import gate
 import readers
 import state
@@ -44,9 +45,9 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     """An act as the author reads it: what Claude did, whether it needs the author, and
     the exact command or path, for the details."""
     said = " ".join(record.get("triggers") or []) if record.get("event") == "outward" else "L1:"
-    exact = (
-        (record.get("command") or "").split("\n", 1)[0] if record.get("event") == "outward" else record.get("path", "")
-    )
+    # The command as it ran, its heredocs' text left out, so a line after one still shows.
+    exact = (" ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
+             if record.get("event") == "outward" else record.get("path", ""))
     for key, words, needs in ACT_WORDS:
         if key in said:
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
@@ -268,6 +269,8 @@ def _short_lines(frame0: dict[str, Any] | None) -> str:
     needs = any(n for _, n, _ in acts) or bool(state.LIVE.get("lost"))
     if needs:
         state.LIVE["decision"] = gate.RISE  # an act that needs the author, or rules that lost their words
+    elif facts and state.LIVE.get("decision", "quiet") == "quiet":
+        state.LIVE["decision"] = "noted"  # an act reported, nothing checked: never a check mark
     if not shorts and not facts:
         return ""
     if not shorts:

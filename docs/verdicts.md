@@ -21,6 +21,8 @@ The questions run in order: the change put into plain words (with labels on), "d
 | ✓ checked: does what you asked, breaks none of your rules | read; the fit rests on the declared requirement; neither of two readings named a rule | nothing |
 | ✓ checked: nothing in this change needed a closer look | free checks only, all met | nothing |
 | ✓ every requirement is done | completion: each requirement read as done over its changes | nothing |
+| · Claude pushed to GitHub | an act reported in a turn with nothing to read | nothing, unless you did not expect it |
+| · the last check was interrupted | the check stopped before its outcome | ask for a reading again |
 | ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: this serves none of your requirements | padding | ask why the change is there |
