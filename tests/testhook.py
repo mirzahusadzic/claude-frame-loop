@@ -1605,6 +1605,17 @@ class ChannelTests(unittest.TestCase):
         self.read_turn(self.SECRET_LINE, session="c3")
         self.assertEqual(len(seen), 2)
 
+    def test_a_line_in_any_script_is_held(self):
+        """Sparky's second review: a line needed three Latin letters to be held, so a line of
+        Chinese read from outside left in a diff."""
+        line = "这是一段从项目外部读取的私有代码注释，不应离开本机"
+        self.outside.write_text(line + "\n", encoding="utf-8")
+        self.post("Read", {"file_path": str(self.outside)}, {"content": line + "\n"})
+        seen = loaded_seen()
+        out = self.read_turn(line)
+        self.assertIn("not read", out["systemMessage"])
+        self.assertEqual(seen, [])
+
     def test_short_or_common_lines_are_never_held(self):
         self.post("Read", {"file_path": str(self.outside)}, {"content": "short\nreturn x\n}\n"})
         seen = loaded_seen()
