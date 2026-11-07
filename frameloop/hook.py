@@ -278,8 +278,10 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     changed: list[str] = []
     if name in ("PostToolUse", "PostToolUseFailure") and tool == "Bash":
         ran(event, frame0, ok=name == "PostToolUse")
-        if name == "PostToolUse" and F.outward(tool_input.get("command", "")):  # the act ran, as asked
-            _log({"event": "act-ran", "command": tool_input.get("command", "")})
+        command = tool_input.get("command", "")
+        # the act ran, as asked: an outward act, or a command on the loop's own files
+        if name == "PostToolUse" and (F.outward(command) or shell_touches_config(command)):
+            _log({"event": "act-ran", "command": command})
         changed = _loop_files_changed(event)
     if name in ("PostToolUse", "PostToolUseFailure"):
         if _training_on():  # a command that failed may still have printed what it read

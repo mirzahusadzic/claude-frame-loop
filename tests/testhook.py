@@ -2875,6 +2875,26 @@ class CoreTests(unittest.TestCase):
         kept.write_text("[]", encoding="utf-8")
         self.assertEqual(hook._loop_files_changed(event), [])
 
+    def test_a_command_on_the_loops_files_that_ran_is_marked_as_run(self):
+        """An agent's report: a command that rose as touching the loop's files was told as
+        "it did not run" after it ran, since only outward acts were marked as run."""
+        command = "echo off > .frame-loop/switch"
+        for event in ("PreToolUse", "PostToolUse"):
+            hook.answer(
+                {
+                    "hook_event_name": event,
+                    "tool_name": "Bash",
+                    "session_id": self.session,
+                    "cwd": str(REPO),
+                    "tool_use_id": "ran-l1",
+                    "tool_input": {"command": command},
+                    "tool_response": {"stdout": "", "stderr": ""},
+                }
+            )
+        log = Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()
+        ran = [json.loads(x) for x in log if '"act-ran"' in x]
+        self.assertTrue(any(r.get("command") == command and r.get("session") == self.session for r in ran))
+
     def test_claude_writing_the_switch_rises(self):
         os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
         out = hook.answer(
