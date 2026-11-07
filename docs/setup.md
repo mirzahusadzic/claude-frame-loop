@@ -11,8 +11,8 @@ Installation, the reader's path through the router, and every setting. The [READ
 | Claude Code | the hooks, the band, and the writer through `claude -p` | `claude --version` |
 | Python 3.9+ | the hooks; standard library only | `python3 --version` |
 | git | the turn snapshots | `git --version` |
-| [uv](https://docs.astral.sh/uv/) | running Gadfly | `uv --version` |
-| a [Gadfly](https://github.com/mirzahusadzic/gadfly) checkout | the reader's trials and fixed rules | `uv run --project ~/gadfly gadfly --help` |
+| [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.12 or later, `pip install midwife` on Python 3.13 | the reader's trials and fixed rules | `gadfly --version` |
+| [uv](https://docs.astral.sh/uv/), optional | running Gadfly from a checkout instead | `uv --version` |
 | the [Unified Model Router](https://github.com/mirzahusadzic/unified-model-router), installed | the reader's model calls | `node install.mjs --verify`, in the router's checkout |
 | `gh`, optional | confirming a repository public | `gh repo view --json visibility` |
 
@@ -33,12 +33,12 @@ The reader comes from a model family other than the Claude whose work it reads, 
 
 ### Install
 
-The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. Gadfly runs through uv from its checkout, in `~/gadfly` unless `GADFLY_CHECKOUT` names another. Then load the plugin:
+The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. The hooks run the `gadfly` command that `pip install midwife` puts on the path; `uv tool install midwife` does the same with its own Python. Then load the plugin:
 
 ```sh
 git clone https://github.com/mirzahusadzic/unified-model-router.git
 cd unified-model-router && node install.mjs && node install.mjs --verify && cd ..
-git clone https://github.com/mirzahusadzic/gadfly.git ~/gadfly
+pip install midwife
 git clone <this repository> claude-frame-loop
 claude --plugin-dir claude-frame-loop
 ```
@@ -61,7 +61,7 @@ The default reader trains on what it reads, so allow it per project: in the proj
 | `FRAME_LOOP_WRITER_MODEL` | `claude-haiku-5-5` | the model that writes labels |
 | `FRAME_LOOP_PRIVATE_NAMES` | `~/.config/frame-loop/private-names.txt` | names masked before a training tier; one per line, `#` for comments |
 | `FRAME_LOOP_LINES=full` | off | the full detail under each reply, instead of one line |
-| `GADFLY_CHECKOUT` | `~/gadfly` | the Gadfly checkout |
+| `GADFLY_CHECKOUT` | none | a Gadfly checkout, run through uv in place of the `gadfly` command; without either, a checkout in `~/gadfly` |
 | `CODEX_ROUTER_TOKEN` | from the router's `openrouter.env` | the router's token |
 
 The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` and `FRAME_LOOP_WRITER=writer:haiku` itself.

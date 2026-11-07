@@ -76,10 +76,11 @@ node install.mjs --verify
 
 #### Gadfly
 
-The hooks run Gadfly through uv from a checkout in `~/gadfly`; `GADFLY_CHECKOUT` names another place:
+Gadfly is on PyPI as `midwife` and needs Python 3.13; the hooks run the `gadfly` command it installs. `uv tool install midwife` brings its own Python instead:
 
 ```sh
-git clone https://github.com/mirzahusadzic/gadfly.git ~/gadfly
+pip install midwife
+gadfly --version
 ```
 
 #### Plugin
@@ -111,7 +112,7 @@ State the work as usual; Claude restates it as requirements and saves them once 
 
 ### Develop
 
-Tests need no API key and no network; the tests that run Gadfly need a checkout and skip without one:
+Tests need no API key and no network. The tests that run Gadfly skip when it is not installed, and the contract tests also need a checkout named by `GADFLY_CHECKOUT`:
 
 ```sh
 python3 -m unittest discover -s tests
