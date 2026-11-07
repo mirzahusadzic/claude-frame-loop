@@ -200,10 +200,13 @@ class ContractTests(unittest.TestCase):
             reader.run(frames.which_ask(FRAME0, STEP, "anthropic"))
         self.assertNotIn("--most", seen[0])
 
-    def test_the_pinned_gadfly_is_at_least_0_12(self):
+    def test_the_pinned_gadfly_is_at_the_floor_the_code_needs(self):
+        """A Gadfly older than reader.GADFLY_FLOOR lacks calls the reader makes, and would pass here."""
+        import reader
+
         done = _gadfly(["--version"], ROOT)
-        version = tuple(int(x) for x in done.stdout.split()[-1].split(".")[:2])
-        self.assertGreaterEqual(version, (0, 12), done.stdout)
+        version = tuple(int(x) for x in done.stdout.split()[-1].split(".")[: len(reader.GADFLY_FLOOR)])
+        self.assertGreaterEqual(version, reader.GADFLY_FLOOR, done.stdout)
 
     def test_an_ideal_reader_on_the_declared_ask_passes(self):
         code, result = firm(frames.which_ask(FRAME0, STEP, "anthropic"), "Ideal")
