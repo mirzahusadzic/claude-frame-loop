@@ -43,6 +43,13 @@ class HaikuTests(unittest.TestCase):
         run.assert_not_called()
         self.assertEqual((again["label"], again["cached"]), ("Adds a greeting.", True))
 
+    def test_the_writers_session_is_marked_so_the_loops_hooks_stand_aside(self):
+        """The cold review, U1: the writer's `claude -p` loads the user's plugins, frame-loop
+        among them, so each label call ran the loop's hooks and wrote to the project's log."""
+        out = json.dumps({"result": "Adds a greeting.", "total_cost_usd": 0.001})
+        _, run = self.label("diff marked", return_value=answered(out))
+        self.assertEqual(run.call_args.kwargs["env"]["FRAME_LOOP_INSIDE_WRITER"], "1")
+
     def test_a_writer_that_cannot_start_or_hangs_gives_no_label(self):
         """A missing `claude` or a hung one would crash the hook or wait on it for ever."""
         for error in (FileNotFoundError("claude"), subprocess.TimeoutExpired("claude", 180)):

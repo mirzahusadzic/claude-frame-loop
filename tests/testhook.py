@@ -523,6 +523,40 @@ class AttackTests(unittest.TestCase):
         for command in ("cat .claude/settings.json", f"head {FIXTURE}", "ls .claude"):
             self.assertIsNone(hook.answer(bash_event(command)), command)
 
+    def test_inside_the_writers_session_the_hooks_stand_aside(self):
+        """The cold review, U1: in the writer's nested `claude -p`, the loop's hooks ran and
+        wrote rows into the project's log. Marked, a hook answers nothing and writes nothing."""
+        import subprocess
+
+        log = WORK / f"inside-writer-{uid(self)}.jsonl"
+        child = {
+            **os.environ,
+            **env(FRAME_LOOP_LOG=str(log), FRAME_LOOP_MODE="enforce"),
+            "FRAME_LOOP_INSIDE_WRITER": "1",
+        }
+        for event in (
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": "w", "cwd": str(REPO)},
+            {"hook_event_name": "UserPromptSubmit", "prompt": "label this", "session_id": "w", "cwd": str(REPO)},
+            {"hook_event_name": "Stop", "session_id": "w", "cwd": str(REPO), "stop_hook_active": False},
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": "w",
+                "cwd": str(REPO),
+                "tool_input": {"command": "git push"},
+            },
+        ):
+            with self.subTest(event["hook_event_name"]):
+                done = subprocess.run(
+                    [sys.executable, str(ROOT / "frameloop/hook.py")],
+                    input=json.dumps(event),
+                    capture_output=True,
+                    text=True,
+                    env=child,
+                )
+                self.assertEqual((done.returncode, done.stdout, done.stderr), (0, "", ""))
+        self.assertFalse(log.exists())
+
     def test_an_unreadable_event_is_said_with_no_decision(self):
         """Sparky's second review: an unreadable event got an ask sent as PreToolUse, whatever
         the event was, and JSON nested past what Python reads crashed with a traceback.

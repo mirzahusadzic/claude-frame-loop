@@ -652,6 +652,8 @@ def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def main() -> int:
+    if os.environ.get("FRAME_LOOP_INSIDE_WRITER") == "1":  # the writer's own `claude -p`: nothing to check
+        return 0
     if len(sys.argv) == 3 and sys.argv[1] == "--background":
         return _background(sys.argv[2])
     try:

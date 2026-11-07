@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
+INSIDE_WRITER = "FRAME_LOOP_INSIDE_WRITER"  # set in the writer's own `claude -p`
 # A label of part of a change could pass what the rest breaks: a longer change is not
 # labelled at all, and its reading stays open.
 LIMIT = 40000
@@ -115,6 +116,9 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
             encoding="utf-8",
             errors="replace",
             cwd=folder,
+            # The nested session loads the user's plugins, frame-loop among them: its hooks
+            # see this and stand aside, so a label call reads nothing and logs nothing.
+            env={**os.environ, INSIDE_WRITER: "1"},
             timeout=180,
         )
     except (OSError, subprocess.TimeoutExpired) as error:
