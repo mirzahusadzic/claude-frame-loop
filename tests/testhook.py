@@ -2652,6 +2652,9 @@ class CoreTests(unittest.TestCase):
             time.sleep(0.2)
             done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(done["state"], "done")
+        # an outcome, not a crash: a failed background read also ends "done", as ■ (the cold review, T2)
+        self.assertIn(done.get("decision"), ("pass", "rise"), done)
+        self.assertFalse([x for x in done.get("lines") or [] if "not read" in x], done)
         while (
             any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob("background-*.json")) and time.time() < deadline
         ):
