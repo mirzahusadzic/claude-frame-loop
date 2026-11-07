@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "frameloop"))
 import readers  # noqa: E402
 
 PAGES = [ROOT / "README.md", ROOT / "CONTRIBUTING.md", ROOT / "SECURITY.md", *sorted((ROOT / "docs").glob("*.md"))]
-LINK = re.compile(r"\]\(([^)\s]+)\)|<img src=\"([^\"]+)\"|srcset=\"([^\"]+)\"")
+LINK = re.compile(r"\]\(([^)\s]+)\)|<img src=\"([^\"]+)\"|srcset=\"([^\"]+)\"|<a href=\"([^\"]+)\"")
 
 
 def anchors(page: Path) -> set[str]:
@@ -50,7 +50,8 @@ class DocsTests(unittest.TestCase):
         body links."""
         twice = []
         for page in PAGES:
-            seen = [m[0].split("#")[0] for m in LINK.findall(outside_code(page.read_text(encoding="utf-8"))) if m[0]]
+            found = LINK.findall(outside_code(page.read_text(encoding="utf-8")))
+            seen = [(m[0] or m[3]).split("#")[0] for m in found if m[0] or m[3]]  # Markdown and HTML links alike
             twice += [f"{page.name}: {t}" for t in sorted({t for t in seen if t and seen.count(t) > 1})]
         self.assertEqual(twice, [])
 
@@ -141,6 +142,12 @@ class DocsTests(unittest.TestCase):
         ):
             self.assertIn(f"| {moment} |", rules, moment)
         self.assertIn("docs/rules.md#when-the-rules-act", (ROOT / "README.md").read_text(encoding="utf-8"))
+
+    def test_no_markdown_link_inside_html(self):
+        """A Markdown link inside an HTML block, such as the figure's caption, shows as raw text."""
+        for page in PAGES:
+            for block in re.findall(r"<p[^>]*>.*?</p>", page.read_text(encoding="utf-8"), re.S):
+                self.assertNotRegex(block, r"\]\([^)]+\)", page.name)
 
 
 if __name__ == "__main__":

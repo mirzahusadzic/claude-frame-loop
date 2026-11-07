@@ -18,7 +18,7 @@ A semantic workflow linter for Claude Code: it checks the work you and Claude do
   </picture>
 </p>
 
-<p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. When the rules act, from a rule's birth to its change, is in [Rules](docs/rules.md#when-the-rules-act); more in Crossings and Recoil, linked below.</em></p>
+<p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. When the rules act, from a rule's birth to its change, is in <a href="docs/rules.md#when-the-rules-act">Rules</a>; more in Crossings and Recoil, linked below.</em></p>
 
 - **Frame 0:** your requirements in your words, fixed with your OK; every change is checked against them.
 - **Free checks, every turn:** files, size, and what your rules require of the change. Rules are the lines of `CLAUDE.md` and `AGENTS.md` you confirmed as rules.
