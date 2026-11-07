@@ -7,20 +7,47 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 import tree  # noqa: E402
 
-FRAME0 = {"id": "root", "asks": [
-    {"id": "A1", "text": "users can greet by name", "inversion": {"users can greet by name": "users can never greet by name"}},
-    {"id": "A2", "text": "the README says how to run it", "inversion": {"the README says how to run it": "the README says nothing of how to run it"}}],
+FRAME0 = {
+    "id": "root",
+    "asks": [
+        {
+            "id": "A1",
+            "text": "users can greet by name",
+            "inversion": {"users can greet by name": "users can never greet by name"},
+        },
+        {
+            "id": "A2",
+            "text": "the README says how to run it",
+            "inversion": {"the README says how to run it": "the README says nothing of how to run it"},
+        },
+    ],
     "principles": [{"id": "P1", "text": "No new dependency is added."}],
-    "triggers": [{"id": "T1", "text": "A push goes to the human first."}]}
+    "triggers": [{"id": "T1", "text": "A push goes to the human first."}],
+}
 
 
 def node(**over):
-    raw = {"id": "greeter", "parent": "root", "scope": ["hello.py", "tests/*"],
-           "principles": [], "triggers": [],
-           "asks": [{"id": "N1", "text": "hello.py takes a --name option and greets by it", "quotes": "A1", "owner": "leaves",
-                     "inversion": {"hello.py takes a --name option and greets by it": "hello.py takes no --name option and never greets by name"}}],
-           "promises": [{"concern": "greeting", "text": "a name given is the name greeted"}],
-           "predictions": [{"for": "N1", "text": "carried and firm within 3 runs"}]}
+    raw = {
+        "id": "greeter",
+        "parent": "root",
+        "scope": ["hello.py", "tests/*"],
+        "principles": [],
+        "triggers": [],
+        "asks": [
+            {
+                "id": "N1",
+                "text": "hello.py takes a --name option and greets by it",
+                "quotes": "A1",
+                "owner": "leaves",
+                "inversion": {
+                    "hello.py takes a --name option and greets by it":
+                        "hello.py takes no --name option and never greets by name"
+                },
+            }
+        ],
+        "promises": [{"concern": "greeting", "text": "a name given is the name greeted"}],
+        "predictions": [{"for": "N1", "text": "carried and firm within 3 runs"}],
+    }
     raw.update(over)
     return raw
 
@@ -85,7 +112,12 @@ class NodeFaultTests(unittest.TestCase):
 
     def test_a_child_keeps_every_rule_above_it_and_cannot_reword_one(self):
         parent = node(principles=[{"id": "P9", "text": "Every flag has a test."}])
-        child = node(id="name-flag", parent="greeter", asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}], predictions=M1_PREDICTED)
+        child = node(
+            id="name-flag",
+            parent="greeter",
+            asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}],
+            predictions=M1_PREDICTED,
+        )
         nodes = {"root": FRAME0, "greeter": parent, "name-flag": child}
         self.assertEqual(tree.node_faults(child, parent, nodes), [])  # left out, still inherited
         self.assertIn("P9", [p["id"] for p in tree.frame0_for(child, FRAME0, nodes)["principles"]])

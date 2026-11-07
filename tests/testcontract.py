@@ -7,16 +7,16 @@ import os
 import subprocess
 import sys
 import unittest
-from unittest import mock
 import uuid
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
 sys.path.insert(0, str(ROOT / "frameloop"))
 import frames  # noqa: E402
-import readers  # noqa: E402
 import gate  # noqa: E402
+import readers  # noqa: E402
 
 FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text())
 STEP = {"id": "contract", "summary": "a step", "claim": {"serves": "A5"},
@@ -79,7 +79,9 @@ class ContractTests(unittest.TestCase):
         work = ROOT / "tests/.work" / uuid.uuid4().hex
         (work / "runs").mkdir(parents=True)
         path = work / "frame.json"
-        path.write_text(json.dumps({**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": NAMES["Ideal"]}}))
+        path.write_text(
+            json.dumps({**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": NAMES["Ideal"]}})
+        )
         done = subprocess.run(["uv", "run", "--project", str(GADFLY), "gadfly", "firm", str(path),
                                "--battery", "fakebatteries:Ideal", "--runs", str(work / "runs"), "--most", "3",
                                "--calls", "48", "--output-tokens", "10", "--json"],
@@ -210,8 +212,8 @@ class LiveReaderTests(unittest.TestCase):
     def test_a_private_name_in_a_path_is_masked_and_gadfly_lets_it_through(self):
         """Seen on the loop's release: the mod's folder carried the project's private name,
         so every turn touching it was refused unread. Masked, it is read; the name never goes."""
-        import reader
         import privacy
+        import reader
         names = ROOT / "tests/.work/private-names.txt"
         names.write_text("secret-project\n")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
@@ -281,10 +283,23 @@ class WalkContractTests(unittest.TestCase):
     """The climb routes by Gadfly's walk (one rule in one place). Its --json is
     Gadfly's API; the fields frame-loop reads are pinned here, so a drift fails loudly."""
 
-    FRAME0 = {"id": "root", "asks": [
-        {"id": "A1", "text": "users can greet by name", "inversion": {"users can greet by name": "users can never greet by name"}},
-        {"id": "A2", "text": "the README says how to run it", "inversion": {"the README says how to run it": "the README says nothing"}}],
-        "principles": [{"id": "P1", "text": "No new dependency is added."}], "triggers": []}
+    FRAME0 = {
+        "id": "root",
+        "asks": [
+            {
+                "id": "A1",
+                "text": "users can greet by name",
+                "inversion": {"users can greet by name": "users can never greet by name"},
+            },
+            {
+                "id": "A2",
+                "text": "the README says how to run it",
+                "inversion": {"the README says how to run it": "the README says nothing"},
+            },
+        ],
+        "principles": [{"id": "P1", "text": "No new dependency is added."}],
+        "triggers": [],
+    }
     GREETER = {"id": "greeter", "parent": "root", "scope": ["hello.py", "tests/*", "README.md"], "asks": [
         {"id": "N1", "text": "hello.py takes a --name option", "quotes": "A1", "owner": "children",
          "inversion": {"hello.py takes a --name option": "hello.py takes no --name option"}},

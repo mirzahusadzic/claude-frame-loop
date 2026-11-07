@@ -57,22 +57,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Run as a script, this module is __main__; an `import hook` elsewhere (a reader, a
 # test) must find this very module, not a second copy.
 sys.modules.setdefault("hook", sys.modules[__name__])
-import readers  # noqa: E402
 import facts as F  # noqa: E402
 import gate  # noqa: E402
+import readers  # noqa: E402
 import state  # noqa: E402
-from record import _log  # noqa: E402
-from declare import _declare_lines, _declared, _marks  # noqa: E402
-from repo import _git, project_root  # noqa: E402
-from lines import for_user, _short_lines, _tell  # noqa: E402
-from live import _live, _live_interrupted  # noqa: E402
-from privacy import capture, hold, not_public, _training_on, _trains, _writer  # noqa: E402
-from framezero import _engaged, load_frame0, node_file_faults, project_rules, _tree_nodes  # noqa: E402
-from obligations import owed, ran  # noqa: E402
 from config import loop_off, plugin_defaults, shell_touches_config, touches_config  # noqa: E402
-from reading import complete, _proposal, _read  # noqa: E402
+from declare import _declare_lines, _declared, _marks  # noqa: E402
+from framezero import _engaged, _tree_nodes, load_frame0, node_file_faults, project_rules  # noqa: E402
+from lines import _short_lines, _tell, for_user  # noqa: E402
+from live import _live, _live_interrupted  # noqa: E402
+from obligations import owed, ran  # noqa: E402
+from privacy import _training_on, _trains, _writer, capture, hold, not_public  # noqa: E402
+from reading import _proposal, _read, complete  # noqa: E402
+from record import _log  # noqa: E402
+from repo import _git, project_root  # noqa: E402
 from turn import _background, _last_reading, _read_turn, _turn_start, _turn_summary  # noqa: E402
-
 
 EDITS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -226,7 +225,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             hold(prompt, "a message from another session")
         told = _last_reading()
         _turn_start(event)
-        return {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
+        return (
+            {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
+        )
     if name in ("PostToolUse", "PostToolUseFailure") and tool == "Bash":
         ran(event, frame0, ok=name == "PostToolUse")
     if name == "PostToolUse":
@@ -300,7 +301,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if shell_touches_config(command):
             found.append("L1: the loop's own configuration or record is touched")
         if not found:
-            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": stray}} if stray else None
+            return (
+                {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": stray}} if stray else None
+            )
         _log({"event": "outward", "command": command, "triggers": found})
         return _rise(mode, "frame-loop: " + "; ".join(found) + ". This rises to the human."
                      + (f"\n{stray}" if stray else ""), "ask")
@@ -344,26 +347,35 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         f"once; an independent reader ({reader}, through Gadfly) reads your work against it, "
         f"and only a mismatch goes to the human.{trains}",
         "",
-        *(["Frame 0 is not written yet, so nothing is read against it. When the author gives "
-           "you a task, reflect what this work is for back to the author in the author's words, "
-           "as plain sentences, one per line, easy to copy; ask about anything unclear. Never "
-           "show the author JSON, ids or inversions: they are for agents. On the author's OK, "
-           "write frame 0 yourself as JSON to "
-           f"{os.environ.get('FRAME_LOOP_FRAME0')}: each ask as "
-           '{"id": "A1", "text": "<the author\'s words>", "inversion": '
-           '{"<that whole text>": "<the whole text, inverted>"}}, and principles and triggers as '
-           '{"id": "P1", "text": "..."}; frame-loop asks the author before that write lands.']
-          if frame0.get("unwritten") else
-          ["Frame 0, asks:", *[f"- {a['id']}: {a['text']}" for a in frame0["asks"]]]),
+        *(
+            [
+                "Frame 0 is not written yet, so nothing is read against it. When the author gives "
+                "you a task, reflect what this work is for back to the author in the author's words, "
+                "as plain sentences, one per line, easy to copy; ask about anything unclear. Never "
+                "show the author JSON, ids or inversions: they are for agents. On the author's OK, "
+                "write frame 0 yourself as JSON to "
+                f"{os.environ.get('FRAME_LOOP_FRAME0')}: each ask as "
+                '{"id": "A1", "text": "<the author\'s words>", "inversion": '
+                '{"<that whole text>": "<the whole text, inverted>"}}, and principles and triggers as '
+                '{"id": "P1", "text": "..."}; frame-loop asks the author before that write lands.'
+            ]
+            if frame0.get("unwritten")
+            else ["Frame 0, asks:", *[f"- {a['id']}: {a['text']}" for a in frame0["asks"]]]
+        ),
         "Principles:",
         *[f"- {p['id']}: {p['text']}" for p in frame0.get("principles", [])],
         "Triggers:",
         *[f"- {t['id']}: {t['text']}" for t in frame0.get("triggers", [])],
-        *(["Obligations, owed when a change touches their scope. Mark the ones you met with a "
-           "marker `: frame-loop-declare --done <ids>`, or `--done <ids>` on a reading; a mark is a claim, "
-           "and each is checked:",
-           *[f"- {o['id']} ({', '.join(o['scope'])}): {o['text']}" for o in frame0["obligations"]]]
-          if frame0.get("obligations") else []),
+        *(
+            [
+                "Obligations, owed when a change touches their scope. Mark the ones you met with a "
+                "marker `: frame-loop-declare --done <ids>`, or `--done <ids>` on a reading; a mark is a claim, "
+                "and each is checked:",
+                *[f"- {o['id']} ({', '.join(o['scope'])}): {o['text']}" for o in frame0["obligations"]],
+            ]
+            if frame0.get("obligations")
+            else []
+        ),
         "",
         "Know where every piece of content came from. Never bring anything from a private "
         "source into work a reader that trains on its inputs will read; if you must, say so "
@@ -394,26 +406,44 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "never sees the declaration or any id: it judges the content alone, so declare "
         "honestly. `--reader <tier>` may ask for a stricter reader, never a looser one, and "
         "`--effort high` for a harder reading, never an easier one.",
-        *(["At the end of each turn that changed files, frame-loop labels the turn's diff "
-           "at no cost. The reader reads it against frame 0 only when a signal fires (an "
-           "obligation unmet, an area no rule covers, a change with no effect, an effort rule), "
-           "and the turn's end then waits for it: about a minute, up to two at high effort, "
-           "while the status line says so. Do not announce the wait in your reply: the status line "
-           "shows it live, and its lines appear under your reply; if it rose, the next prompt "
-           "tells you, and you explain it to the author in plain words. Before such a "
-           "turn ends, declare the asks it serves with `: frame-loop-declare --serves <ids>`, a "
-           "no-op the hook reads; never write ids in your reply to the human. The reader never "
-           "sees your reply or the declaration, only the change."]
-          if os.environ.get("FRAME_LOOP_READ_TURNS") == "1" else []),
-        *(["A writer (Haiku) reads each change once into a label in plain words; the reader "
-           "reads only that label, never your code or your reply."] if _writer() else []),
-        *([f"The work is a tree of nodes, frame 0 its root: {', '.join(n for n in _tree_nodes(frame0) if n != 'root') or 'no node yet'}. "
-           "A node is a crossing fixed as a file in the tree folder, written with the author; "
-           "its asks quote its parent's, its scope lies under the parent's, and every rule "
-           "above it holds. Engage the node you work in with `: frame-loop-node <id>`, a "
-           "no-op the hook reads; then readings use its asks, completion reads its asks over "
-           "its own steps, and a change outside its scope is not authorized. A completed "
-           "node climbs to its parent by itself."] if os.environ.get("FRAME_LOOP_TREE") else []),
+        *(
+            [
+                "At the end of each turn that changed files, frame-loop labels the turn's diff "
+                "at no cost. The reader reads it against frame 0 only when a signal fires (an "
+                "obligation unmet, an area no rule covers, a change with no effect, an effort rule), "
+                "and the turn's end then waits for it: about a minute, up to two at high effort, "
+                "while the status line says so. Do not announce the wait in your reply: the status line "
+                "shows it live, and its lines appear under your reply; if it rose, the next prompt "
+                "tells you, and you explain it to the author in plain words. Before such a "
+                "turn ends, declare the asks it serves with `: frame-loop-declare --serves <ids>`, a "
+                "no-op the hook reads; never write ids in your reply to the human. The reader never "
+                "sees your reply or the declaration, only the change."
+            ]
+            if os.environ.get("FRAME_LOOP_READ_TURNS") == "1"
+            else []
+        ),
+        *(
+            [
+                "A writer (Haiku) reads each change once into a label in plain words; the reader "
+                "reads only that label, never your code or your reply."
+            ]
+            if _writer()
+            else []
+        ),
+        *(
+            [
+                "The work is a tree of nodes, frame 0 its root: "
+                f"{', '.join(n for n in _tree_nodes(frame0) if n != 'root') or 'no node yet'}. "
+                "A node is a crossing fixed as a file in the tree folder, written with the author; "
+                "its asks quote its parent's, its scope lies under the parent's, and every rule "
+                "above it holds. Engage the node you work in with `: frame-loop-node <id>`, a "
+                "no-op the hook reads; then readings use its asks, completion reads its asks over "
+                "its own steps, and a change outside its scope is not authorized. A completed "
+                "node climbs to its parent by itself."
+            ]
+            if os.environ.get("FRAME_LOOP_TREE")
+            else []
+        ),
         "Pushes, releases, recursive deletes and any change to the loop's own configuration "
         "or record also rise to the human.",
     ]

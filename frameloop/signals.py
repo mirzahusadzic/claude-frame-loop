@@ -32,13 +32,13 @@ def rules() -> dict[str, Any]:
 
 
 def _lines(diff: str) -> tuple[list[str], list[str]]:
-    added = [l[1:] for l in diff.splitlines() if l.startswith("+") and not l.startswith("+++")]
-    removed = [l[1:] for l in diff.splitlines() if l.startswith("-") and not l.startswith("---")]
+    added = [line[1:] for line in diff.splitlines() if line.startswith("+") and not line.startswith("+++")]
+    removed = [line[1:] for line in diff.splitlines() if line.startswith("-") and not line.startswith("---")]
     return added, removed
 
 
 def _meaningful(lines: list[str]) -> list[str]:
-    return [l for l in lines if l.strip() and not l.strip().startswith("#")]
+    return [line for line in lines if line.strip() and not line.strip().startswith("#")]
 
 
 def _cosmetic(added: list[str], removed: list[str]) -> bool:

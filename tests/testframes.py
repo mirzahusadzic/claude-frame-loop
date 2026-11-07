@@ -127,14 +127,32 @@ class ViolationTests(unittest.TestCase):
 
 
 STEPS = [
-    {"id": "S1", "label": "touched cli.py +12; obligations O1 ✓", "diff": "+    parser.add_argument('--name')", "claims": ["A1"]},
+    {
+        "id": "S1",
+        "label": "touched cli.py +12; obligations O1 ✓",
+        "diff": "+    parser.add_argument('--name')",
+        "claims": ["A1"],
+    },
     {"id": "S2", "label": "touched tests/test_cli.py +8", "diff": "+def test_name(): ...", "claims": ["A2"]},
     {"id": "S3", "label": "touched README.md +3", "diff": "+Run `cli --name Ada`.", "claims": []},
 ]
-ASK0 = {"id": "w", "asks": [
-    {"id": "A1", "text": "the CLI greets by a name it is given", "inversion": {"the CLI greets by a name it is given": "the CLI greets no one by name"}},
-    {"id": "A2", "text": "every change comes with a test that fails before it", "inversion": {"every change comes with a test that fails before it": "changes come with no tests"}}],
-    "principles": [{"id": "P1", "text": "No new dependency is added."}], "triggers": []}
+ASK0 = {
+    "id": "w",
+    "asks": [
+        {
+            "id": "A1",
+            "text": "the CLI greets by a name it is given",
+            "inversion": {"the CLI greets by a name it is given": "the CLI greets no one by name"},
+        },
+        {
+            "id": "A2",
+            "text": "every change comes with a test that fails before it",
+            "inversion": {"every change comes with a test that fails before it": "changes come with no tests"},
+        },
+    ],
+    "principles": [{"id": "P1", "text": "No new dependency is added."}],
+    "triggers": [],
+}
 
 
 class UndeclaredTests(unittest.TestCase):

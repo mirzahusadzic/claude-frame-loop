@@ -17,15 +17,15 @@ from typing import Any
 import frames
 import gate
 import state
-from record import _log, _records, _records_all
 from declare import _claimed, _declared, _masked, _without_declaration
-from repo import _git, project_root
-from effort import effort_for, _effort_rules
-from lines import for_user, _reader_name, _tell
+from effort import _effort_rules, effort_for
+from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
+from lines import _reader_name, _tell, for_user
 from live import _live_step, _on_answers, _ran
-from privacy import outgoing, _short_path, tier_for, withhold_file, _writer
-from framezero import load_frame0, load_frame0_root, route, _tree_nodes, with_semantic
 from obligations import obligations_line, outside_scope
+from privacy import _short_path, _writer, outgoing, tier_for, withhold_file
+from record import _log, _records, _records_all
+from repo import _git, project_root
 
 
 def _reader():
@@ -148,7 +148,11 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     agent's lines (`said`) for the declaration and effort only. Logged as `kind`."""
     started = time.time()
     diff = _git(cwd, "diff", "--stat", "--patch", before, after).stdout
-    status = [line.split("\t") for line in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines() if "\t" in line]
+    status = [
+        line.split("\t")
+        for line in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines()
+        if "\t" in line
+    ]
     facts = {"deleted": [x[-1] for x in status if x[0].startswith("D")],
              "paths": [x[-1] for x in status], "chars": len(diff)}
     frame0 = with_semantic(frame0, facts["paths"])
@@ -193,9 +197,18 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     """When the agent presents its work: each ask the session's steps claim is read once
     with the claimed steps' diffs (the reviewer's completion frame); an ask nothing claims
     is unfulfilled by rule, unread."""
-    steps = [{"id": r["id"], "label": r["text"], "claims": r.get("claims", []),
-              "diff": _cut(Path(r["diff_file"]).read_text(encoding="utf-8"), 4000) if Path(r["diff_file"]).exists() else ""}
-             for r in _records("step") if (r.get("node") or "root") == (state.NODE or "root")]  # this node's leaves
+    steps = [
+        {
+            "id": r["id"],
+            "label": r["text"],
+            "claims": r.get("claims", []),
+            "diff": _cut(Path(r["diff_file"]).read_text(encoding="utf-8"), 4000)
+            if Path(r["diff_file"]).exists()
+            else "",
+        }
+        for r in _records("step")
+        if (r.get("node") or "root") == (state.NODE or "root")
+    ]  # this node's leaves
     if not steps:
         return "frame-loop · completion · nothing to read: no step was labelled in this session"
     started = time.time()
@@ -232,9 +245,15 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         _live_step(for_user(f"whether {ask['id']} is done", frame0), n, len(frame0["asks"]))
         result = run(frame)
         level = ((result.get("findings") or [{}])[0].get("levels") or {}).get("baseline")
-        ok = (not gate._failed(result)) and result.get("firm") and result.get("category") == "carried" and level == "yes"
+        ok = (
+            (not gate._failed(result)) and result.get("firm") and result.get("category") == "carried" and level == "yes"
+        )
         state.LIVE["decision"] = state.LIVE.get("decision", gate.PASS) if ok else gate.RISE
-        parts.append(f"{ask['id']} ✓" if ok else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'})")
+        parts.append(
+            f"{ask['id']} ✓"
+            if ok
+            else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'})"
+        )
         if ok and not os.environ.get("FRAME_LOOP_TREE"):
             _log({"event": "filled", "ask": ask["id"]})
         elif ok:  # Gadfly's walk says which hole it fills; anything but one clear fit stops

@@ -1,10 +1,10 @@
 import json
-import time
-import re
 import os
+import re
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 from pathlib import Path
@@ -12,11 +12,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
-import hook  # noqa: E402
 import config  # noqa: E402
 import declare  # noqa: E402
 import frames  # noqa: E402
 import framezero  # noqa: E402
+import hook  # noqa: E402
 import lines  # noqa: E402
 import obligations  # noqa: E402
 import privacy  # noqa: E402
@@ -344,7 +344,10 @@ class AttackTests(unittest.TestCase):
     def test_full_width_declarations_are_read_and_cut(self):
         os.environ.update(env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_MODE="enforce"))
         seen = loaded_seen()
-        self.assertNotIn("hookSpecificOutput", hook.answer(plan_event("\uff33\uff45\uff52\uff56\uff45\uff53: \uff21\uff12\nAdd a test.")))
+        self.assertNotIn(
+            "hookSpecificOutput",
+            hook.answer(plan_event("\uff33\uff45\uff52\uff56\uff45\uff53: \uff21\uff12\nAdd a test.")),
+        )
         self.assertNotIn("A2", seen[0]["inputs"][0]["text"])
 
     def test_the_loops_own_configuration_rises_when_touched(self):
@@ -671,7 +674,8 @@ class AdaptiveEffortTests(unittest.TestCase):
     def test_a_deleted_file_raises_the_effort_by_rule(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
         (REPO / "gone.py").write_text("x = 1\n")
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "gone")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "gone")
         seen = loaded_seen()
         self.start()
         (REPO / "gone.py").unlink()
@@ -682,7 +686,7 @@ class AdaptiveEffortTests(unittest.TestCase):
 
     def test_a_dependency_manifest_raises_the_effort_by_rule(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
-        seen = loaded_seen()
+        loaded_seen()  # clears what the reader saw before this test
         manifest = REPO / "requirements.txt"
         self.addCleanup(lambda: manifest.exists() and manifest.unlink())
         self.start()
@@ -742,7 +746,9 @@ class LineTests(unittest.TestCase):
                               FRAME_LOOP_TRAINING_OK="1", FRAME_LOOP_EFFORT="low"))
         out = hook.answer(plan_event("Serves: A2\nEffort: max\nAdd a test."))  # the longest line: max is uncalibrated
         first, second = out["systemMessage"].split("\n")[:2]
-        self.assertTrue(first.startswith(lines.for_user("frame-loop · plan · rise: names P1", framezero.load_frame0())), first)
+        self.assertTrue(
+            first.startswith(lines.for_user("frame-loop · plan · rise: names P1", framezero.load_frame0())), first
+        )
         self.assertIn("No new dependency is added.", first)
         self.assertNotIn("stage 2 confirms", first)
         self.assertTrue(second.startswith("  muse max ↑agent, uncalibrated ·"), second)
@@ -757,7 +763,9 @@ class LineTests(unittest.TestCase):
                 "a rule signal (large-diff), a claimed change with no effect")
         out = lines.for_user(line, None)
         self.assertNotIn("…", out)
-        words = lambda text: [w for w in text.split() if w != "·"]  # a wrap at " · " drops the dot
+        def words(text):  # a wrap at " · " drops the dot
+            return [w for w in text.split() if w != "·"]
+
         self.assertEqual(words(out), words(line))
         self.assertTrue(all(len(x) <= 100 for x in out.split("\n")), out)
 
@@ -829,10 +837,14 @@ class CoopTests(unittest.TestCase):
         (REPO / ".claude").mkdir(exist_ok=True)
         (REPO / ".claude/settings.json").write_text(json.dumps({"hooks": {"Stop": [
             {"hooks": [{"type": "command", "command": command}]}]}}))
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "settings")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "settings")
 
     def run_read(self, *args):
-        import io, contextlib, ondemand
+        import contextlib
+        import io
+
+        import ondemand
         for key in [k for k in os.environ if k.startswith("FRAME_LOOP_")]:
             os.environ.pop(key)  # nothing from the caller: ondemand.py takes the project's settings
         here = os.getcwd()
@@ -885,7 +897,10 @@ class CoopTests(unittest.TestCase):
         out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "m1",
                            "cwd": str(REPO), "tool_input": {"command": ": frame-loop-read --serves A1"}})
         self.assertIn("frame-loop · read · pass", out["systemMessage"])
-        self.assertEqual(lines.for_user(out["hookSpecificOutput"]["additionalContext"], framezero.load_frame0()), out["systemMessage"])  # the agent keeps the ids
+        self.assertEqual(
+            lines.for_user(out["hookSpecificOutput"]["additionalContext"], framezero.load_frame0()),
+            out["systemMessage"],
+        )  # the agent keeps the ids
         self.assertIn("marker", seen[0]["inputs"][0]["text"])
         git("checkout", "--", "hello.py")
 
@@ -934,7 +949,8 @@ class CoopTests(unittest.TestCase):
 
     def test_without_project_settings_nothing_is_read(self):
         (REPO / ".claude/settings.json").unlink(missing_ok=True) if (REPO / ".claude").exists() else None
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "no settings")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "no settings")
         code, out = self.run_read("--serves", "A1")
         self.assertNotEqual(code, 0)
         self.assertIn("no frame-loop hook", out)
@@ -1031,11 +1047,14 @@ class WriterTests(unittest.TestCase):
 
     def test_code_states_the_files_and_the_copy_guard_reads_only_the_writers_part(self):
         import writer
-        diff = ("diff --git a/src/a_rather_long_module_name.py b/src/a_rather_long_module_name.py\n"
-                "deleted file mode 100644\n--- a/src/a_rather_long_module_name.py\n"
-                "diff --git a/pyproject.toml b/pyproject.toml\n--- a/pyproject.toml\n+++ b/pyproject.toml\n"
-                "diff --git a/new.py b/new.py\nnew file mode 100644\n"
-                "diff --git a/old_name.py b/new_name.py\nsimilarity index 90%\nrename from old_name.py\nrename to new_name.py\n")
+        diff = (
+            "diff --git a/src/a_rather_long_module_name.py b/src/a_rather_long_module_name.py\n"
+            "deleted file mode 100644\n--- a/src/a_rather_long_module_name.py\n"
+            "diff --git a/pyproject.toml b/pyproject.toml\n--- a/pyproject.toml\n+++ b/pyproject.toml\n"
+            "diff --git a/new.py b/new.py\nnew file mode 100644\n"
+            "diff --git a/old_name.py b/new_name.py\nsimilarity index 90%\n"
+            "rename from old_name.py\nrename to new_name.py\n"
+        )
         self.assertEqual(writer.facts_line(diff, ["pyproject.toml"]),
                          "Files: added new.py; deleted src/a_rather_long_module_name.py; "
                          "renamed old_name.py to new_name.py; modified pyproject.toml. Manifests: pyproject.toml.")
@@ -1220,7 +1239,8 @@ class ChannelTests(unittest.TestCase):
     def test_a_line_already_in_the_public_repository_is_never_held(self):
         common = "from __future__ import annotations  # a line the project already has"
         (REPO / "base.py").write_text(common + "\n")
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "base line")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "base line")
         self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="common")
         seen = loaded_seen()
         self.read_turn(common, session="common")
@@ -1236,7 +1256,8 @@ class ChannelTests(unittest.TestCase):
         self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="wh")
         common = "from __future__ import annotations  # already in the public repository"
         (REPO / "base.py").write_text(common + "\n")
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "base line")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "base line")
         self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="wh")
         self.read_turn(common, session="wh")
         data = json.loads(Path(os.environ["FRAME_LOOP_WITHHOLD"]).read_text())
@@ -1370,13 +1391,16 @@ class CoreTests(unittest.TestCase):
         os.environ.update(self.saved)
 
     def turn(self, files, reply):
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         for name, text in files.items():
             (REPO / name).parent.mkdir(parents=True, exist_ok=True)
             (REPO / name).write_text(text)
         out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                            "last_assistant_message": reply, "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         return out["systemMessage"] if out else ""
 
     def test_a_turns_lines_wrap_and_are_never_cut(self):
@@ -1409,20 +1433,31 @@ class CoreTests(unittest.TestCase):
         os.environ.update(FRAME_LOOP_READER="testhook:peeking", FRAME_LOOP_LIVE=str(live))
         import testhook as loaded  # the reader is loaded by name, as its own module
         loaded.PEEKED.clear()
-        bash = lambda command: hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
-                                            "cwd": str(REPO), "tool_input": {"command": command}})
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        def bash(command):
+            return hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
+                                "cwd": str(REPO), "tool_input": {"command": command}})
+
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "notes").mkdir(exist_ok=True)
         (REPO / "notes" / f"{id(self)}.py").write_text(f"print({id(self)})\n" * 400)
         bash(": frame-loop-declare --serves A2")
         out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                            "last_assistant_message": "done", "stop_hook_active": False})["systemMessage"]
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         steps = [p[0] for p in loaded.PEEKED]
         self.assertEqual([x["state"] for x in steps], ["reading"] * len(steps))
-        self.assertTrue(all(x["step"] == "does it do what you asked, and does it break any of your rules?" for x in steps), steps)
-        self.assertTrue(all(x["what"] == "checking the change against your requirements" and x["started"] for x in steps), steps)
-        self.assertTrue(all(x["why"] == "it touches files none of your rules cover" for x in steps), steps)  # what the wait is for
+        self.assertTrue(
+            all(x["step"] == "does it do what you asked, and does it break any of your rules?" for x in steps), steps
+        )
+        self.assertTrue(
+            all(x["what"] == "checking the change against your requirements" and x["started"] for x in steps), steps
+        )
+        self.assertTrue(
+            all(x["why"] == "it touches files none of your rules cover" for x in steps), steps
+        )  # what the wait is for
         self.assertEqual(len(steps), 2)  # the two questions ran at once, in one step
         self.assertTrue(all(x["answers"] >= 3 for x in steps), steps)  # counted as they come in, summed
         done = json.loads((live / f"{self.session}.json").read_text())
@@ -1485,7 +1520,8 @@ class CoreTests(unittest.TestCase):
         (REPO / "late.py").write_text(f"print('late {id(self)}')\n")
         hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                      "last_assistant_message": "done", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         step = [r for r in record._records_all() if r.get("event") == "step" and r.get("session") == self.session][-1]
         self.assertIn("early.py", step["paths"])
         self.assertIn("late.py", step["paths"])
@@ -1506,11 +1542,14 @@ class CoreTests(unittest.TestCase):
         elsewhere = Path(make_repo(WORK / f"elsewhere-{id(self)}"))
         (elsewhere / "AGENTS.md").write_text("# Another guide\n\n- Another rule.\n")
         os.environ.update(FRAME_LOOP_READER="testhook:passing", CLAUDE_PROJECT_DIR=str(REPO))
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "hello.py").write_text(f"print('here {id(self)}')\n")
         out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(elsewhere),
                            "last_assistant_message": "done", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         said = (out or {}).get("systemMessage", "")
         self.assertNotIn("AGENTS.md", said)
         step = [r for r in record._records_all() if r.get("event") == "step" and r.get("session") == self.session][-1]
@@ -1528,22 +1567,32 @@ class CoreTests(unittest.TestCase):
     def test_a_command_on_the_loops_files_is_not_called_a_change(self):
         """Seen on the loop's release: a read of the loop's files was told as "Claude
         changed the loop's own files"."""
-        ran = {"event": "outward", "command": "python3 -c 'print(1)'", "triggers": ["L1: the loop's own configuration or record is touched"]}
+        ran = {
+            "event": "outward",
+            "command": "python3 -c 'print(1)'",
+            "triggers": ["L1: the loop's own configuration or record is touched"],
+        }
         landed = WORK / f"landed-{id(self)}.json"
         landed.write_text("{}")
         wrote = {"event": "config", "path": str(landed), "at": landed.stat().st_mtime}
         refused = {"event": "config", "path": str(WORK / f"never-{id(self)}.json"), "at": 1}  # Claude Code said no
         self.assertEqual(lines.act_words(ran)[0], "Claude ran a command on the loop's own files")
         self.assertEqual(lines.act_words(wrote)[0], "Claude changed the loop's own files")
-        self.assertEqual(lines.act_words(refused)[0], "Claude tried to change the loop's own files, and it did not go through")
+        self.assertEqual(
+            lines.act_words(refused)[0], "Claude tried to change the loop's own files, and it did not go through"
+        )
 
     def test_a_plugin_keeps_each_projects_files_in_the_project(self):
         """Installed as a plugin, nothing set: the loop's files go to <project>/.frame-loop."""
         fresh = Path(make_repo(WORK / f"fresh-{id(self)}"))
         for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
             os.environ.pop(name, None)
-        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin"))
-        out = hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)})
+        os.environ.update(
+            FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin")
+        )
+        out = hook.answer(
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
+        )
         self.assertEqual(os.environ["FRAME_LOOP_FRAME0"], str(fresh / ".frame-loop/frame0.json"))
         self.assertTrue((fresh / ".frame-loop").is_dir())
         self.assertNotIn("FRAME_LOOP_RULES", os.environ)  # no rules yet: none indexed
@@ -1553,18 +1602,31 @@ class CoreTests(unittest.TestCase):
         """The docs promised parallel reader calls, and the plugin made them one at a time."""
         fresh = Path(make_repo(WORK / f"parallel-{id(self)}"))
         os.environ.pop("FRAME_LOOP_PARALLEL", None)
-        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin"))
-        hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)})
+        os.environ.update(
+            FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(fresh), FRAME_LOOP_LIVE=str(WORK / "live-plugin")
+        )
+        hook.answer(
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
+        )
         self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "7")
         os.environ["FRAME_LOOP_PARALLEL"] = "2"
-        hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)})
+        hook.answer(
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(fresh)}
+        )
         self.assertEqual(os.environ["FRAME_LOOP_PARALLEL"], "2")
 
     def test_a_chain_of_markers_only_is_read_in_full(self):
         """Seen in the novice profile: Claude wrote `: frame-loop-read …; : frame-loop-declare …`
         as one command, and neither was read."""
-        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
-                           "cwd": str(REPO), "tool_input": {"command": ": frame-loop-node root; : frame-loop-declare --serves A2"}})
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-node root; : frame-loop-declare --serves A2"},
+            }
+        )
         told = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("declared Serves: A2", told)
         self.assertNotIn("A2;", told)
@@ -1575,9 +1637,14 @@ class CoreTests(unittest.TestCase):
         writer read the author's own words as part of the change, repeated them, and the
         copy guard refused the label: the first check never ran."""
         fresh = Path(make_repo(WORK / f"novice-{id(self)}"))
-        os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_FRAME0=str(fresh / ".frame-loop/frame0.json"),
-                          CLAUDE_PROJECT_DIR=str(fresh))
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(fresh), "prompt": "OK"})
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:passing",
+            FRAME_LOOP_FRAME0=str(fresh / ".frame-loop/frame0.json"),
+            CLAUDE_PROJECT_DIR=str(fresh),
+        )
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(fresh), "prompt": "OK"}
+        )
         (fresh / ".frame-loop").mkdir()
         (fresh / ".frame-loop/frame0.json").write_text(Path(FIXTURE).read_text())
         (fresh / "greet.py").write_text("print('hello')\n")
@@ -1590,7 +1657,8 @@ class CoreTests(unittest.TestCase):
         """Seen in the novice profile: Claude saved frame 0 with asks only, and every reading
         crashed on its missing id."""
         bare = WORK / f"bare-{id(self)}.json"
-        raw = json.loads(Path(FIXTURE).read_text()); raw.pop("id", None)
+        raw = json.loads(Path(FIXTURE).read_text())
+        raw.pop("id", None)
         bare.write_text(json.dumps(raw))
         os.environ.update(FRAME_LOOP_FRAME0=str(bare), FRAME_LOOP_READER="testhook:passing")
         self.assertIn("rise", self.turn({"hello.py": f"print('bare {id(self)}')\n" * 300}, "done") + "rise")
@@ -1605,10 +1673,14 @@ class CoreTests(unittest.TestCase):
         live.mkdir()
         os.environ["FRAME_LOOP_LIVE"] = str(live)
         (live / f"{self.session}.json").write_text(json.dumps({"session": self.session, "at": 1, "state": "reading"}))
-        hook.answer({"hook_event_name": "SessionStart", "source": "resume", "session_id": self.session, "cwd": str(REPO)})
+        hook.answer(
+            {"hook_event_name": "SessionStart", "source": "resume", "session_id": self.session, "cwd": str(REPO)}
+        )
         self.assertEqual(json.loads((live / f"{self.session}.json").read_text())["state"], "done")
         (live / f"{self.session}.json").write_text(json.dumps({"session": self.session, "at": 1, "state": "reading"}))
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         self.assertEqual(json.loads((live / f"{self.session}.json").read_text())["state"], "done")
 
     def test_a_docs_edit_under_a_docs_rule_starts_no_read(self):
@@ -1619,14 +1691,17 @@ class CoreTests(unittest.TestCase):
             {"id": "R9", "kind": "semantic", "scope": ["README.md", "docs/*"], "text": "docs shape",
              "quote": ["Docs: README brief."], "check": None, "accepted": True}]}))
         os.environ.update(FRAME_LOOP_RULES=str(rules), FRAME_LOOP_READER="testhook:passing")
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "docs").mkdir(exist_ok=True)
         (REPO / "docs" / f"page-{id(self)}.md").write_text(f"# Page {id(self)}\n" + "A line of the docs.\n" * 2000)
         hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session, "cwd": str(REPO),
                      "tool_input": {"command": ": frame-loop-declare --serves A2"}})
         hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                      "last_assistant_message": "done", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         step = [r for r in record._records_all() if r.get("event") == "step" and r.get("session") == self.session][-1]
         self.assertEqual(step["signals"], [])
 
@@ -1646,7 +1721,9 @@ class CoreTests(unittest.TestCase):
         self.addCleanup(lambda: switch.unlink() if switch.exists() else None)
         os.environ.update(FRAME_LOOP_READER="testhook:passing", CLAUDE_PROJECT_DIR=str(REPO))
         switch.write_text("off\n")
-        out = hook.answer({"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(REPO)})
+        out = hook.answer(
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": self.session, "cwd": str(REPO)}
+        )
         self.assertIn("switched off", out["hookSpecificOutput"]["additionalContext"])
         self.assertEqual(self.turn({"hello.py": f"print('off {id(self)}')\n" * 300}, "done"), "")
         self.assertIsNone(hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
@@ -1656,14 +1733,20 @@ class CoreTests(unittest.TestCase):
 
     def test_claude_writing_the_switch_rises(self):
         os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
-        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Write", "session_id": self.session, "cwd": str(REPO),
-                           "tool_input": {"file_path": str(REPO / ".frame-loop" / "switch"), "content": "off"}})
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Write",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"file_path": str(REPO / ".frame-loop" / "switch"), "content": "off"},
+            }
+        )
         self.assertIn("configuration or record is touched", out["systemMessage"])
 
     def test_in_shadow_mode_the_read_runs_in_the_background(self):
         """Asked for: "it was 2 min...that is unacceptable". The turn's end does not wait for the
         read: it runs in its own process and lands in the record and the band."""
-        import subprocess as sp, sys as system
         live = WORK / f"live-bg-{id(self)}"
         tests = str(ROOT / "tests")
         os.environ.update(FRAME_LOOP_READER="testhook:slow", FRAME_LOOP_BACKGROUND="1", FRAME_LOOP_LIVE=str(live),
@@ -1680,9 +1763,12 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(turns, "the background read never landed in the record")
         done = json.loads((live / f"{self.session}.json").read_text())
         while done.get("state") != "done" and time.time() < deadline:
-            time.sleep(0.2); done = json.loads((live / f"{self.session}.json").read_text())
+            time.sleep(0.2)
+            done = json.loads((live / f"{self.session}.json").read_text())
         self.assertEqual(done["state"], "done")
-        while any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob("background-*.json")) and time.time() < deadline:
+        while (
+            any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob("background-*.json")) and time.time() < deadline
+        ):
             time.sleep(0.2)  # the background process removes its payload as it exits: no write after this test
 
     def test_a_marker_inside_a_chain_is_not_read_and_says_so(self):
@@ -1700,15 +1786,24 @@ class CoreTests(unittest.TestCase):
         """Seen on the loop's release: `: frame-loop-declare --serves A2,A7; : frame-loop-node
         docs; cd … && wc …` was read as one declaration whose values ran to the end of the
         line, and the commands after the marker went unchecked: a push there went unseen."""
-        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
-                           "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1; git push origin main"}})
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-declare --serves A1; git push origin main"},
+            }
+        )
         told = out["hookSpecificOutput"]["additionalContext"]
         self.assertIn("rises to the human", told)
         self.assertIn("a command of its own", told)
         out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
                            "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1 && ls"}})
         self.assertIn("not read", out["hookSpecificOutput"]["additionalContext"])
-        self.assertFalse([r for r in record._records_all() if r.get("event") == "declare" and r.get("session") == self.session])
+        self.assertFalse(
+            [r for r in record._records_all() if r.get("event") == "declare" and r.get("session") == self.session]
+        )
 
     def test_the_writer_labels_the_whole_change_never_the_readers_cut(self):
         """Seen on the loop's own release: a big turn's diff was cut at the reader's cap
@@ -1717,14 +1812,17 @@ class CoreTests(unittest.TestCase):
         import testhook as loaded
         loaded.WRITTEN.clear()
         os.environ.update(FRAME_LOOP_WRITER="testhook:recording", FRAME_LOOP_DIFF_CHARS="300")
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "hello.py").write_text("print('first file')\n" * 30)
         (REPO / "zz_last.py").write_text(f"print('the last file {id(self)}')\n")
         hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
                      "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1"}})
         hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                      "last_assistant_message": "done", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         self.assertTrue(loaded.WRITTEN)
         self.assertIn(f"the last file {id(self)}", loaded.WRITTEN[0])
         self.assertNotIn("[diff cut", loaded.WRITTEN[0])
@@ -1732,14 +1830,17 @@ class CoreTests(unittest.TestCase):
     def test_a_declaration_by_marker_keeps_ids_out_of_the_reply(self):
         """no ids to the user. The agent declares by a no-op the hook reads, never by a
         "Serves:" line in its reply."""
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "hello.py").write_text(f"print('marked {id(self)}')\n")
         said = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
                             "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1 --done O1"}})
         self.assertNotIn("systemMessage", said or {})
         out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                            "last_assistant_message": "The greeting is updated.", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         turn = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()
                 if json.loads(x).get("event") == "turn"][-1]
         self.assertEqual(turn["declared"], ["A1"])
@@ -1766,7 +1867,10 @@ class CoreTests(unittest.TestCase):
 
     def test_an_area_no_rule_covers_brings_a_reading(self):
         seen = loaded_seen()
-        self.turn({"telemetry.py": f"import urllib.request  # {id(self)}\nurllib.request.urlopen('https://x')\n"}, "Serves: A1")
+        self.turn(
+            {"telemetry.py": f"import urllib.request  # {id(self)}\nurllib.request.urlopen('https://x')\n"},
+            "Serves: A1",
+        )
         self.assertTrue(seen)
 
     def test_steps_are_numbered_per_session(self):
@@ -1790,7 +1894,9 @@ class CoreTests(unittest.TestCase):
 
     @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
     def test_completion_reads_each_claimed_ask_with_its_claimed_diffs(self):
-        self.turn({"hello.py": f"print('greet by name {id(self)}')\n", "README.md": f"usage {id(self)}\n"}, "Serves: A1")
+        self.turn(
+            {"hello.py": f"print('greet by name {id(self)}')\n", "README.md": f"usage {id(self)}\n"}, "Serves: A1"
+        )
         self.turn({"tests/test_hello.py": f"def test_name(): pass  # {id(self)}\n"}, "Serves: A2")
         seen = loaded_seen()
         out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
@@ -1809,13 +1915,31 @@ class TreeHookTests(CoreTests):
     asks and every rule above it; a node file is checked when written; a change outside
     the node's scope is not authorized; completion at a node fills its asks and climbs."""
 
-    GREETER = {"id": "greeter", "parent": "root", "scope": ["hello.py", "tests/*"], "principles": [], "triggers": [],
-               "asks": [{"id": "N1", "text": "hello.py reads its settings from settings.toml", "quotes": "A1", "owner": "leaves",
-                         "inversion": {"hello.py reads its settings from settings.toml": "hello.py reads no settings file"}},
-                        {"id": "N2", "text": "each hello.py change has a test that fails first", "quotes": "A2", "owner": "leaves",
-                         "inversion": {"each hello.py change has a test that fails first": "hello.py changes have no tests"}}],
-               "promises": [{"concern": "settings", "text": "hello.py runs as its settings say"}],
-               "predictions": [{"for": "N1, N2", "text": "carried and firm within 3 runs"}]}
+    GREETER = {
+        "id": "greeter",
+        "parent": "root",
+        "scope": ["hello.py", "tests/*"],
+        "principles": [],
+        "triggers": [],
+        "asks": [
+            {
+                "id": "N1",
+                "text": "hello.py reads its settings from settings.toml",
+                "quotes": "A1",
+                "owner": "leaves",
+                "inversion": {"hello.py reads its settings from settings.toml": "hello.py reads no settings file"},
+            },
+            {
+                "id": "N2",
+                "text": "each hello.py change has a test that fails first",
+                "quotes": "A2",
+                "owner": "leaves",
+                "inversion": {"each hello.py change has a test that fails first": "hello.py changes have no tests"},
+            },
+        ],
+        "promises": [{"concern": "settings", "text": "hello.py runs as its settings say"}],
+        "predictions": [{"for": "N1, N2", "text": "carried and firm within 3 runs"}],
+    }
 
     def setUp(self):
         super().setUp()
@@ -1835,12 +1959,15 @@ class TreeHookTests(CoreTests):
     def test_a_marker_engages_a_node_and_its_asks_are_read(self):
         self.marker(": frame-loop-node greeter")
         seen = loaded_seen()
-        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"})
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
         (REPO / "hello.py").write_text(f"print('settings {id(self)}')\n")
         self.marker(": frame-loop-declare --serves N1")
         hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(REPO),
                      "last_assistant_message": "done", "stop_hook_active": False})
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "turn")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
         asked = [f for f in seen if f["name"].startswith("which-ask")]
         self.assertTrue(asked)
         self.assertIn("settings.toml", json.dumps(asked[0]["body"]))
@@ -1850,8 +1977,15 @@ class TreeHookTests(CoreTests):
     def test_a_node_file_is_checked_when_written(self):
         bad = {**self.GREETER, "id": "wide", "parent": "greeter", "scope": ["src/*"],
                "asks": [{**self.GREETER["asks"][0], "id": "W1", "quotes": "N1"}]}
-        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Write", "session_id": self.session, "cwd": str(REPO),
-                           "tool_input": {"file_path": str(self.tree / "wide.json"), "content": json.dumps(bad)}})
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Write",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"file_path": str(self.tree / "wide.json"), "content": json.dumps(bad)},
+            }
+        )
         self.assertIn("configuration or record is touched", out["systemMessage"])
         self.assertIn("outside", out["systemMessage"])
 
@@ -1863,9 +1997,11 @@ class TreeHookTests(CoreTests):
     def test_a_climb_stops_unless_gadflys_walk_names_one_hole(self):
         """no fit, more than one, or a frontier: the climb stops and rises, in
         the walk's words; nothing is filled by a guess."""
-        for walked, says in (({"fits": [], "frontier": []}, "found 0 holes"),
-                             ({"fits": [{"frame": "node-greeter", "holes": ["done-N1", "done-N2"]}], "frontier": []}, "found 2 holes"),
-                             ({"fits": [], "frontier": [{"sha256": "x"}]}, "text no node holds")):
+        for walked, says in (
+            ({"fits": [], "frontier": []}, "found 0 holes"),
+            ({"fits": [{"frame": "node-greeter", "holes": ["done-N1", "done-N2"]}], "frontier": []}, "found 2 holes"),
+            ({"fits": [], "frontier": [{"sha256": "x"}]}, "text no node holds"),
+        ):
             import testhook as loaded
             loaded.WALKED = walked
             os.environ["FRAME_LOOP_ROUTER"] = "testhook:canned_walk"
@@ -1902,13 +2038,16 @@ class SnapshotTests(unittest.TestCase):
     def test_a_same_second_same_size_edit_is_not_read_as_unchanged(self):
         import time
         with tempfile.TemporaryDirectory() as d:
-            run = lambda *a: subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],
-                                            cwd=d, capture_output=True, text=True).stdout
+            def run(*a, d=d):
+                return subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                                      cwd=d, capture_output=True, text=True).stdout
+
             run("init", "-q")
             while time.time() % 1 > 0.3:
                 time.sleep(0.02)
             Path(d, "f.py").write_text("print('raise it')\n")
-            run("add", "f.py"); run("commit", "-qm", "r")
+            run("add", "f.py")
+            run("commit", "-qm", "r")
             Path(d, "f.py").write_text("print('lower it')\n")
             time.sleep(1.1 - time.time() % 1)
             tree = repo.snapshot(d)  # before git status, which rewrites the index and marks the edit
@@ -1967,28 +2106,89 @@ class RulesTests(unittest.TestCase):
         (REPO / "AGENTS.md").write_text(f"# guide {id(self)}\n- docs change with the code\n")
         (REPO / "examples").mkdir(exist_ok=True)
         (REPO / "examples/kept.json").write_text("{}\n")
-        git("add", "-A"); git("commit", "-q", "--allow-empty", "-m", "rules base")
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "rules base")
         import hashlib
         self.rules = WORK / f"rules-{id(self)}.json"
-        self.rules.write_text(json.dumps({"project": "t", "source": {"file": "AGENTS.md",
-            "sha256": hashlib.sha256((REPO / "AGENTS.md").read_bytes()).hexdigest()}, "rules": [
-            {"id": "R1", "kind": "obligation", "scope": ["hello.py"], "text": "hello.py changes come with README.md",
-             "check": {"changed": ["README.md"]}, "accepted": True},
-            {"id": "R2", "kind": "obligation", "scope": ["examples/*"], "text": "kept files never change",
-             "check": {"untouched": ["examples/*"]}, "accepted": True},
-            {"id": "R3", "kind": "obligation", "scope": ["hello.py"], "text": "not yet accepted",
-             "check": {"changed": ["NOTES.md"]}, "accepted": False},
-            {"id": "R4", "kind": "semantic", "scope": ["hello.py"], "text": "greetings stay polite", "check": None,
-             "quote": ["- docs change with the code"], "accepted": True},
-            {"id": "R6", "kind": "principle", "scope": ["*"], "text": "a label", "check": None,
-             "quote": ["- docs change", "with the code"], "accepted": True},
-            {"id": "R5", "kind": "obligation", "scope": ["nowhere/*.py"], "text": "a stale scope", "check": {"exists": "x"}, "accepted": True},
-            {"id": "R7", "kind": "obligation", "scope": ["hello.py"], "text": "the suite passes on the final tree",
-             "check": {"ran": ["uv run pytest -q"]}, "accepted": True}]}))
+        self.rules.write_text(
+            json.dumps(
+                {
+                    "project": "t",
+                    "source": {
+                        "file": "AGENTS.md",
+                        "sha256": hashlib.sha256((REPO / "AGENTS.md").read_bytes()).hexdigest(),
+                    },
+                    "rules": [
+                        {
+                            "id": "R1",
+                            "kind": "obligation",
+                            "scope": ["hello.py"],
+                            "text": "hello.py changes come with README.md",
+                            "check": {"changed": ["README.md"]},
+                            "accepted": True,
+                        },
+                        {
+                            "id": "R2",
+                            "kind": "obligation",
+                            "scope": ["examples/*"],
+                            "text": "kept files never change",
+                            "check": {"untouched": ["examples/*"]},
+                            "accepted": True,
+                        },
+                        {
+                            "id": "R3",
+                            "kind": "obligation",
+                            "scope": ["hello.py"],
+                            "text": "not yet accepted",
+                            "check": {"changed": ["NOTES.md"]},
+                            "accepted": False,
+                        },
+                        {
+                            "id": "R4",
+                            "kind": "semantic",
+                            "scope": ["hello.py"],
+                            "text": "greetings stay polite",
+                            "check": None,
+                            "quote": ["- docs change with the code"],
+                            "accepted": True,
+                        },
+                        {
+                            "id": "R6",
+                            "kind": "principle",
+                            "scope": ["*"],
+                            "text": "a label",
+                            "check": None,
+                            "quote": ["- docs change", "with the code"],
+                            "accepted": True,
+                        },
+                        {
+                            "id": "R5",
+                            "kind": "obligation",
+                            "scope": ["nowhere/*.py"],
+                            "text": "a stale scope",
+                            "check": {"exists": "x"},
+                            "accepted": True,
+                        },
+                        {
+                            "id": "R7",
+                            "kind": "obligation",
+                            "scope": ["hello.py"],
+                            "text": "the suite passes on the final tree",
+                            "check": {"ran": ["uv run pytest -q"]},
+                            "accepted": True,
+                        },
+                    ],
+                }
+            )
+        )
         self.user_guide = WORK / f"user-guide-{id(self)}.md"
         self.user_guide.write_text("# mine\n")
-        os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_RULES=str(self.rules), FRAME_LOOP_LOG=str(self.log),
-                          FRAME_LOOP_USER_GUIDE=str(self.user_guide))
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:passing",
+            FRAME_LOOP_RULES=str(self.rules),
+            FRAME_LOOP_LOG=str(self.log),
+            FRAME_LOOP_USER_GUIDE=str(self.user_guide),
+        )
         self.addCleanup(lambda: git("checkout", "--", "."))
 
     def tearDown(self):
@@ -1996,8 +2196,15 @@ class RulesTests(unittest.TestCase):
         os.environ.update(self.saved)
 
     def read(self):
-        return hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": "ru",
-                            "cwd": str(REPO), "tool_input": {"command": ": frame-loop-read --serves A1"}})["systemMessage"]
+        return hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": "ru",
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-read --serves A1"},
+            }
+        )["systemMessage"]
 
     def test_a_semantic_rule_in_scope_is_read_with_the_principles(self):
         """oversight: a semantic rule was only listed in the briefing, never
@@ -2122,8 +2329,10 @@ class RulesTests(unittest.TestCase):
 
     def test_a_declared_pipefail_lets_a_pipe_speak_for_its_commands(self):
         """a reviewer types its checks behind `set -o pipefail &&` and pipes to tail."""
-        self.assertEqual(obligations._ran_parts("set -o pipefail && uv run ruff check . && uv run pytest -q 2>&1 | tail -1"),
-                         ["uv run ruff check .", "uv run pytest -q", "tail -1"])
+        self.assertEqual(
+            obligations._ran_parts("set -o pipefail && uv run ruff check . && uv run pytest -q 2>&1 | tail -1"),
+            ["uv run ruff check .", "uv run pytest -q", "tail -1"],
+        )
         self.assertEqual(obligations._ran_parts("set -euo pipefail && npm run docs:build 2>&1 | tail -1"),
                          ["npm run docs:build", "tail -1"])
         for hidden in ("echo set -o pipefail && uv run pytest -q | tail -1",

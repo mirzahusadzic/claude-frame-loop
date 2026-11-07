@@ -11,17 +11,22 @@ import time
 from pathlib import Path
 from typing import Any
 
-import readers
 import gate
+import readers
 import state
 
-
 # What an act the loop watches means to the author, by its trigger: (words, needs the author).
-ACT_WORDS = (("git push", "Claude pushed to GitHub", False), ("gh release", "Claude made a GitHub release", False),
-             ("npm publish", "Claude published a package", False), ("twine upload", "Claude published a package", False),
-             ("rm -", "Claude deleted a folder", True), ("T1:", "spending passed what you approved", True),
-             ("T2:", "Claude changed something people see", False), ("T4:", "Claude touched a personal file", True),
-             ("L1:", "Claude changed the loop's own files", False))
+ACT_WORDS = (
+    ("git push", "Claude pushed to GitHub", False),
+    ("gh release", "Claude made a GitHub release", False),
+    ("npm publish", "Claude published a package", False),
+    ("twine upload", "Claude published a package", False),
+    ("rm -", "Claude deleted a folder", True),
+    ("T1:", "spending passed what you approved", True),
+    ("T2:", "Claude changed something people see", False),
+    ("T4:", "Claude touched a personal file", True),
+    ("L1:", "Claude changed the loop's own files", False),
+)
 
 
 def _landed(record: dict[str, Any]) -> bool:
@@ -37,7 +42,9 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     """An act as the author reads it: what Claude did, whether it needs the author, and
     the exact command or path, for the details."""
     said = " ".join(record.get("triggers") or []) if record.get("event") == "outward" else "L1:"
-    exact = (record.get("command") or "").split("\n", 1)[0] if record.get("event") == "outward" else record.get("path", "")
+    exact = (
+        (record.get("command") or "").split("\n", 1)[0] if record.get("event") == "outward" else record.get("path", "")
+    )
     for key, words, needs in ACT_WORDS:
         if key in said:
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them

@@ -14,7 +14,6 @@ from typing import Any
 import readers
 from declare import _value
 
-
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 

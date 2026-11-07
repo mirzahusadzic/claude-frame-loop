@@ -8,7 +8,7 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 
 - Docs: `README.md` (what it is, install), `docs/quickstart.md`, `docs/verdicts.md`, `docs/rules.md`, `docs/privacy.md`, `docs/crossings.md`, `docs/recoil.md`, `docs/architecture.md`, `docs/setup.md`; figures in `docs/images/`, rebuilt by `scripts/figures.py`.
 - Plugin: `.claude-plugin/plugin.json`; `hooks/hooks.json` (the command hooks); `hooks/band.tsx` (the band and `/frame-loop`); `types/index.d.ts` (the band's state).
-- Dev: Python 3.9+; `python3 -m unittest discover -s tests` (the contract tests need a Gadfly checkout); `claude plugin test .` for the band.
+- Dev: Python 3.9+; `ruff check .` (settings in `ruff.toml`); `python3 -m unittest discover -s tests` (the contract tests need a Gadfly checkout); `claude plugin test .` for the band.
 
 | Task | Source |
 | --- | --- |

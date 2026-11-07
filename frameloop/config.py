@@ -14,7 +14,6 @@ from typing import Any
 import state
 from privacy import real_home
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 

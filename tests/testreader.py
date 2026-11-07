@@ -37,7 +37,10 @@ class LauncherTest(unittest.TestCase):
 
     def test_home_checkout_when_nothing_on_path(self):
         (self.tmp / "pyproject.toml").write_text("[project]\n")
-        with mock.patch.object(reader, "GADFLY", self.tmp), mock.patch.object(reader.shutil, "which", return_value=None):
+        with (
+            mock.patch.object(reader, "GADFLY", self.tmp),
+            mock.patch.object(reader.shutil, "which", return_value=None),
+        ):
             self.assertEqual(reader.launcher()[1], self.tmp)
 
     def test_not_installed_is_never_a_pass(self):

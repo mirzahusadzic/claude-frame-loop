@@ -19,12 +19,11 @@ from typing import Any
 import readers
 import signals as S
 import state
-from record import _log
 from declare import _masked, _value, _without_declaration
-from repo import _git, project_root
 from effort import _effort_rules
 from lines import _reader_name
-
+from record import _log
+from repo import _git, project_root
 
 _EXCUSED: set[str] = set()
 
@@ -262,7 +261,7 @@ def outbound_faults(text: str, kind: str) -> list[str]:
     """What keeps an outgoing reading from leaving: lines read from outside the project
     (unless the public repository already has them), or anything like a secret."""
     if kind == "the turn's change":
-        lines = [l[1:] for l in text.splitlines() if l.startswith("+") and not l.startswith("+++")]
+        lines = [line[1:] for line in text.splitlines() if line.startswith("+") and not line.startswith("+++")]
     else:
         lines = text.splitlines()
     faults = []

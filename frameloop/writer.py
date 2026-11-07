@@ -39,9 +39,11 @@ def facts_line(text: str, manifests: list[str]) -> str:
             current = line.split(" b/", 1)[-1]
             modified.append(current)
         elif current and line.startswith("new file mode"):
-            modified.remove(current); added.append(current)
+            modified.remove(current)
+            added.append(current)
         elif current and line.startswith("deleted file mode"):
-            modified.remove(current); deleted.append(current)
+            modified.remove(current)
+            deleted.append(current)
         elif current and line.startswith("rename from "):
             source = line[len("rename from "):]
             if current in modified:

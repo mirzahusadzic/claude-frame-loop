@@ -109,12 +109,16 @@ def premise_faults(node: dict[str, Any]) -> list[str]:
                 faults.append(f"a prediction is for {x}, not an ask of this node")
         covered.update(named)
         if not any(c in (prediction.get("text") or "") for c in CATEGORIES):
-            faults.append(f"the prediction for {', '.join(named)} names no category it expects ({', '.join(CATEGORIES)})")
+            faults.append(
+                f"the prediction for {', '.join(named)} names no category it expects ({', '.join(CATEGORIES)})"
+            )
     faults += [f"{a} has no prediction" for a in sorted(asks - covered)]
     return faults
 
 
-def frame0_for(node: dict[str, Any], frame0: dict[str, Any], nodes: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
+def frame0_for(
+    node: dict[str, Any], frame0: dict[str, Any], nodes: dict[str, dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """A node read as frame 0: its asks, and every rule above it and its own."""
     nodes = {"root": {**frame0, "id": "root"}, **(nodes or {})}
     nodes.setdefault(node["id"], node)
@@ -130,15 +134,27 @@ def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:
     """A node as a Gadfly frame, for routing only and never asked: each ask a span of the
     node's own text, one hole per ask, of its own kind."""
     asks = node.get("asks") or []
-    return {"name": f"node-{node['id']}", "relation": "the node's asks", "locus": "the node",
-            "role": "the tree's routing", "grain": "one ask", "purpose": "route completions",
-            "trajectory": "the tree as fixed", "crossing": "the node's completion",
-            "promise": "an ask is done only by a carried completion", "baseline": "as fixed",
-            "body": {"spans": [{"id": a["id"], "text": a["text"], "kind": "ask"} for a in asks]},
-            "anchors": [], "holes": [{"id": f"done-{a['id']}", "kind": f"done-{a['id']}", "about": a["text"]} for a in asks],
-            "inputs": [{"id": "x", "text": "the tree"}], "observe": {"labels": ["yes", "no"], "instruction": "never asked"},
-            "interventions": {"repeat": True, "ablation": True}, "allowed": {"ablation": ["no"]},
-            "standing": {"quorum": 3, "agree": 2}, "battery": battery}
+    return {
+        "name": f"node-{node['id']}",
+        "relation": "the node's asks",
+        "locus": "the node",
+        "role": "the tree's routing",
+        "grain": "one ask",
+        "purpose": "route completions",
+        "trajectory": "the tree as fixed",
+        "crossing": "the node's completion",
+        "promise": "an ask is done only by a carried completion",
+        "baseline": "as fixed",
+        "body": {"spans": [{"id": a["id"], "text": a["text"], "kind": "ask"} for a in asks]},
+        "anchors": [],
+        "holes": [{"id": f"done-{a['id']}", "kind": f"done-{a['id']}", "about": a["text"]} for a in asks],
+        "inputs": [{"id": "x", "text": "the tree"}],
+        "observe": {"labels": ["yes", "no"], "instruction": "never asked"},
+        "interventions": {"repeat": True, "ablation": True},
+        "allowed": {"ablation": ["no"]},
+        "standing": {"quorum": 3, "agree": 2},
+        "battery": battery,
+    }
 
 
 def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> dict[str, dict[str, Any]]:
@@ -149,7 +165,9 @@ def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> 
 
     def owner(nid: str, ask: dict[str, Any]) -> str:
         if nid == "root":
-            return "children" if any(a.get("quotes") == ask["id"] for c in children[nid] for a in c["asks"]) else "leaves"
+            return (
+                "children" if any(a.get("quotes") == ask["id"] for c in children[nid] for a in c["asks"]) else "leaves"
+            )
         return ask.get("owner", "leaves")
 
     def visit(nid: str) -> dict[str, Any]:

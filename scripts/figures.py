@@ -4,9 +4,12 @@ level, every shade chosen by contrast against the box it sits in."""
 import colorsys
 from pathlib import Path
 
+
 def lum(h):
     r, g, b = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
-    f = lambda v: v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+    def f(v):
+        return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
+
     return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
 
 def cr(a, b):
@@ -17,8 +20,8 @@ def shade(hue, sat, fill, target, dark):
     """The colour of this hue whose contrast on `fill` is closest above `target`."""
     best = None
     for i in range(1000):
-        l = i / 1000
-        r, g, b = colorsys.hls_to_rgb(hue / 360, l, sat)
+        lightness = i / 1000
+        r, g, b = colorsys.hls_to_rgb(hue / 360, lightness, sat)
         c = "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
         k = cr(c, fill)
         if k >= target and ((dark and lum(c) > lum(fill)) or (not dark and lum(c) < lum(fill))):
@@ -27,8 +30,12 @@ def shade(hue, sat, fill, target, dark):
     return best[0]
 
 THEMES = {
-    "light": dict(dark=False, ink="#1f2328", line="#1f2328", fills=["#ffffff", "#f6f8fa", "#eaeef2", "#dde2e7", "#d0d7de"]),
-    "dark": dict(dark=True, ink="#e6edf3", line="#c9d1d9", fills=["#0d1117", "#161b22", "#1c2128", "#262c33", "#30363d"]),
+    "light": dict(
+        dark=False, ink="#1f2328", line="#1f2328", fills=["#ffffff", "#f6f8fa", "#eaeef2", "#dde2e7", "#d0d7de"]
+    ),
+    "dark": dict(
+        dark=True, ink="#e6edf3", line="#c9d1d9", fills=["#0d1117", "#161b22", "#1c2128", "#262c33", "#30363d"]
+    ),
 }
 HUES = {"a": (212, 0.85), "ar": (36, 0.95), "b": (140, 0.7), "br": (320, 0.75)}
 # level: 1 request, 2 confirmed, 3 requirement, 4 label, 5 reader; fill index each sits on
@@ -61,16 +68,17 @@ def svg(theme):
   <text x="{x+38}" y="600" class="{k}5">with the requirement: fits</text>
   <text x="{x+38}" y="624" class="{k}5">without it: doesn’t ✓</text>
   <text x="{x+38}" y="648" class="{k}r5">breaks no rule ✓</text>'''
-    return f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
+
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
   <title id="t">The frames, filled in with one request</title>
   <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude's turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude's turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour.</desc>
   <style>
-    text {{ font-family: "Latin Modern Roman", "CMU Serif", "Computer Modern", "Times New Roman", Georgia, serif; font-size: 19px; fill: {t['ink']}; }}
+    text {{ font-family: "Latin Modern Roman", "CMU Serif", "Computer Modern", "Times New Roman", Georgia, serif; font-size: 19px; fill: {t["ink"]}; }}
     .b {{ font-weight: 700; }}
     .i {{ font-style: italic; }}
-{css}    .box {{ stroke: {t['line']}; stroke-width: 1.3; }}
-    .arrow {{ stroke: {t['line']}; stroke-width: 1.4; fill: none; }}
-    .head {{ fill: {t['line']}; }}
+{css}    .box {{ stroke: {t["line"]}; stroke-width: 1.3; }}
+    .arrow {{ stroke: {t["line"]}; stroke-width: 1.4; fill: none; }}
+    .head {{ fill: {t["line"]}; }}
   </style>
   {box(128, 73, 677, 723, f[0], 16)}
   <text x="149" y="108"><tspan class="b">You</tspan>: <tspan class="i">“<tspan class="a1">Add rate limiting to the API.</tspan> <tspan class="b1">Over the limit, return HTTP 429.</tspan>”</tspan></text>
@@ -105,7 +113,7 @@ def svg(theme):
   <path d="M572 747 L558 754 L572 760 Z" class="head"/>
   <text x="545" y="760" text-anchor="end">▲ a mismatch becomes a change You declare</text>
 </svg>
-'''
+"""
 
 if __name__ == "__main__":
     import sys

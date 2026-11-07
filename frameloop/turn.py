@@ -19,17 +19,17 @@ from typing import Any
 import gate
 import signals as S
 import state
-from record import _log, _records, _records_all
-from declare import _declared
-from repo import _git, project_root, snapshot
-from effort import _effort_rules, _rule_hits
-from lines import act_words, for_user, _guide_words, _short_lines, signal_words, _signals_short
-from live import _live
-from privacy import _hash
-from framezero import load_frame0, rules_lost
-from obligations import obligations_line, outside_scope
 from config import plugin_defaults
+from declare import _declared
+from effort import _effort_rules, _rule_hits
+from framezero import load_frame0, rules_lost
+from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words
+from live import _live
+from obligations import obligations_line, outside_scope
+from privacy import _hash
 from reading import read_change
+from record import _log, _records, _records_all
+from repo import _git, project_root, snapshot
 
 
 def guides(cwd: str) -> dict[str, str]:
@@ -90,9 +90,13 @@ def _turn_start(event: dict[str, Any]) -> None:
 def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims: list[str]) -> dict[str, Any]:
     """A turn's free, deterministic label: its files and size, the asks it claims, what
     it owes, and its signals. No model is involved."""
-    status = [l.split("\t") for l in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines() if "\t" in l]
+    status = [
+        row.split("\t") for row in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines() if "\t" in row
+    ]
     paths = [x[-1] for x in status]
-    numstat = [l.split("\t") for l in _git(cwd, "diff", "--numstat", before, after).stdout.splitlines() if "\t" in l]
+    numstat = [
+        row.split("\t") for row in _git(cwd, "diff", "--numstat", before, after).stdout.splitlines() if "\t" in row
+    ]
     added = sum(int(x[0]) for x in numstat if x[0].isdigit())
     removed = sum(int(x[1]) for x in numstat if x[1].isdigit())
     diff = _git(cwd, "diff", "--patch", before, after).stdout
@@ -127,7 +131,11 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
 
 
 def _keep_step(step: dict[str, Any]) -> None:
-    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop")) / "steps" / (state.SESSION or "none")
+    folder = (
+        Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
+        / "steps"
+        / (state.SESSION or "none")
+    )
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{step['id']}.diff").write_text(step["diff"], encoding="utf-8")
     _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"},
@@ -140,7 +148,11 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
         return None
     cwd = event.get("cwd") or os.getcwd()
     path = os.environ.get("FRAME_LOOP_LOG")
-    records = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()] if path and Path(path).exists() else []
+    records = (
+        [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()]
+        if path and Path(path).exists()
+        else []
+    )
     records = [r for r in records if r.get("session") == state.SESSION]
     last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
     starts = [r for r in records[last_stop + 1:] if r.get("event") == "turn-start"]
@@ -166,7 +178,9 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
         return _read_in_background(event, cwd, before, after, said)
     read = read_change(cwd, before, after, said, frame0, "turn")
     result = read["result"]
-    tell = f"frame-loop · turn · {step['id']} · signal: {', '.join(_signals_short(step['signals']))}" + "\n" + read["tell"]
+    tell = (
+        f"frame-loop · turn · {step['id']} · signal: {', '.join(_signals_short(step['signals']))}" + "\n" + read["tell"]
+    )
     if result["decision"] != gate.PASS and mode == "enforce" and not event.get("stop_hook_active"):
         return {"decision": "block", "reason": f"frame-loop: {result['reason']}", "systemMessage": tell}
     return {"systemMessage": tell}
@@ -179,12 +193,30 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(cwd) / ".frame-loop" / "work")
     work.mkdir(parents=True, exist_ok=True)
     payload = work / f"background-{int(time.time() * 1000)}.json"
-    payload.write_text(json.dumps({"event": event, "cwd": cwd, "before": before, "after": after, "said": said,
-                                   "session": state.SESSION, "node": state.NODE, "why": state.LIVE.get("why")}), encoding="utf-8")
+    payload.write_text(
+        json.dumps(
+            {
+                "event": event,
+                "cwd": cwd,
+                "before": before,
+                "after": after,
+                "said": said,
+                "session": state.SESSION,
+                "node": state.NODE,
+                "why": state.LIVE.get("why"),
+            }
+        ),
+        encoding="utf-8",
+    )
     flags = ["-I"] if sys.flags.isolated else []
-    subprocess.Popen([sys.executable, *flags, str(Path(__file__).resolve().parent / "hook.py"), "--background", str(payload)],
-                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                     start_new_session=True, env=os.environ.copy())
+    subprocess.Popen(
+        [sys.executable, *flags, str(Path(__file__).resolve().parent / "hook.py"), "--background", str(payload)],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+        env=os.environ.copy(),
+    )
     _log({"event": "turn-queued"})
     state.LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
     state.LIVE["queued"] = True  # the background process writes the band from here on
@@ -208,7 +240,12 @@ def _background(payload_path: str) -> int:
         _live(state="done", decision=state.LIVE.get("decision", "quiet"), started=state.LIVE.get("started"),
               lines=short.split("\n") if short else [], detail=detail.split("\n"))
     except Exception as error:  # the band never stays "running" on a crash
-        _live(state="done", decision="block", lines=[f"frame-loop ■ not read: {type(error).__name__}"], detail=[str(error)])
+        _live(
+            state="done",
+            decision="block",
+            lines=[f"frame-loop ■ not read: {type(error).__name__}"],
+            detail=[str(error)],
+        )
     finally:
         Path(payload_path).unlink(missing_ok=True)
     return 0
