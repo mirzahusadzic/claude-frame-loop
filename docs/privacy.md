@@ -8,7 +8,7 @@ What a reading sends, to whom, and what is refused before it leaves the machine.
 
 | Model | Reads | Runs |
 | --- | --- | --- |
-| Writer (Haiku), when labels are on | the change, once, to label it in plain words | Anthropic's API on the user's Claude Code login: `claude -p`, no tools, no MCP, no session kept |
+| Writer (Haiku), when labels are on | the whole change, once, to label it in plain words; never one that looks like it holds a secret | Anthropic's API on the user's Claude Code login: `claude -p`, no tools, no MCP, no session kept |
 | Reader, the tier in `FRAME_LOOP_TIER` | frame 0, the rules, and the change or its label | the chosen model, through the Unified Model Router and Gadfly |
 
 ---
@@ -32,7 +32,7 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 
 | Check | On | Effect | By |
 | --- | --- | --- | --- |
-| secrets: API, AWS, GitHub and Slack tokens, private keys | every tier | refused | Gadfly's withhold; frame-loop's own check on a training tier |
+| secrets: API, AWS, GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
 | repository not confirmed public | a training tier | refused unless `gh` confirms it public, or labels are on and `FRAME_LOOP_LABELS_OK=1` | frame-loop |
 | lines of 24 characters or more read from outside the project | a training tier | refused unless the public repository holds them | frame-loop, then Gadfly's withhold |

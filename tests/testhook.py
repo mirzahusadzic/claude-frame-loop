@@ -1062,6 +1062,23 @@ class WriterTests(unittest.TestCase):
             self.assertIn(why, out["systemMessage"], spec)
             self.assertEqual(seen, [], spec)
 
+    def test_a_secret_never_reaches_the_writer(self):
+        """The first review: the writer got the raw change, a secret in it included."""
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:recording"
+        WRITTEN.clear()
+        token = "ghp_" + "a1B2c3D4e5" * 4
+        out = hook.answer(plan_event(f"Serves: A2\nSet the token to {token} and add a test.", cwd=self.private))
+        self.assertIn("secret", out["systemMessage"])
+        self.assertEqual(WRITTEN, [])
+
+    def test_a_secret_on_a_removed_or_unchanged_line_is_held_too(self):
+        """The first review: with labels off, only added lines were checked, and a diff
+        sends removed and context lines too."""
+        token = "AKIA" + "ABCDEFGHIJKLMNOP"
+        for line in (f"-KEY = '{token}'", f" KEY = '{token}'"):
+            diff = f"--- a/x.py\n+++ b/x.py\n@@ -1,2 +1,2 @@\n{line}\n+print('hi')\n"
+            self.assertTrue(any("secret" in f for f in privacy.outbound_faults(diff, "the turn's change")), line)
+
     def test_without_a_reader_the_writer_is_never_called(self):
         """The first review: with no reader set, the change still went to the writer."""
         os.environ.pop("FRAME_LOOP_READER")

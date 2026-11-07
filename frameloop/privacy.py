@@ -67,6 +67,11 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
                     "the label quotes an ask" if any(writer.quotes(label, a["text"]) for a in frame0.get("asks", []))
                     else None)
 
+        # The writer reads the whole change on the user's own login: a secret never reaches it.
+        secret = next((name for name, pattern in SECRETS if pattern.search(text)), None)
+        if secret:
+            _log({"event": "label", "kind": kind, "refused": f"a secret ({secret})"})
+            return None, f"it looks like it holds a secret ({secret}), so it was not labelled"
         made = write(given)
         refusal = refused(made)
         if refusal == "the label quotes the change":  # one rewrite, told what it repeated
@@ -260,8 +265,8 @@ def _in_repository(line: str) -> bool:
 def outbound_faults(text: str, kind: str) -> list[str]:
     """What keeps an outgoing reading from leaving: lines read from outside the project
     (unless the public repository already has them), or anything like a secret."""
-    if kind == "the turn's change":
-        lines = [line[1:] for line in text.splitlines() if line.startswith("+") and not line.startswith("+++")]
+    if kind == "the turn's change":  # every line of the diff is sent: added, removed and context
+        lines = [line[1:] for line in text.splitlines() if line[:1] in "+- " and not line.startswith(("+++", "---"))]
     else:
         lines = text.splitlines()
     faults = []
