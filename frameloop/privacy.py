@@ -270,15 +270,17 @@ def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
         hold(response, tool)
 
 
-def _in_repository(line: str) -> bool:
-    """Whether the public repository's HEAD already holds this exact line."""
+def _in_repository_all(lines: list[str]) -> set[str]:
+    """Which of these exact lines the public repository's HEAD already holds, in one
+    `git grep` for them all (the first review counted two git calls a line)."""
+    wanted = {" ".join(x.split()): x for x in lines if x.strip()}
+    if not wanted:
+        return set()
     root = str(project_root(state.CWD))
-    files = _git(root, "grep", "-F", "-l", "-e", line, "HEAD", "--")
-    for name in files.stdout.splitlines():
-        shown = _git(root, "show", name if name.startswith("HEAD:") else f"HEAD:{name}")
-        if any(" ".join(x.split()) == " ".join(line.split()) for x in shown.stdout.splitlines()):
-            return True
-    return False
+    patterns = [arg for x in wanted.values() for arg in ("-e", x)]
+    found = _git(root, "grep", "-F", "-h", "--no-color", *patterns, "HEAD", "--")
+    have = {" ".join(x.split()) for x in found.stdout.splitlines()}
+    return {wanted[k] for k in wanted if k in have}
 
 
 def outbound_faults(text: str, kind: str) -> list[str]:
@@ -290,14 +292,10 @@ def outbound_faults(text: str, kind: str) -> list[str]:
         lines = text.splitlines()
     faults = []
     held = _held(state.SESSION)
-    matched = []
-    for line in lines:
-        norm = _norm(line)
-        if norm and _hash(norm) in held:
-            if not _in_repository(line.strip()):
-                matched.append(held[_hash(norm)])
-    _EXCUSED.update(_hash(_norm(line)) for line in lines
-                    if _norm(line) and _hash(_norm(line)) in held and _in_repository(line.strip()))
+    hits = [line for line in lines if _norm(line) and _hash(_norm(line)) in held]
+    public = _in_repository_all([line.strip() for line in hits])  # one git call for them all
+    matched = [held[_hash(_norm(line))] for line in hits if line.strip() not in public]
+    _EXCUSED.update(_hash(_norm(line)) for line in hits if line.strip() in public)
     if matched:
         faults.append(f"it holds {len(matched)} line(s) this session read from outside the project "
                       f"(from {_short_path(Path(matched[0])) if '/' in matched[0] else matched[0]})")

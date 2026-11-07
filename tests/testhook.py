@@ -1299,6 +1299,17 @@ class ChannelTests(unittest.TestCase):
             self.assertIn("outside", out["systemMessage"], command)
             self.assertEqual(seen, [], command)
 
+    def test_held_lines_are_checked_against_the_repository_in_one_call(self):
+        """The first review: two git calls for each held line in an outgoing reading."""
+        many = [f"an outside line long enough to hold, number {n:03d} {uid(self)}" for n in range(100)]
+        self.outside.write_text("\n".join(many) + "\n")
+        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="many")
+        state.SESSION = "many"
+        with unittest.mock.patch.object(privacy, "_git", wraps=privacy._git) as calls:
+            faults = privacy.outbound_faults("\n".join(many), "the label")
+        self.assertTrue(any("100 line(s)" in f for f in faults), faults)
+        self.assertLessEqual(calls.call_count, 2)
+
     def test_another_session_is_not_held_by_this_ones_reads(self):
         self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text()}, session="c2")
         seen = loaded_seen()
