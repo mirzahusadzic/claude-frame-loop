@@ -222,6 +222,9 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     ]  # this node's leaves
     if not steps:
         return "frame-loop · completion · nothing to read: no step was labelled in this session"
+    faults = frames.frame0_faults(frame0)
+    if faults:  # no requirement can be done against a frame 0 that cannot be read
+        return "frame-loop · completion · not read: frame 0 is not ready: " + "; ".join(faults)
     started = time.time()
     tier, tier_note = tier_for(said)
     parts, used = [], {}
