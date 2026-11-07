@@ -1,6 +1,8 @@
 # Recoil
 
-How finished work climbs the tree of [Crossings](crossings.md): a completion fills a hole in its node, a node with every hole filled fills its parent, up to frame 0. Routing is Gadfly's recoil; filling is a fixed rule, with no model call.
+Advanced: not needed for a first check. What you see: when a node's work is done, the line says so, and its parent's requirement counts as done once all of the node's are; at frame 0, every requirement is done.
+
+How finished work climbs the tree of [Crossings](crossings.md): a completion fills a hole in its node, a node with every hole filled fills its parent, up to frame 0. Gadfly's walk, which it calls recoil, picks the hole a completion fills; filling is a fixed rule, with no model call.
 
 ---
 

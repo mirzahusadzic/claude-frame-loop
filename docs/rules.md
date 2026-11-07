@@ -16,7 +16,7 @@ For AGENTS.md, under "Tests":
 OK to add it?
 ```
 
-The confirmed line is indexed as a rule that quotes it, so the rule is always read by the guide's words. A line in `~/.claude/CLAUDE.md` holds for every project; one in the project's guides, for that project.
+The confirmed line is indexed as a rule that quotes it, so the rule is always read by the guide's words. A guide line is checked only once it is indexed: when a guide gains lines, the briefing tells Claude to offer them to you as rules. A line in `~/.claude/CLAUDE.md` holds for every project; one in the project's guides, for that project.
 
 ---
 

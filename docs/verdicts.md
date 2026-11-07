@@ -10,7 +10,7 @@ The band's first line names what is read and why; the second, the question, the 
 
 What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 
-The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules in frame 0 only the first. For a change Claude declared no requirement for, the one question is "what is it for?". When you ask whether the work is done, Claude runs `: frame-loop-read --complete`, and each requirement is read against the changes that claim it.
+The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules indexed for the project only the first. For a change Claude declared no requirement for, the one question is "what is it for?". When you ask whether the work is done, or Claude presents it as done, Claude runs `: frame-loop-read --complete`, a marker: a shell command that does nothing (`:` is the shell's no-op), which the loop's hooks read; then each requirement is read against the changes that claim it.
 
 ---
 
@@ -25,7 +25,7 @@ The change is put into plain words first (with labels on); then two questions ru
 | · the last check was interrupted | the check stopped before its outcome | ask for a reading again |
 | ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
-| ▲ needs you: this serves none of your requirements | padding | ask why the change is there |
+| ▲ needs you: this serves none of your requirements | padding: a change that serves no purpose at all | ask why the change is there |
 | ▲ needs you: the reader couldn't settle which of your requirements this serves | the answers disagreed; often a turn that mixed several things | read the details |
 | ▲ needs you: the reader doesn't see this resting on the requirement Claude named | it still fits with that requirement cut | ask what it is for |
 | ▲ needs you: the reader sees it serving "a requirement", not the requirement Claude named | another requirement carries it | check which requirement it serves |
@@ -41,16 +41,15 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Acts
 
-Acts the loop always reports, after the outcome on the same line:
+Acts the loop always reports, after the outcome on the same line. In shadow mode, the default, a "no" act is reported with a · and blocks nothing; in enforce mode the ones a command or an edit makes, pushes, releases, publishing, deletes and changes to the loop's own files, ask you before they run.
 
-| Act | Needs you |
+| Act | ▲ in shadow mode |
 | --- | --- |
 | Claude pushed to GitHub · made a GitHub release · published a package | no |
 | Claude changed something people see | no |
 | Claude changed the loop's own files · ran a command on the loop's own files · tried, and it did not go through | no |
 | AGENTS.md: 5 lines added, 2 lines removed; your rules all still hold | no |
 | Claude deleted a folder · deleted untracked files · deleted files | yes |
-| spending passed what you approved | yes |
 | Claude touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 

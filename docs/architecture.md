@@ -6,7 +6,7 @@ frame-loop runs as Claude Code hooks on the user's machine. Each turn's change p
 
 ### To the reader
 
-**Key:** 🟠 Claude Code · 🟢 frame-loop · 🔵 the reader · 🔴 refused, nothing sent.
+**Key:** 🟠 orange, Claude Code · 🟢 green, frame-loop · 🔵 blue, the reader · 🔴 red, refused, nothing sent.
 
 ```mermaid
 ---
@@ -153,7 +153,7 @@ flowchart LR
         GD["<b>Guard</b><br/>acts that are yours"]
         GT["<b>Gate</b><br/>fixed rules"]
     end
-    OUT["<b>Claude Code</b><br/>a hook message under the reply,<br/>the band above the prompt:<br/>✓ fits · ▲ needs you · ■ not read"]
+    OUT["<b>Claude Code</b><br/>a hook message under the reply,<br/>the band above the prompt:<br/>✓ fits · ▲ needs you · ■ not read<br/>· an act reported"]
     CL -->|"push, release, delete,<br/>frame 0 or loop files"| GD
     RD -->|"answers"| GT
     FC -->|"✓"| OUT
