@@ -9,6 +9,7 @@ from __future__ import annotations
 import fnmatch
 import json
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -24,7 +25,7 @@ from declare import _declared
 from effort import _effort_rules, _rule_hits
 from framezero import load_frame0, rules_lost
 from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words
-from live import _live
+from live import _alive, _live
 from obligations import obligations_line, outside_scope
 from privacy import _hash
 from reading import read_change
@@ -195,7 +196,17 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     and Claude hears the outcome at the next prompt."""
     work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(cwd) / ".frame-loop" / "work")
     work.mkdir(parents=True, exist_ok=True)
-    payload = work / f"background-{int(time.time() * 1000)}.json"
+    # One background read a session: a newer one stops the one still running and reads from
+    # where that one began, so no turn goes unread and no two reads run at once.
+    queued = [r for r in _records("turn-queued") if r.get("pid")]
+    if queued and _alive(queued[-1]["pid"]) and queued[-1].get("before"):
+        try:
+            os.killpg(int(queued[-1]["pid"]), signal.SIGTERM)  # its own group: Gadfly's calls stop too
+        except OSError:
+            pass
+        before = queued[-1]["before"]
+        _log({"event": "background-replaced", "pid": queued[-1]["pid"]})
+    payload = work / f"background-{state.SESSION}-{time.time_ns()}.json"
     payload.write_text(
         json.dumps(
             {
@@ -212,7 +223,7 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
         encoding="utf-8",
     )
     flags = ["-I"] if sys.flags.isolated else []
-    subprocess.Popen(
+    child = subprocess.Popen(
         [sys.executable, *flags, str(Path(__file__).resolve().parent / "hook.py"), "--background", str(payload)],
         stdin=subprocess.DEVNULL,
         stdout=subprocess.DEVNULL,
@@ -220,7 +231,7 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
         start_new_session=True,
         env=os.environ.copy(),
     )
-    _log({"event": "turn-queued"})
+    _log({"event": "turn-queued", "pid": child.pid, "before": before})
     state.LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
     state.LIVE["queued"] = True  # the background process writes the band from here on
     return {"systemMessage": "frame-loop · turn · checking in the background"}
@@ -229,6 +240,8 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
 def _background(payload_path: str) -> int:
     """The background read: the turn's read as the Stop hook would make it, its outcome in
     the record and the band."""
+    # Stopped by a newer read: exit through `finally`, so the payload never stays behind.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
     payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
     state.SESSION, state.CWD, state.NODE = payload["session"], payload["cwd"], payload.get("node")
     state.LIVE.clear()

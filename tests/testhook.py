@@ -19,6 +19,7 @@ import frames  # noqa: E402
 import framezero  # noqa: E402
 import hook  # noqa: E402
 import lines  # noqa: E402
+import live as live_module  # noqa: E402
 import obligations  # noqa: E402
 import privacy  # noqa: E402
 import reader  # noqa: E402
@@ -1916,6 +1917,36 @@ class CoreTests(unittest.TestCase):
             any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob("background-*.json")) and time.time() < deadline
         ):
             time.sleep(0.2)  # the background process removes its payload as it exits: no write after this test
+
+    def test_a_newer_background_read_replaces_one_still_running(self):
+        """The first review: each turn started a background read of its own, however many
+        still ran; a newer one now stops the older and reads from where it began."""
+        live = WORK / f"live-bg2-{uid(self)}"
+        tests = str(ROOT / "tests")
+        os.environ.update(FRAME_LOOP_READER="testhook:slow", FRAME_LOOP_BACKGROUND="1", FRAME_LOOP_LIVE=str(live),
+                          PYTHONPATH=os.pathsep.join([tests, str(ROOT / "frameloop")]))
+        self.turn({"hello.py": f"print('one {uid(self)}')\n" * 300}, "done")
+        self.turn({"hello.py": f"print('two {uid(self)}')\n" * 300}, "done")
+        mine = [r for r in record._records_all() if r.get("session") == self.session]
+        queued = [r for r in mine if r.get("event") == "turn-queued"]
+        self.assertEqual(len(queued), 2)
+        self.assertEqual(queued[1]["before"], queued[0]["before"])  # the newer read covers both turns
+        replaced = [r for r in record._records_all() if r.get("event") == "background-replaced"
+                    and r.get("session") == self.session]
+        self.assertEqual([r["pid"] for r in replaced], [queued[0]["pid"]])
+        deadline = time.time() + 20
+        while time.time() < deadline and any(Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob(
+                f"background-{self.session}-*.json")):
+            time.sleep(0.2)  # the newer read ends and removes its payload; nothing is left running
+        for r in queued:  # this test is their parent: reap them, as the system does for the hook's
+            while time.time() < deadline:
+                try:
+                    if os.waitpid(r["pid"], os.WNOHANG)[0]:
+                        break
+                except ChildProcessError:
+                    break
+                time.sleep(0.2)
+            self.assertFalse(live_module._alive(r["pid"]))
 
     def test_a_marker_inside_a_chain_is_not_read_and_says_so(self):
         """Seen on the loop's release: `cd … && : frame-loop-declare --serves …` was never

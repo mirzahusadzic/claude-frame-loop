@@ -44,7 +44,7 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 
 ### Cost and limits
 
-- **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt; in enforce mode the turn's end waits for it.
+- **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt, and a newer turn's read takes over one still running, from where that one began; in enforce mode the turn's end waits for it.
 - **Calls:** a read takes tens of reader calls, which Gadfly makes seven at a time, plus one Haiku call for the label; OpenRouter bills the reader's calls at the tier's price.
 - **Scope:** it tests whether a change rests on your requirements, not whether your requirements are right; work that touches the right files for the wrong reason is caught at completion, not per turn.
 - **Measured, not guaranteed:** the reader's calibration is summarised in [Rules](docs/rules.md#calibration).
