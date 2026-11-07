@@ -166,6 +166,16 @@ class DocsTests(unittest.TestCase):
             self.assertEqual(bool(listed), status == "designed", f"{part}: {status} in Crossings")
         self.assertIn("[Roadmap](docs/roadmap.md)", (ROOT / "README.md").read_text(encoding="utf-8"))
 
+    def test_a_grants_paths_are_said_to_be_the_nodes_scope(self):
+        """The node file's grant row read as if a grant's own paths were checked, while the
+        code holds a change to the node's scope and reads no grant at all."""
+        reads_grant = any("grant" in p.read_text(encoding="utf-8") for p in (ROOT / "frameloop").glob("*.py"))
+        row = re.search(r"^\| `grant` \|.*$", (ROOT / "docs/crossings.md").read_text(encoding="utf-8"), re.M)
+        self.assertIsNotNone(row)
+        if not reads_grant:
+            self.assertIn("paths: the node's `scope`", row.group(0))
+            self.assertIn("commands and spend: designed, not built", row.group(0))
+
     def test_no_markdown_link_inside_html(self):
         """A Markdown link inside an HTML block, such as the figure's caption, shows as raw text."""
         for page in PAGES:

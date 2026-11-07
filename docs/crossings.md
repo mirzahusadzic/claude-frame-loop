@@ -34,7 +34,7 @@ One JSON file per node in `.frame-loop/tree/`, fixed only on the user's confirma
 | `parent` | the node it narrows | the parent exists |
 | `grain` | the level of the talk | |
 | `scope` | path globs the node may change | each glob lies under the parent's |
-| `grant` | paths, commands, spend | paths: every change; commands and spend: not yet |
+| `grant` | paths, commands, spend | paths: the node's `scope`, held on every change, with no list of their own; commands and spend: designed, not built |
 | `asks` | the node's requirements, each quoting one parent requirement, owned by its steps or its children | quotes a parent requirement; one owner; whole inversion; no two alike |
 | `principles`, `triggers` | rules added at this node | none rewords a rule above |
 | `promises` | one promise per concern | at least one; one per concern |
