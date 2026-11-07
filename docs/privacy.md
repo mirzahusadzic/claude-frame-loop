@@ -39,7 +39,7 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 | secrets: API, AWS, GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
 | repository not confirmed public | a training tier | refused unless `gh` confirms it public, or labels are on and `FRAME_LOOP_LABELS_OK=1` | frame-loop |
-| lines of 24 characters or more read from outside the project | a training tier | refused unless the public repository holds them | frame-loop, then Gadfly's withhold |
+| lines of 24 characters or more read from outside the project, also inside a longer line, a file name or a label (any 31 characters of one in a row) | a training tier | refused unless the public repository holds them | frame-loop, then Gadfly's withhold |
 | private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names and labels, as a whole word in any case; refused if one remains | frame-loop, then Gadfly's withhold |
 | a label sharing 24 characters in a row with the change | labels on | rewritten once, told what it repeated; refused if still copied | frame-loop |
 | a label naming an id or quoting a requirement | labels on | refused | frame-loop |

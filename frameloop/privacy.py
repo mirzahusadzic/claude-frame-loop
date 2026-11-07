@@ -223,6 +223,24 @@ def _hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+# Held text is found inside longer text too (a literal, a comment, a file name, a label):
+# a held line also keeps the hashes of its windows of WINDOW characters, one every STRIDE
+# and the last, so any WINDOW + STRIDE - 1 characters of it in a row, or the whole line,
+# are found wherever they are sent.
+WINDOW, STRIDE = 24, 8
+
+
+def _whash(text: str) -> str:
+    return _hash(text)[:16]
+
+
+def _windows(line: str, step: int = 1) -> list[str]:
+    starts = list(range(0, len(line) - WINDOW + 1, step))
+    if starts and starts[-1] != len(line) - WINDOW:
+        starts.append(len(line) - WINDOW)
+    return [line[i : i + WINDOW] for i in starts]
+
+
 def _strings(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -247,11 +265,12 @@ def hold(content: Any, source: str) -> int:
     folder.mkdir(parents=True, exist_ok=True)
     with open(folder / f"{state.SESSION or 'none'}.jsonl", "a", encoding="utf-8") as out:
         for line in lines:
-            out.write(json.dumps({"h": _hash(line), "from": source}) + "\n")
+            windows = [_whash(w) for w in _windows(line, STRIDE)]
+            out.write(json.dumps({"h": _hash(line), "w": windows, "from": source}) + "\n")
     return len(lines)
 
 
-def _held(session: str | None) -> dict[str, str]:
+def _held_records(session: str | None) -> list[dict[str, Any]]:
     folder = _held_dir()
     files = (
         [folder / f"{session}.jsonl"]
@@ -260,13 +279,33 @@ def _held(session: str | None) -> dict[str, str]:
         if folder.is_dir()
         else []
     )
+    return [r for path in files if path.exists() for r in rows(path) if "h" in r and "from" in r]
+
+
+def _held(session: str | None) -> dict[str, str]:
+    """Whole held lines by hash, as Gadfly's withhold file takes them."""
     found: dict[str, str] = {}
-    for path in files:
-        if path.exists():
-            for record in rows(path):
-                if "h" in record and "from" in record:
-                    found.setdefault(record["h"], record["from"])
+    for record in _held_records(session):
+        found.setdefault(record["h"], record["from"])
     return found
+
+
+def _held_windows(session: str | None) -> dict[str, str]:
+    """The held lines' window hashes, each with where its line came from."""
+    found: dict[str, str] = {}
+    for record in _held_records(session):
+        for window in record.get("w") or []:
+            found.setdefault(window, record["from"])
+    return found
+
+
+def _held_in(line: str, held: dict[str, str], windows: dict[str, str]) -> str | None:
+    """Where a held line, or a run of one inside this line, came from; None if neither."""
+    text = " ".join(line.split())
+    whole = _norm(line)
+    if whole and _hash(whole) in held:
+        return held[_hash(whole)]
+    return next((windows[h] for h in map(_whash, _windows(text)) if h in windows), None)
 
 
 def _outside_path(token: str) -> bool:
@@ -361,16 +400,20 @@ def _in_repository_all(lines: list[str]) -> set[str]:
 def outbound_faults(text: str, kind: str) -> list[str]:
     """What keeps an outgoing reading from leaving: lines read from outside the project
     (unless the public repository already has them), or anything like a secret."""
-    if kind == "the turn's change":  # every line of the diff is sent: added, removed and context
-        lines = [line[1:] for line in text.splitlines() if line[:1] in "+- " and not line.startswith(("+++", "---"))]
+    if kind == "the turn's change":  # every line of the diff is sent: added, removed, context and headers
+        lines = [
+            line[1:] if line[:1] in "+- " and not line.startswith(("+++", "---")) else line
+            for line in text.splitlines()
+        ]
     else:
         lines = text.splitlines()
     faults = []
-    held = _held(state.SESSION)
-    hits = [line for line in lines if _norm(line) and _hash(_norm(line)) in held]
+    held, windows = _held(state.SESSION), _held_windows(state.SESSION)
+    found = {line: _held_in(line, held, windows) for line in lines if len(line.strip()) >= WINDOW}
+    hits = [line for line, source in found.items() if source]
     public = _in_repository_all([line.strip() for line in hits])  # one git call for them all
-    matched = [held[_hash(_norm(line))] for line in hits if line.strip() not in public]
-    _EXCUSED.update(_hash(_norm(line)) for line in hits if line.strip() in public)
+    matched = [found[line] for line in hits if line.strip() not in public]
+    _EXCUSED.update(_hash(_norm(line)) for line in hits if line.strip() in public and _norm(line))
     if matched:
         faults.append(
             f"it holds {len(matched)} line(s) this session read from outside the project "

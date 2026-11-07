@@ -1616,6 +1616,46 @@ class ChannelTests(unittest.TestCase):
         self.assertIn("not read", out["systemMessage"])
         self.assertEqual(seen, [])
 
+    def test_held_text_inside_a_longer_line_or_a_file_name_never_leaves(self):
+        """Sparky's second review: the seal compared whole lines, so a held line kept inside
+        a string, a comment or a file name left in the diff."""
+        phrase = f"outside-source-phrase-741852963-keep-private-{uid(self)[-6:]}"
+        self.outside.write_text(phrase + "\n", encoding="utf-8")
+        for n, (path, text) in enumerate(
+            [
+                ("hello.py", f"NOTE = '{phrase}'  # kept from a private file\n"),
+                (f"{phrase}.txt", "an ordinary line of our own\n"),
+            ]
+        ):
+            with self.subTest(path):
+                session = f"inside-{n}-{uid(self)}"
+                self.post("Read", {"file_path": str(self.outside)}, {"content": phrase + "\n"}, session=session)
+                hook.answer(
+                    {"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"}
+                )
+                (REPO / path).write_text(text, encoding="utf-8")
+                self.addCleanup(
+                    lambda p=REPO / path: (
+                        git("checkout", "--", p.name) if p.name == "hello.py" else p.unlink(missing_ok=True)
+                    )
+                )
+                seen = loaded_seen()
+                out = hook.answer(
+                    {
+                        "hook_event_name": "Stop",
+                        "session_id": session,
+                        "cwd": str(REPO),
+                        "last_assistant_message": "Serves: A1",
+                        "stop_hook_active": False,
+                    }
+                )
+                self.assertIn("outside the project", out["systemMessage"])
+                self.assertEqual(seen, [])
+                if path == "hello.py":
+                    git("checkout", "--", "hello.py")
+                else:
+                    (REPO / path).unlink(missing_ok=True)
+
     def test_short_or_common_lines_are_never_held(self):
         self.post("Read", {"file_path": str(self.outside)}, {"content": "short\nreturn x\n}\n"})
         seen = loaded_seen()
