@@ -18,7 +18,7 @@ A semantic workflow linter for Claude Code: it checks the work you and Claude do
   </picture>
 </p>
 
-<p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. More in Crossings and Recoil, linked below.</em></p>
+<p align="center"><em>One request through nested frames: each frame declares what the one inside it may do, and an inner frame informs an outer one only through a gate. Given the turn's label, the reader is asked whether it fits with the requirement and again without it: a real fit holds only with it. Each colour follows one part of the request, its rule beside it in the complementary colour. When the rules act, from a rule's birth to its change, is in [Rules](docs/rules.md#when-the-rules-act); more in Crossings and Recoil, linked below.</em></p>
 
 - **Frame 0:** your requirements in your words, fixed with your OK; every change is checked against them.
 - **Free checks, every turn:** files, size, and what your rules require of the change. Rules are the lines of `CLAUDE.md` and `AGENTS.md` you confirmed as rules.
@@ -55,7 +55,7 @@ A semantic workflow linter for Claude Code: it checks the work you and Claude do
 - **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt, and a newer turn's read takes over one still running, from where that one began; in enforce mode the turn's end waits for it.
 - **Calls and price:** a read takes tens of reader calls, which Gadfly makes seven at a time for each of the two questions it asks at once, so up to fourteen. Over the 23 reads recorded while frame-loop 0.1.0 checked its own release, on the `contributor` tier, a read took 6 to 54 calls (median 24), 2,600 to 30,000 input tokens and 4,500 to 183,000 output tokens (median 42,000), most of them the reader's reasoning. OpenRouter bills those tokens at the model's current rate, so your price depends on its rates; no dollar figures were recorded, and none for the `private` tier. The label is one Haiku call through `claude -p`, counted on your Claude login like any other.
 - **Scope:** it tests whether a change rests on your requirements, not whether your requirements are right; work that touches the right files for the wrong reason is caught at completion, not per turn.
-- **Measured, not guaranteed:** the reader's calibration is summarised in [Rules](docs/rules.md#calibration).
+- **Measured, not guaranteed:** the reader's calibration is summarised in Rules, under Calibration.
 
 ---
 

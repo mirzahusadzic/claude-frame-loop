@@ -125,6 +125,23 @@ class DocsTests(unittest.TestCase):
         self.assertIn(f"status-alpha%20{version}", readme)
         self.assertNotIn('"version"', (ROOT / ".claude-plugin/marketplace.json").read_text(encoding="utf-8"))
 
+    def test_the_rules_page_says_when_the_rules_act(self):
+        """Mirza: frame-loop's own docs carry the table of when the rules act, linked from the figure."""
+        rules = (ROOT / "docs/rules.md").read_text(encoding="utf-8")
+        self.assertIn("### When the rules act", rules)
+        for moment in (
+            "you state a way of working",
+            "a session starts",
+            "at a crossing",
+            "while Claude works",
+            "each tool call",
+            "each turn's end",
+            "on a signal",
+            "a guide changes",
+        ):
+            self.assertIn(f"| {moment} |", rules, moment)
+        self.assertIn("docs/rules.md#when-the-rules-act", (ROOT / "README.md").read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()

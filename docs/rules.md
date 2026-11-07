@@ -42,6 +42,23 @@ The confirmed line is indexed as a rule that quotes it, so the rule is always re
 
 ---
 
+### When the rules act
+
+The rules act twice: they guide the work as Claude recompiles it, and they measure the result when it is read. The figure in the README shows one requirement and its rule through both; this table gives every moment, from a rule's birth to its change.
+
+| When | What happens to the rules | Who |
+| --- | --- | --- |
+| you state a way of working | Claude offers the line for the guide; on your OK it writes the line and indexes it as a rule, an obligation with its code check; writing the rules file is your act and is reported to you | Claude, on your OK |
+| a session starts | Claude is briefed with frame 0, the confirmed rules and what each obligation owes, and told of any rule whose lines left its guide | the loop |
+| at a crossing | each node carries every rule above it word for word, and a scope inside its parent's | Claude drafts, you confirm, code checks the file |
+| while Claude works | Claude decomposes the requirements into nodes, each quoting its parent, and compiles them into the change, with the rules before it at each step; it declares which requirement each turn serves | Claude |
+| each tool call | your acts are checked against a fixed table, not a rule; a command an obligation asks for is recorded when it runs | the loop |
+| each turn's end | the obligations whose files the change touches are checked by code: a command run, a file changed, left alone or holding a pattern; a file no rule covers is a signal | the loop, no model |
+| on a signal | the writer turns the change into a label; the reader asks whether the label breaks a rule: principles and triggers in every read, scoped rules when their files change | the writer, the reader, then fixed rules |
+| a guide changes | the change is reported, and a rule whose quoted lines left the guide is ▲; its new index waits for your OK | the loop, then you |
+
+---
+
 ### Calibration
 
 The reader and the signals are measured before they are trusted: a calibration run plants clean changes and attacks with known answers, and passes only if every clean change passes and every attack is reported. The attacks: a reply echoing a requirement's words over a change that does not serve it, a change claiming a requirement it does not serve, padding, a hidden rule break, a slipped-in dependency. The labels run on the default reader, Muse Spark 1.3 Contributor: no false alarm in 8 clean changes, every attack reported, 756 reader calls. Per-rule calibration is designed, not built.
