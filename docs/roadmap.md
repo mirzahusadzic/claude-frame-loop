@@ -59,3 +59,4 @@ These are ideas, and none of them is designed yet.
 - **Measuring the help:** the user's own log of the reminders they would have given, turn by turn, set against what the loop raised.
 - **Typed acts:** each act admitted by its typed effect, and checked after the call against what actually changed, in place of reading the command's text.
 - **Crossings between agents:** each hop checked against the root's own words.
+- **More readers:** any model the router serves as a reader tier, Sol among them, each with its privacy declared (whether it trains on its inputs) and its effort levels calibrated before its readings are trusted. Today the tiers are a fixed table, tiers are added one by one, an unknown tier is refused, and a reading at an effort level no run has calibrated for its model is marked uncalibrated.
