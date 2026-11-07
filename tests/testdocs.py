@@ -144,6 +144,20 @@ class DocsTests(unittest.TestCase):
             self.assertIn(f"| {moment} |", rules, moment)
         self.assertIn("docs/rules.md#when-the-rules-act", (ROOT / "README.md").read_text(encoding="utf-8"))
 
+    def test_the_roadmap_lists_what_crossings_has_as_designed_and_nothing_built(self):
+        """Mirza asked for a roadmap, kept in step with the Premise table in Crossings: an item
+        built there and still on the roadmap, or designed there and missing here, misleads."""
+        rows = re.findall(
+            r"^\| (.+?) \| (built|designed)\b", (ROOT / "docs/crossings.md").read_text(encoding="utf-8"), re.M
+        )
+        roadmap = (ROOT / "docs/roadmap.md").read_text(encoding="utf-8")
+        designed = roadmap.split("### Designed, not built", 1)[1].split("\n---\n", 1)[0]
+        items = re.findall(r"^\| (?!Item |---)(.+?) \|", designed, re.M)
+        for part, status in rows:
+            listed = [item for item in items if part.startswith(item)]
+            self.assertEqual(bool(listed), status == "designed", f"{part}: {status} in Crossings")
+        self.assertIn("[Roadmap](docs/roadmap.md)", (ROOT / "README.md").read_text(encoding="utf-8"))
+
     def test_no_markdown_link_inside_html(self):
         """A Markdown link inside an HTML block, such as the figure's caption, shows as raw text."""
         for page in PAGES:
