@@ -84,6 +84,41 @@ class FactsTests(unittest.TestCase):
         for command in never:
             self.assertIsNone(facts.outward(command), command)
 
+    def test_an_act_after_settings_or_inside_nested_substitutions_counts(self):
+        """`A=1 git push` or a push two substitutions deep would run unseen by the guard."""
+        runs = {
+            "GIT_TRACE=1 git push": "git push",
+            'echo "$(echo $(git push))"': "git push",
+            "twine upload dist/*": "twine upload",
+            "git push 'origin": "git push",  # an unclosed quote: read word by word
+        }
+        for command, act in runs.items():
+            self.assertEqual(facts.outward(command), act, command)
+
+    def test_a_shell_or_find_that_runs_no_act_is_none(self):
+        """A script run by bash, or find running a reader, would be told to the author as a push or a delete."""
+        never = [
+            "bash deploy.sh",
+            "bash -c",
+            "find . -name '*.py' -exec cat {} ;",
+            "sudo",
+            "A=1",
+            'echo "$(git push"',  # an unclosed substitution: the shell refuses to run it
+            'echo "`git push"',
+        ]
+        for command in never:
+            self.assertIsNone(facts.outward(command), command)
+
+    def test_every_action_of_a_find_is_read_not_only_the_first(self):
+        """Found here: a harmless first `-exec` hid a second `-exec rm -rf`, and the delete never rose."""
+        runs = [
+            "find . -exec ls {} \\; -exec rm -rf {} +",
+            "find . -ok echo {} \\; -exec git push \\;",
+            "find . -execdir cat {} \\; -execdir rm -r {} +",
+        ]
+        for command in runs:
+            self.assertIsNotNone(facts.outward(command), command)
+
 
 if __name__ == "__main__":
     unittest.main()

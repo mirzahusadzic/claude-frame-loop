@@ -159,9 +159,9 @@ def _act(words: list[str], depth: int) -> str | None:
     if name == "find":
         if "-delete" in args:
             return "find -delete"
-        for flag in ("-exec", "-execdir", "-ok", "-okdir"):
-            if flag in args:
-                inner = args[args.index(flag) + 1 :]
+        for at, flag in enumerate(args):  # every action, not only the first of its kind
+            if flag in ("-exec", "-execdir", "-ok", "-okdir"):
+                inner = args[at + 1 :]
                 inner = inner[: next((k for k, w in enumerate(inner) if w in (";", "+")), len(inner))]
                 found = _act(inner, depth)
                 if found:
