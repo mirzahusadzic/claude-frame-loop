@@ -1,4 +1,4 @@
-"""The CLI contract: the real `gadfly firm` (0.13.0 or later) with fake readers, read
+"""The CLI contract: the real `gadfly firm` (0.13.1 or later) with fake readers, read
 by the gate. No network and no cost. Run folders go under tests/.work/ (ignored),
 each one fresh, and nothing is deleted."""
 
@@ -103,7 +103,7 @@ def firm(frame, battery, only=None):
 
 
 class FloorTests(unittest.TestCase):
-    """The first review: the docs gave Gadfly 0.12 as the floor, and the code needs 0.13."""
+    """The first review: the docs gave Gadfly 0.12 as the floor, and the code needed 0.13."""
 
     def test_the_docs_name_the_floor_the_code_needs(self):
         import reader
@@ -112,14 +112,32 @@ class FloorTests(unittest.TestCase):
         for doc in ("docs/setup.md", "README.md"):
             self.assertIn(f"{floor} or later", (ROOT / doc).read_text(encoding="utf-8"), doc)
 
+    def test_every_install_and_the_ci_checkout_name_the_floor(self):
+        """0.13.1 made Gadfly's output UTF-8 on Windows; an install line or a CI checkout left
+        at 0.13 would test and install the release whose output the hooks misread there."""
+        import re
+
+        import reader
+
+        floor = ".".join(map(str, reader.GADFLY_FLOOR))
+        for doc in ("docs/setup.md", "README.md", ".github/workflows/ci.yml"):
+            text = (ROOT / doc).read_text(encoding="utf-8")
+            pins = re.findall(r"midwife>=([\d.]+)", text)
+            self.assertTrue(pins, doc)
+            self.assertEqual(set(pins), {floor}, doc)
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertRegex(ci, rf"ref: [0-9a-f]{{40}}  # v{re.escape(floor)}, for the contract tests")
+
     @unittest.skipUnless((GADFLY / "pyproject.toml").exists(), "no Gadfly checkout")
     def test_the_checkout_is_at_the_floor_or_later(self):
         import re
 
         import reader
 
-        found = re.search(r'^version = "(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(encoding="utf-8"), re.M)
-        self.assertGreaterEqual((int(found.group(1)), int(found.group(2))), reader.GADFLY_FLOOR)
+        found = re.search(
+            r'^version = "(\d+)\.(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(encoding="utf-8"), re.M
+        )
+        self.assertGreaterEqual(tuple(map(int, found.groups())), reader.GADFLY_FLOOR)
 
 
 @unittest.skipUnless((GADFLY / "pyproject.toml").exists(), "no Gadfly checkout")

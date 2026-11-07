@@ -1,4 +1,4 @@
-"""The live reader: runs a frame through the gadfly CLI (0.13.0 or later) and returns
+"""The live reader: runs a frame through the gadfly CLI (0.13.1 or later) and returns
 Gadfly's JSON. Each call gets its own fresh folder under FRAME_LOOP_WORK; nothing is
 deleted. Gadfly reserves the calls itself (--calls auto, 9aa8a4a); only the per-call
 output cap binds."""
@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
-GADFLY_FLOOR = (0, 13)  # `--calls auto`, `--withhold`, `firm --parallel` and `standing.most` came in 0.13
+GADFLY_FLOOR = (0, 13, 1)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
+# 0.13.1: UTF-8 output on Windows, which the hooks read as UTF-8
 MISSING = "Gadfly is not installed: pip install midwife (Python 3.13 or later)"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 

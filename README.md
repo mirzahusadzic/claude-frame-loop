@@ -48,10 +48,10 @@ Needs: Claude Code (tested 2.1.319), git, Python 3.13 via uv; for the router, No
 npm install -g @openai/codex@0.166.0
 git clone https://github.com/mirzahusadzic/unified-model-router.git
 cd unified-model-router && node install.mjs && node install.mjs --verify && cd ..
-uv tool install 'midwife>=0.13'
+uv tool install 'midwife>=0.13.1'
 ```
 
-Gadfly: `midwife` 0.13 or later; the hooks run on its Python. The plugin, at a Claude Code prompt:
+Gadfly: `midwife` 0.13.1 or later; the hooks run on its Python. The plugin, at a Claude Code prompt:
 
 ```text
 /plugin marketplace add mirzahusadzic/claude-frame-loop
