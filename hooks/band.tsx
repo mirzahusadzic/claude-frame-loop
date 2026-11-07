@@ -104,7 +104,7 @@ export const register: Register = on => {
       // the band never holds up a prompt
     }
     return next(e)
-  })
+  }).catch(($, e, next) => next(e)) // a throw or an overrun, too: the prompt goes on
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const now = await read($, live)

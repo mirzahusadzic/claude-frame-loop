@@ -2454,6 +2454,14 @@ class ReadOnlyTests(unittest.TestCase):
         flags = [h.get("onFailure") for entries in settings["hooks"].values() for e in entries for h in e["hooks"]]
         self.assertNotIn("block", flags)
 
+    def test_no_band_hook_can_hold_up_a_prompt(self):
+        """`claude plugin validate`: a gating hook without `.catch` fails closed, so a throw
+        in the band's prompt hook could stop the author's prompt."""
+        band = (ROOT / "hooks/band.tsx").read_text()
+        hook_body = band[band.index("on('prompt.submit'"):]
+        end = hook_body.index("\n  })")
+        self.assertTrue(hook_body[end:].startswith("\n  }).catch("), hook_body[end:end + 40])
+
     def test_a_reading_claude_asks_for_has_the_time_a_plan_has(self):
         """The first review: `: frame-loop-read` runs a reading inside the Bash hook, which
         Claude Code stopped at 30 seconds, well before a reading ends."""
