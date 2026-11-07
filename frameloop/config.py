@@ -230,8 +230,66 @@ def shell_touches_config(command: str) -> bool:
             if ("/" in word or "\\" in word or word.startswith("~")) and "://" not in word:
                 if touches_config(word) or any(touches_config(match) for match in _globbed(word)):
                     return True
+    if any(touches_config(path) for path in _patched(text)):  # a patch that rewrites them
+        return True
     spelled = {spelling for q in _protected() for spelling in (str(q), q.as_posix())}  # C:\\x and C:/x alike
     return any(re.search(re.escape(s) + r"(?![\w.-])", code) for s in spelled)
+
+
+def _patched(command: str) -> list[str]:
+    """The files a patch a command applies names (`git apply fix.diff`, `patch -p1 < fix.diff`):
+    its `diff --git`, `---` and `+++` lines, with git's a/ and b/ prefixes taken off."""
+    named: list[str] = []
+    for part in F._split(command):
+        words = F.command_words(F._words(part))
+        if not words:
+            continue
+        name, args = F.program(words[0]), words[1:]
+        sub = F._flags(args, F.GIT_VALUED)[:1] if name == "git" else []
+        if not (name == "patch" or sub in (["apply"], ["am"])):
+            continue
+        tokens = _tokens(part)
+        given = [_unquoted(tokens[k + 1]) for k, t in enumerate(tokens[:-1]) if t == "<"]
+        given += [a for a in args if not a.startswith("-") and a not in ("apply", "am")]
+        for file in given:
+            try:
+                path = Path(file) if Path(file).is_absolute() else Path(state.CWD or os.getcwd()) / file
+                if not path.is_file() or path.stat().st_size > 4_000_000:
+                    continue
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except (OSError, ValueError):
+                continue
+            for line in text.splitlines():
+                if line.startswith(("--- ", "+++ ")):
+                    target = line[4:].split("\t")[0].strip()
+                    named.append(re.sub(r"^[ab]/", "", target))
+                elif line.startswith("diff --git "):
+                    named += [re.sub(r"^[ab]/", "", x) for x in line.split()[2:4]]
+    return [x for x in dict.fromkeys(named) if x and x != "/dev/null"]
+
+
+def loop_files(event: dict[str, Any]) -> dict[str, str]:
+    """The loop's own files that are the author's, each by its content's hash ("" when
+    absent): frame 0, the rules, the tree's nodes, the switch, the private names and the
+    project's Claude Code settings. Not the record or the work folder: the loop writes them."""
+    import hashlib
+
+    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or os.getcwd())
+    paths = [Path(os.environ[n]) for n in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES") if os.environ.get(n)]
+    tree = os.environ.get("FRAME_LOOP_TREE")
+    if tree and Path(tree).is_dir():
+        paths += sorted(Path(tree).glob("*.json"))[:500]
+    paths += [switch_path(event), project / ".claude" / "settings.json", project / ".claude" / "settings.local.json"]
+    paths.append(
+        Path(os.environ.get("FRAME_LOOP_PRIVATE_NAMES") or Path(real_home()) / ".config/frame-loop/private-names.txt")
+    )
+    found = {}
+    for path in paths:
+        try:
+            found[str(path)] = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else ""
+        except OSError:
+            found[str(path)] = "?"
+    return found
 
 
 def _globbed(word: str) -> list[str]:

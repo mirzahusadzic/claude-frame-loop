@@ -159,6 +159,30 @@ class ReviewProtectedTests(unittest.TestCase):
             with mock.patch.object(config.glob, "glob", older_glob):  # a hook run outside the launcher
                 self.assertTrue(config.shell_touches_config("printf x > .frame-l*/frame0.json"))
 
+    def test_a_patch_that_rewrites_the_loops_files_is_the_loops(self):
+        """Sparky's second review: `git apply` or `patch` rewrote frame 0 without naming it."""
+        project = Path(tempfile.mkdtemp(prefix="frame-loop-r06-"))
+        (project / ".frame-loop").mkdir()
+        frame0 = project / ".frame-loop" / "frame0.json"
+        frame0.write_text("{}", encoding="utf-8")
+        (project / "loop.diff").write_text(
+            "diff --git a/.frame-loop/frame0.json b/.frame-loop/frame0.json\n"
+            '--- a/.frame-loop/frame0.json\n+++ b/.frame-loop/frame0.json\n@@ -1 +1 @@\n-{}\n+{"asks": []}\n',
+            encoding="utf-8",
+        )
+        readme = "--- a/README.md\n+++ b/README.md\n@@ -1 +1 @@\n-a\n+b\n"
+        (project / "readme.diff").write_text(readme, encoding="utf-8")
+        saved = state.CWD
+        self.addCleanup(setattr, state, "CWD", saved)
+        state.CWD = str(project)
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(project), "FRAME_LOOP_FRAME0": str(frame0)}):
+            for command in ("git apply loop.diff", "patch -p1 < loop.diff", "git am --3way loop.diff"):
+                with self.subTest(command):
+                    self.assertTrue(config.shell_touches_config(command))
+            for command in ("git apply readme.diff", "patch -p1 < readme.diff"):
+                with self.subTest(command):
+                    self.assertFalse(config.shell_touches_config(command))
+
     def test_the_private_names_and_the_live_files_are_the_loops(self):
         folder = Path(tempfile.mkdtemp(prefix="frame-loop-l6-"))
         names, live = folder / "names.txt", folder / "live"

@@ -62,13 +62,13 @@ import facts as F  # noqa: E402
 import gate  # noqa: E402
 import readers  # noqa: E402
 import state  # noqa: E402
-from config import loop_off, plugin_defaults, shell_touches_config, touches_config  # noqa: E402
+from config import loop_files, loop_off, plugin_defaults, shell_touches_config, touches_config  # noqa: E402
 from declare import _declare_lines, _declared, _marks  # noqa: E402
 from framezero import _engaged, _tree_nodes, load_frame0, node_file_faults, project_rules  # noqa: E402
 from lines import _short_lines, _tell, for_user  # noqa: E402
 from live import _live, _live_interrupted  # noqa: E402
 from obligations import owed, ran  # noqa: E402
-from privacy import _training_on, _trains, _writer, capture, hold, not_public  # noqa: E402
+from privacy import _short_path, _training_on, _trains, _writer, capture, hold, not_public  # noqa: E402
 from reading import _proposal, _read, complete  # noqa: E402
 from record import _log  # noqa: E402
 from repo import _git, project_root  # noqa: E402
@@ -275,17 +275,27 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         return (
             {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
         )
+    changed: list[str] = []
     if name in ("PostToolUse", "PostToolUseFailure") and tool == "Bash":
         ran(event, frame0, ok=name == "PostToolUse")
         if name == "PostToolUse" and F.outward(tool_input.get("command", "")):  # the act ran, as asked
             _log({"event": "act-ran", "command": tool_input.get("command", "")})
+        changed = _loop_files_changed(event)
     if name in ("PostToolUse", "PostToolUseFailure"):
         if _training_on():  # a command that failed may still have printed what it read
             brought = event.get("tool_response")
             if name == "PostToolUseFailure":
                 brought = {"tool_response": brought, "error": event.get("error")}
             capture(tool or "", tool_input, brought)
-        return None
+        if not changed:
+            return None
+        for path in changed:
+            _log({"event": "config", "tool": "Bash", "path": path, "after": True})
+        said = (
+            "frame-loop: L1: the command changed the loop's own files "
+            f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."
+        )
+        return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
     if name == "Stop":
         turn = _read_turn(event, frame0, mode)
         if turn and turn.get("decision") == "block":
@@ -312,6 +322,8 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
     if tool == "Bash":
         command = tool_input.get("command", "")
+        if not command.strip().startswith(": frame-loop-"):
+            _keep_loop_files(event)  # compared after the call: whatever its spelling, a change shows
         parts = [x for x in re.split(r"\s*(?:&&|;|\n)\s*", command.strip()) if x] if "<<" not in command else [command]
         if len(parts) > 1 and all(x.startswith(": frame-loop-") and _marker_only(x) for x in parts):
             # Only markers, chained: each is read, declarations before a reading.
@@ -413,6 +425,38 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         # Plan mode stays Claude Code's own: a plan's reading only informs, in every mode.
         return {**_rise("shadow", f"frame-loop: {result['reason']}", "deny"), "systemMessage": tell}
     return None
+
+
+def _loop_files_at(event: dict[str, Any]) -> Path:
+    work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(state.CWD or os.getcwd()) / ".frame-loop" / "work")
+    call = re.sub(r"[^\w-]", "_", str(event.get("tool_use_id") or "call"))[:80]
+    session = re.sub(r"[^\w-]", "_", state.SESSION or "none")
+    return work / "loop-files" / f"{session}-{call}.json"
+
+
+def _keep_loop_files(event: dict[str, Any]) -> None:
+    """Before a shell call: the hashes of the loop's own files, to compare after it (the
+    text of a command cannot show every way it writes them: `git checkout -- .`)."""
+    try:
+        path = _loop_files_at(event)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(loop_files(event)), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def _loop_files_changed(event: dict[str, Any]) -> list[str]:
+    """After a shell call: the loop's own files it changed, created or removed."""
+    path = _loop_files_at(event)
+    try:
+        before = json.loads(path.read_text(encoding="utf-8"))
+        path.unlink()
+    except (OSError, ValueError):
+        return []
+    if not isinstance(before, dict):
+        return []
+    after = loop_files(event)
+    return [p for p in sorted(set(before) | set(after)) if before.get(p, "") != after.get(p, "")]
 
 
 def briefing(frame0: dict[str, Any], mode: str) -> str:

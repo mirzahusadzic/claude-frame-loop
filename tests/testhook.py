@@ -2726,6 +2726,34 @@ class CoreTests(unittest.TestCase):
         switch.write_text("on\n", encoding="utf-8")
         self.assertNotEqual(self.turn({"hello.py": f"print('on {uid(self)}')\n" * 300}, "done"), "")
 
+    def test_a_shell_call_that_changes_the_loops_files_rises_after_it(self):
+        """Sparky's second review: `git checkout -- .`, `git stash pop` or a script rewrote
+        frame 0 with no word of it in the command. The loop's own files are hashed before
+        each shell call and compared after it."""
+        frame0 = WORK / f"frame0-after-{uid(self)}.json"
+        frame0.write_text(Path(FIXTURE).read_text(encoding="utf-8"), encoding="utf-8")
+        os.environ.update(FRAME_LOOP_FRAME0=str(frame0), CLAUDE_PROJECT_DIR=str(REPO))
+
+        def call(event, command, use):
+            return hook.answer(
+                {
+                    "hook_event_name": event,
+                    "tool_name": "Bash",
+                    "session_id": self.session,
+                    "cwd": str(REPO),
+                    "tool_use_id": use,
+                    "tool_input": {"command": command},
+                    "tool_response": {"stdout": "", "stderr": ""},
+                }
+            )
+
+        call("PreToolUse", "git checkout -- .", "t1")
+        frame0.write_text('{"asks": []}', encoding="utf-8")  # what the command did
+        out = call("PostToolUse", "git checkout -- .", "t1")
+        self.assertIn("changed the loop's own files", out["systemMessage"])
+        call("PreToolUse", "ls", "t2")
+        self.assertIsNone(call("PostToolUse", "ls", "t2"))
+
     def test_claude_writing_the_switch_rises(self):
         os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
         out = hook.answer(
