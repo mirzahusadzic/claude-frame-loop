@@ -30,8 +30,8 @@ jobs:
           python-version: ${{ matrix.python }}
       - name: Git identity for the tests' own repositories
         run: git config --global user.email ci@example.invalid && git config --global user.name ci
-      - name: Lint
-        run: uvx ruff@0.17.4 check .
+      - name: Lint and format
+        run: uvx ruff@0.17.4 check . && uvx ruff@0.17.4 format --check .
       - name: Test, without Gadfly
         run: uv run --no-project --python ${{ matrix.python }} python -m unittest discover -s tests
 
