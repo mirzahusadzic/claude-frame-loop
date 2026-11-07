@@ -435,6 +435,25 @@ class AttackTests(unittest.TestCase):
         out = hook.safe_answer(bash_event("git status"))
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
 
+    def test_an_event_that_is_no_object_is_unreadable_never_a_crash(self):
+        """The first review: `[]` on stdin crashed the error path with a traceback."""
+        import subprocess
+        for mode in ("enforce", "shadow"):
+            child = {**os.environ, **env(FRAME_LOOP_MODE=mode)}
+            done = subprocess.run([sys.executable, str(ROOT / "frameloop/hook.py")], input="[]",
+                                  capture_output=True, text=True, env=child)
+            self.assertEqual((done.returncode, done.stderr), (0, ""))
+            self.assertIn("unreadable event", json.loads(done.stdout)["systemMessage"])
+
+    def test_an_error_answer_names_its_own_event(self):
+        """The first review: an error at a prompt or after a tool claimed to be PreToolUse."""
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(broken_frame0())))
+        with unittest.mock.patch.object(hook, "answer", side_effect=RuntimeError("boom")):
+            for name in ("UserPromptSubmit", "PostToolUse"):
+                out = hook.safe_answer({"hook_event_name": name, "tool_name": "Bash", "prompt": "go"})
+                self.assertEqual(out["hookSpecificOutput"]["hookEventName"], name)
+                self.assertNotIn("permissionDecision", out["hookSpecificOutput"])
+
 
 class SessionStartTests(unittest.TestCase):
     """A new session is told the loop plainly: what reads its plans, and how to declare."""
@@ -1456,6 +1475,23 @@ class CoreTests(unittest.TestCase):
         git("add", "-A")
         git("commit", "-q", "--allow-empty", "-m", "turn")
         return out["systemMessage"] if out else ""
+
+    def test_a_project_that_is_not_a_git_repository_says_so_once(self):
+        """The first review: outside git no change was read, and the line saying so was
+        dropped, so the author saw nothing at all."""
+        os.environ.update(FRAME_LOOP_READER="testhook:passing")
+        os.environ.pop("FRAME_LOOP_LINES", None)  # as the plugin runs: the short lines under the reply
+        plain = Path(tempfile.mkdtemp(prefix="frame-loop-plain-"))
+        said = []
+        for _ in range(2):
+            hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(plain),
+                         "prompt": "go"})
+            (plain / "notes.md").write_text(f"{uid(self)} {len(said)}\n")
+            out = hook.answer({"hook_event_name": "Stop", "session_id": self.session, "cwd": str(plain),
+                               "last_assistant_message": "done", "stop_hook_active": False})
+            said.append((out or {}).get("systemMessage", ""))
+        self.assertIn("changes are not read here: this project is not a git repository", said[0])
+        self.assertNotIn("changes are not read here", said[1])
 
     def test_the_switch_is_never_part_of_the_change(self):
         """The first review: writing the switch in a turn made it the change, and a paid

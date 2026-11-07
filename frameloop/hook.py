@@ -486,6 +486,9 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
 def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """answer(), failing closed: an error in enforce mode denies a plan and asks the
     human about any other act; in shadow mode it is only noted."""
+    if not isinstance(event, dict):  # valid JSON, but no event: as unreadable as broken JSON
+        return _rise(os.environ.get("FRAME_LOOP_MODE", "shadow"), "frame-loop error: an unreadable event "
+                     f"(a {type(event).__name__}, not an object)", "ask")
     try:
         return answer(event)
     except Exception as error:  # noqa: BLE001  (any failure must close, not open)
@@ -494,11 +497,15 @@ def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
             _log({"event": "error", "tool": event.get("tool_name"), "error": reason})
         except OSError:
             pass
-        if event.get("hook_event_name") == "Stop":
+        name = event.get("hook_event_name")
+        if name == "Stop":
             return {"systemMessage": reason}
-        if event.get("hook_event_name") == "SessionStart":
+        if name == "SessionStart":
             return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
                     f"frame-loop is installed here but not running ({reason}). Tell the human."}}
+        if name in ("UserPromptSubmit", "PostToolUse", "PostToolUseFailure"):  # no decision to make here
+            return {"systemMessage": reason, "hookSpecificOutput": {"hookEventName": name,
+                                                                    "additionalContext": reason}}
         if event.get("tool_name") == "ExitPlanMode":
             return _rise("shadow", reason, "deny")  # plan mode stays as it is
         return _rise(os.environ.get("FRAME_LOOP_MODE", "shadow"), reason, "ask")
