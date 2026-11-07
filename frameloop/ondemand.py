@@ -70,7 +70,9 @@ def parser() -> argparse.ArgumentParser:
 def reading(root: Path, serves: str, effort: str | None, base: str, done: str | None = None) -> tuple[int, str]:
     """One on-demand reading with the settings already in the environment."""
     frame0 = load_frame0()
-    before = _git(str(root), "rev-parse", f"{base}^{{tree}}").stdout.strip()
+    # A failed rev-parse still prints its argument: only a zero exit names a tree.
+    base_tree = _git(str(root), "rev-parse", "--verify", "--quiet", f"{base}^{{tree}}")
+    before = base_tree.stdout.strip() if base_tree.returncode == 0 else ""
     after = snapshot(str(root))
     if not before or not after:
         return 2, "frame-loop · read · not read: no snapshot"
