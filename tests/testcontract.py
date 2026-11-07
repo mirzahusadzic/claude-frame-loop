@@ -1,4 +1,4 @@
-"""The CLI contract: the real `gadfly firm` (0.12.0 or later) with fake readers, read
+"""The CLI contract: the real `gadfly firm` (0.13.0 or later) with fake readers, read
 by the gate. No network and no cost. Run folders go under tests/.work/ (ignored),
 each one fresh, and nothing is deleted."""
 
@@ -66,6 +66,24 @@ def firm(frame, battery, only=None):
     env = {**os.environ, "PYTHONPATH": str(ROOT / "tests")}
     done = subprocess.run(cmd, capture_output=True, text=True, env=env, cwd=GADFLY)
     return done.returncode, json.loads(done.stdout or done.stderr)
+
+
+class FloorTests(unittest.TestCase):
+    """The first review: the docs gave Gadfly 0.12 as the floor, and the code needs 0.13."""
+
+    def test_the_docs_name_the_floor_the_code_needs(self):
+        import reader
+        floor = ".".join(map(str, reader.GADFLY_FLOOR))
+        for doc in ("docs/setup.md", "README.md"):
+            self.assertIn(f"{floor} or later", (ROOT / doc).read_text(), doc)
+
+    @unittest.skipUnless((GADFLY / "pyproject.toml").exists(), "no Gadfly checkout")
+    def test_the_checkout_is_at_the_floor_or_later(self):
+        import re
+
+        import reader
+        found = re.search(r'^version = "(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(), re.M)
+        self.assertGreaterEqual((int(found.group(1)), int(found.group(2))), reader.GADFLY_FLOOR)
 
 
 @unittest.skipUnless((GADFLY / "pyproject.toml").exists(), "no Gadfly checkout")
