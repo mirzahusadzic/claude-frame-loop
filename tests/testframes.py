@@ -11,8 +11,7 @@ FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text())
 
 
 def step(serves="A5"):
-    return {"id": "t", "summary": "a step", "claim": {"serves": serves},
-            "facts": {"files touched": "review notes"}}
+    return {"id": "t", "summary": "a step", "claim": {"serves": serves}, "facts": {"files touched": "review notes"}}
 
 
 class WhichAskTests(unittest.TestCase):
@@ -70,8 +69,12 @@ class WhichAskTests(unittest.TestCase):
         self.assertIn("A2", frames.frame0_faults(none)[0])
 
     def test_a_half_inversion_in_every_ask_is_a_fault_each(self):
-        half = {**FRAME0, "asks": [{**a, "inversion": {a["text"].split()[-1]: "not " + a["text"].split()[-1]}}
-                                   for a in FRAME0["asks"]]}
+        half = {
+            **FRAME0,
+            "asks": [
+                {**a, "inversion": {a["text"].split()[-1]: "not " + a["text"].split()[-1]}} for a in FRAME0["asks"]
+            ],
+        }
         self.assertEqual(len(frames.frame0_faults(half)), 6)
         self.assertEqual(frames.frame0_faults(FRAME0), [])
 
@@ -125,7 +128,6 @@ class ViolationTests(unittest.TestCase):
             frames.violation_confirm(FRAME0, step(), "A1", "anthropic")
 
 
-
 STEPS = [
     {
         "id": "S1",
@@ -166,8 +168,9 @@ class UndeclaredTests(unittest.TestCase):
         self.assertEqual(frame["observe"]["labels"], asks + ["none", "unclear", "other"])
         self.assertEqual(len(frame["anchors"]), 1)
         self.assertEqual(frame["observe"]["instruction"], frames.FULFIL_INSTRUCTION)
-        self.assertEqual(frames.which_ask(FRAME0, step(), "anthropic")["observe"]["instruction"],
-                         frames.FULFIL_INSTRUCTION)
+        self.assertEqual(
+            frames.which_ask(FRAME0, step(), "anthropic")["observe"]["instruction"], frames.FULFIL_INSTRUCTION
+        )
 
 
 class MostTests(unittest.TestCase):
@@ -220,6 +223,7 @@ class CompletionTests(unittest.TestCase):
     def test_an_ask_nothing_claims_is_not_read(self):
         with self.assertRaises(frames.FrameError):
             frames.completion(ASK0, "A2", [dict(s, claims=[]) for s in STEPS], "public", with_diffs=True)
+
 
 if __name__ == "__main__":
     unittest.main()

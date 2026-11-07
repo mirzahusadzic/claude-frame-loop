@@ -27,7 +27,7 @@ def _failed(result: dict[str, Any]) -> bool:
 
 def _failure(result: dict[str, Any]) -> str:
     error = result.get("error") or {}
-    return (result.get("stopped") or error.get("message") or f"exit {result.get('exit')}")
+    return result.get("stopped") or error.get("message") or f"exit {result.get('exit')}"
 
 
 def which_ask(result: dict[str, Any], declared: list[str]) -> tuple[str, str]:

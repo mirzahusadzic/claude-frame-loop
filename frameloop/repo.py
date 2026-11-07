@@ -46,8 +46,11 @@ def snapshot(cwd: str) -> str | None:
         mine.unlink()
     skip = []
     project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd) / ".frame-loop"
-    own = [os.environ[name] for name in ("FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_FRAME0",
-                                         "FRAME_LOOP_RULES", "FRAME_LOOP_TREE") if os.environ.get(name)]
+    own = [
+        os.environ[name]
+        for name in ("FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE")
+        if os.environ.get(name)
+    ]
     own.append(str(project / "switch"))  # the author's switch
     if os.environ.get("FRAME_LOOP_PLUGIN") == "1":
         own.append(str(project))  # the plugin keeps all of its files there
@@ -59,8 +62,12 @@ def snapshot(cwd: str) -> str | None:
         return None
     # Set back to their committed state in the loop's own index after, never named to
     # `git add`, which refuses a path it ignores; the files themselves are untouched.
-    if skip and _git(str(root), "reset", "-q", "--", *skip, index=str(mine)).returncode != 0 and _git(
-            str(root), "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *skip, index=str(mine)).returncode != 0:
+    if (
+        skip
+        and _git(str(root), "reset", "-q", "--", *skip, index=str(mine)).returncode != 0
+        and _git(str(root), "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *skip, index=str(mine)).returncode
+        != 0
+    ):
         return None  # (no commit yet: nothing to set back to, so they are left out)
     tree = _git(str(root), "write-tree", index=str(mine))
     return tree.stdout.strip() or None
@@ -69,4 +76,3 @@ def snapshot(cwd: str) -> str | None:
 def _files(root: Path) -> list[str]:
     listed = _git(str(root), "ls-files", "-co", "--exclude-standard")
     return [x for x in listed.stdout.splitlines() if x.strip()]
-

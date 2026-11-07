@@ -17,9 +17,11 @@ def fake_python(path: Path, recent: bool, says: str) -> None:
     """An interpreter that answers the version check as a 3.13 or a 3.9 would, and as a
     hook prints which one it is."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("#!/bin/sh\n"
-                    f'case "$*" in *-c*) exit {0 if recent else 1} ;; esac\n'
-                    f"cat <<'EOF'\n{json.dumps({'systemMessage': says})}\nEOF\n")
+    path.write_text(
+        "#!/bin/sh\n"
+        f'case "$*" in *-c*) exit {0 if recent else 1} ;; esac\n'
+        f"cat <<'EOF'\n{json.dumps({'systemMessage': says})}\nEOF\n"
+    )
     path.chmod(0o755)
 
 
@@ -33,8 +35,9 @@ class LauncherTests(unittest.TestCase):
 
     def run_hook(self, event: dict, path: list) -> str:
         env = {"PATH": os.pathsep.join([*map(str, path), str(self.tools)]), "HOME": str(self.tmp / "home")}
-        done = subprocess.run(["/bin/sh", str(RUN)], input=json.dumps(event), capture_output=True, text=True,
-                              env=env, timeout=30)
+        done = subprocess.run(
+            ["/bin/sh", str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env, timeout=30
+        )
         self.assertEqual((done.returncode, done.stderr), (0, ""))
         return done.stdout
 

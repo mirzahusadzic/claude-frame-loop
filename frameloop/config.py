@@ -19,10 +19,46 @@ from privacy import real_home
 ROOT = Path(__file__).resolve().parents[1]
 
 
-READ_ONLY = {"cat", "head", "tail", "less", "more", "grep", "rg", "ls", "wc", "stat", "file",
-             "diff", "jq", "shasum", "sha256sum", "md5", "md5sum", "cksum", "xxd", "od", "hexdump",
-             "cd", "pwd", "echo", "printf", "true", "test", "[", "basename", "dirname", "realpath",
-             "sort", "uniq", "cut", "tr", "nl", "column", "sed"}
+READ_ONLY = {
+    "cat",
+    "head",
+    "tail",
+    "less",
+    "more",
+    "grep",
+    "rg",
+    "ls",
+    "wc",
+    "stat",
+    "file",
+    "diff",
+    "jq",
+    "shasum",
+    "sha256sum",
+    "md5",
+    "md5sum",
+    "cksum",
+    "xxd",
+    "od",
+    "hexdump",
+    "cd",
+    "pwd",
+    "echo",
+    "printf",
+    "true",
+    "test",
+    "[",
+    "basename",
+    "dirname",
+    "realpath",
+    "sort",
+    "uniq",
+    "cut",
+    "tr",
+    "nl",
+    "column",
+    "sed",
+}
 
 
 # sed reads unless it edits in place or its script writes (w/W): those calls are writes.
@@ -31,8 +67,25 @@ SED_WRITES = re.compile(r"(^|\s)(-i\S*|--in-place\S*|-[a-zA-Z]*i)(\s|$)|(^|['\";
 
 CONFIG = re.compile(r"\.claude/(settings[^\s'\"]*|hooks\b)|FRAME_LOOP_")
 # git's subcommands that only read; any other may write.
-GIT_READS = {"log", "show", "diff", "status", "blame", "grep", "ls-files", "ls-tree", "rev-parse", "cat-file",
-             "rev-list", "describe", "shortlog", "reflog", "whatchanged", "check-ignore", "merge-base"}
+GIT_READS = {
+    "log",
+    "show",
+    "diff",
+    "status",
+    "blame",
+    "grep",
+    "ls-files",
+    "ls-tree",
+    "rev-parse",
+    "cat-file",
+    "rev-list",
+    "describe",
+    "shortlog",
+    "reflog",
+    "whatchanged",
+    "check-ignore",
+    "merge-base",
+}
 FIND_WRITES = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
 # Programs that keep a heredoc as data, never run it.
 DATA_SINKS = {"cat", "tee", "head", "tail", "wc", "grep", "sed", "sort"}
@@ -123,8 +176,9 @@ def shell_touches_config(command: str) -> bool:
     if _read_only(command):
         return False
     text, bodies = F.heredocs(command)
-    code = "\n".join([text] + [body for reader, body in bodies
-                               if Path((F._words(reader) or [""])[0]).name not in DATA_SINKS])
+    code = "\n".join(
+        [text] + [body for reader, body in bodies if Path((F._words(reader) or [""])[0]).name not in DATA_SINKS]
+    )
     if CONFIG.search(code) or re.search(r"(?<![\w-])\.frame-loop(/|\b)", code):
         return True
     home = os.path.expanduser("~")
@@ -173,4 +227,3 @@ def loop_off(event: dict[str, Any]) -> bool:
         return switch_path(event).read_text(encoding="utf-8").strip().lower() == "off"
     except OSError:
         return False
-

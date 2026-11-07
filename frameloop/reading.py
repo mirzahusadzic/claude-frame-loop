@@ -42,14 +42,14 @@ def _proposal(body: str, serves: str, effort: str | None) -> str:
     started = time.time()
     said = f"Serves: {serves}" + (f"\nEffort: {effort}" if effort else "")
     declared = _declared(said, frame0)
-    result, tier, tier_note = _read(frame0, body, declared, "a proposal", f"proposal-{int(started)}",
-                                    said=said)
+    result, tier, tier_note = _read(frame0, body, declared, "a proposal", f"proposal-{int(started)}", said=said)
     _log({"event": "proposal", "declared": declared, "tier": tier, "tier_note": tier_note, **result})
     return _tell("proposal", result, tier, started, frame0)
 
 
-def read_step(frame0: dict[str, Any], step: dict[str, Any], declared: list[str],
-              tier: str, effort: str | None = None) -> dict[str, Any]:
+def read_step(
+    frame0: dict[str, Any], step: dict[str, Any], declared: list[str], tier: str, effort: str | None = None
+) -> dict[str, Any]:
     """Run the step's frames through the reader and apply the gate's rules. Without a
     reader, nothing is read: the result says so, and never passes by default."""
     run = _reader()
@@ -71,13 +71,27 @@ def read_step(frame0: dict[str, Any], step: dict[str, Any], declared: list[str],
         read = run(at(frames.undeclared(frame0, step, tier)), only=("baseline", "repeat"))
         _ran(read)
         decision, reason = gate.undeclared(read)
-        question = ("declare" if "declare it?" in reason else "missing-ask" if "lacks" in reason else
-                    "padding" if "no purpose" in reason else "not-settled" if "not settled" in reason else "not-read")
-        return {"decision": decision, "reason": f"it declares no ask · {reason}",
-                "question": question, "usage": _spent(read)}
+        question = (
+            "declare"
+            if "declare it?" in reason
+            else "missing-ask"
+            if "lacks" in reason
+            else "padding"
+            if "no purpose" in reason
+            else "not-settled"
+            if "not settled" in reason
+            else "not-read"
+        )
+        return {
+            "decision": decision,
+            "reason": f"it declares no ask · {reason}",
+            "question": question,
+            "usage": _spent(read),
+        }
     # Both questions at once (Asked for: "are we running this in parallel?"): the rules
     # question costs its calls even when the fit fails, and the turn waits half as long.
     from concurrent.futures import ThreadPoolExecutor
+
     if not (frame0.get("principles") or frame0.get("triggers")):  # requirements only: no rule to break
         _live_step("does it do what you asked?", 1, 1, "fit")
         asked = run(at(frames.which_ask(frame0, step, tier)))
@@ -85,8 +99,12 @@ def read_step(frame0: dict[str, Any], step: dict[str, Any], declared: list[str],
         decision, reason = gate.which_ask(asked, declared)
         if decision != gate.PASS:
             return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked)}
-        return {"decision": decision, "reason": "violation: frame 0 states no rules", "fit": reason,
-                "usage": _spent(asked)}
+        return {
+            "decision": decision,
+            "reason": "violation: frame 0 states no rules",
+            "fit": reason,
+            "usage": _spent(asked),
+        }
     _live_step("does it do what you asked, and does it break any of your rules?", 1, 1, "fit-and-rules")
     with ThreadPoolExecutor(2) as pool:
         fit_job = pool.submit(run, at(frames.which_ask(frame0, step, tier)))
@@ -98,8 +116,7 @@ def read_step(frame0: dict[str, Any], step: dict[str, Any], declared: list[str],
         return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke)}
     fit = reason
     decision, reason = gate.violation_stage_one(broke)
-    return {"decision": decision, "reason": f"violation: {reason}", "fit": fit,
-            "usage": _spent(asked, broke)}
+    return {"decision": decision, "reason": f"violation: {reason}", "fit": fit, "usage": _spent(asked, broke)}
 
 
 def _spent(*results: dict[str, Any]) -> dict[str, int]:
@@ -119,9 +136,15 @@ def _spent(*results: dict[str, Any]) -> dict[str, int]:
     return total
 
 
-def _read(frame0: dict[str, Any], text: str, declared: list[str], kind: str,
-          step_id: str, said: str | None = None,
-          facts: dict[str, Any] | None = None) -> tuple[dict[str, Any], str | None, str]:
+def _read(
+    frame0: dict[str, Any],
+    text: str,
+    declared: list[str],
+    kind: str,
+    step_id: str,
+    said: str | None = None,
+    facts: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], str | None, str]:
     """Read a plan or a turn's change: frame 0 must be ready, an ask declared and the
     tier allowed, or it rises unread. `said` is where the agent's lines are (the reply,
     for a turn); by default the text itself (a plan)."""
@@ -129,32 +152,46 @@ def _read(frame0: dict[str, Any], text: str, declared: list[str], kind: str,
     faults = frames.frame0_faults(frame0)
     # The declaration never reaches the reader: its lines are cut, and every id of
     # frame 0 left in the text is masked.
-    step = {"id": step_id, "summary": _masked(_without_declaration(text), frame0),
-            "facts": {"kind": kind}}
+    step = {"id": step_id, "summary": _masked(_without_declaration(text), frame0), "facts": {"kind": kind}}
     if faults:
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if tier is None:
         return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
         return {"decision": gate.RISE, "reason": "no reader configured: not read"}, tier, tier_note
-    state.LIVE["what"] = "checking " + {"the turn's change": "the change", "a plan": "Claude's plan",
-                                   "a proposal": "Claude's proposal"}.get(kind, kind) + " against your requirements"
+    state.LIVE["what"] = (
+        "checking "
+        + {"the turn's change": "the change", "a plan": "Claude's plan", "a proposal": "Claude's proposal"}.get(
+            kind, kind
+        )
+        + " against your requirements"
+    )
     if _writer() is not None:
         _live_step("putting the change into plain words", key="label")
     sent, refusal = outgoing(text, kind, tier, frame0)
     if refusal:
-        return ({"decision": gate.RISE, "where": _short_path(project_root(state.CWD)),
-                 "reason": "not read: " + refusal}, tier, tier_note)
+        return (
+            {"decision": gate.RISE, "where": _short_path(project_root(state.CWD)), "reason": "not read: " + refusal},
+            tier,
+            tier_note,
+        )
     step["summary"] = _masked(_without_declaration(sent), frame0)
     effort, notes, error = effort_for(said if said is not None else text, facts, tier)
     if error:
         return {"decision": gate.RISE, "reason": error}, tier, tier_note
-    return ({**read_step(frame0, step, declared, tier, effort), "effort": effort,
-             "effort_notes": notes, "effort_rules": _effort_rules()["version"]}, tier, tier_note)
+    return (
+        {
+            **read_step(frame0, step, declared, tier, effort),
+            "effort": effort,
+            "effort_notes": notes,
+            "effort_rules": _effort_rules()["version"],
+        },
+        tier,
+        tier_note,
+    )
 
 
-def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, Any],
-                kind: str) -> dict[str, Any]:
+def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, Any], kind: str) -> dict[str, Any]:
     """Read the change between two trees against frame 0: the diff for the reader, the
     agent's lines (`said`) for the declaration and effort only. Logged as `kind`."""
     started = time.time()
@@ -164,37 +201,62 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
         for line in _git(cwd, "diff", "--name-status", "--no-renames", before, after).stdout.splitlines()
         if "\t" in line
     ]
-    facts = {"deleted": [x[-1] for x in status if x[0].startswith("D")],
-             "paths": [x[-1] for x in status], "chars": len(diff)}
+    facts = {
+        "deleted": [x[-1] for x in status if x[0].startswith("D")],
+        "paths": [x[-1] for x in status],
+        "chars": len(diff),
+    }
     frame0 = with_semantic(frame0, facts["paths"])
     cap = int(os.environ.get("FRAME_LOOP_DIFF_CHARS", "12000"))
     if len(diff) > cap and _writer() is None:  # the reader's cap; a writer reads it whole, to its own limit
         diff = diff[:cap] + f"\n[diff cut at {cap} characters]"
-    result, tier, tier_note = _read(frame0, diff, _declared(said, frame0), "the turn's change",
-                                    f"{kind}-{int(started)}", said=said, facts=facts)
+    result, tier, tier_note = _read(
+        frame0, diff, _declared(said, frame0), "the turn's change", f"{kind}-{int(started)}", said=said, facts=facts
+    )
     line, faults = obligations_line(frame0, project_root(cwd), facts["paths"], _claimed(said), status)
     scope = outside_scope(frame0, facts["paths"])
     faults += scope
     if faults and result["decision"] == gate.PASS:
         result = {**result, "decision": gate.RISE, "reason": "obligations: " + "; ".join(faults)}
     if scope:  # leads the author's line whatever the read found, a refusal included
-        result = {**result, "decision": gate.RISE if result["decision"] == gate.PASS else result["decision"],
-                  "scope": [f.split(" is outside")[0].replace("not authorized: ", "") for f in scope]}
-    _log({"event": kind, "declared": _declared(said, frame0), "tier": tier, "tier_note": tier_note,
-          "from": before, "to": after, "obligations": faults, **result})
+        result = {
+            **result,
+            "decision": gate.RISE if result["decision"] == gate.PASS else result["decision"],
+            "scope": [f.split(" is outside")[0].replace("not authorized: ", "") for f in scope],
+        }
+    _log(
+        {
+            "event": kind,
+            "declared": _declared(said, frame0),
+            "tier": tier,
+            "tier_note": tier_note,
+            "from": before,
+            "to": after,
+            "obligations": faults,
+            **result,
+        }
+    )
     tell = _tell(kind, result, tier, started, frame0)
     return {"result": result, "tier": tier, "tell": tell + ("\n" + line if line else "")}
 
 
-def completion_frame(frame0: dict[str, Any], ask: dict[str, Any], steps: list[dict[str, Any]], tier: str,
-                     in_tree: bool) -> dict[str, Any]:
+def completion_frame(
+    frame0: dict[str, Any], ask: dict[str, Any], steps: list[dict[str, Any]], tier: str, in_tree: bool
+) -> dict[str, Any]:
     """One ask's completion frame. In a tree it quotes the node's ask by a span with its
     source and offers its hole's kind, so Gadfly's walk routes it to exactly that hole
     (recoil 1; the routing is guarded against walk in the tests)."""
     frame = frames.completion(frame0, ask["id"], steps, tier, with_diffs=True)
     if in_tree:
-        frame["body"]["spans"].insert(0, {"id": "the-ask", "text": ask["text"], "kind": "ask",
-                                          "source": {"sha256": hashlib.sha256(ask["text"].encode()).hexdigest()}})
+        frame["body"]["spans"].insert(
+            0,
+            {
+                "id": "the-ask",
+                "text": ask["text"],
+                "kind": "ask",
+                "source": {"sha256": hashlib.sha256(ask["text"].encode()).hexdigest()},
+            },
+        )
         frame["offers"] = f"done-{ask['id']}"
     return frame
 
@@ -242,12 +304,18 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             # With a writer every step goes as its label (the free label names paths);
             # without one, the claimed steps' diffs go, each checked.
             write = _writer() is not None
-            sent = {s["id"]: outgoing(s["diff"], "the turn's change", tier, frame0)
-                    for s in (steps if write else claimed)}
+            sent = {
+                s["id"]: outgoing(s["diff"], "the turn's change", tier, frame0) for s in (steps if write else claimed)
+            }
             refusal = next((why for _, why in sent.values() if why), None)
-            frame_steps = ([{**s, "label": sent[s["id"]][0], "diff": ""} for s in steps] if write else
-                           [{**s, "diff": _masked(_without_declaration(sent[s["id"]][0]), frame0)}
-                            if s["id"] in sent else s for s in steps])  # masked, as every reading is
+            frame_steps = (
+                [{**s, "label": sent[s["id"]][0], "diff": ""} for s in steps]
+                if write
+                else [
+                    {**s, "diff": _masked(_without_declaration(sent[s["id"]][0]), frame0)} if s["id"] in sent else s
+                    for s in steps
+                ]
+            )  # masked, as every reading is
         if refusal:
             parts.append(f"{ask['id']} not read ({refusal})")
             continue
@@ -276,11 +344,12 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
                 parts.append(f"climb stopped: {why}")
                 _log({"event": "climb-stopped", "ask": ask["id"], "why": why})
             else:
-                _log({"event": "filled", "node": node, "ask": hole[len("done-"):], "routed": "gadfly walk"})
+                _log({"event": "filled", "node": node, "ask": hole[len("done-") :], "routed": "gadfly walk"})
         for k, v in _spent(result).items():
             used[k] = used.get(k, 0) + v
     if os.environ.get("FRAME_LOOP_TREE"):  # the host rule climbs, no call (recoil 1)
         import tree
+
         filled = {((r.get("node") or "root"), r["ask"]) for r in _records_all() if r.get("event") == "filled"}
         climbed = tree.climb(_tree_nodes(load_frame0_root()), filled)
         if state.NODE and state.NODE != "root" and climbed.get(state.NODE, {}).get("complete"):
@@ -291,11 +360,13 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     done = sum(1 for x in parts if x.endswith(" ✓"))
     asks = len(frame0["asks"])
     state.LIVE["decision"] = gate.PASS if done == asks else gate.RISE
-    state.LIVE["shorts"] = ["frame-loop ✓ every requirement is done" if done == asks else
-                       f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"]
+    state.LIVE["shorts"] = [
+        "frame-loop ✓ every requirement is done"
+        if done == asks
+        else f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"
+    ]
     first = "frame-loop · completion · " + " · ".join(parts)
     second = f"  {_reader_name(tier)} · {time.time() - started:.0f}s"
     if "calls" in used:
         second += f" · {used['calls']} calls"
     return first + "\n" + second
-

@@ -39,22 +39,30 @@ def load_frame0() -> dict[str, Any]:
     read against."""
     path = Path(os.environ["FRAME_LOOP_FRAME0"])
     # Not written yet: the author has given no task, so nothing is read against it.
-    frame0 = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {
-        "id": "unwritten", "unwritten": True, "asks": [], "principles": [], "triggers": []}
+    frame0 = (
+        json.loads(path.read_text(encoding="utf-8"))
+        if path.exists()
+        else {"id": "unwritten", "unwritten": True, "asks": [], "principles": [], "triggers": []}
+    )
     frame0.setdefault("id", "frame-0")  # Claude may save it without one (novice profile)
     rules = project_rules()
     if rules:
         accepted = [r for r in rules.get("rules", []) if r.get("accepted") is True]
         frame0["obligations"] = frame0.get("obligations", []) + [
             {"id": r["id"], "scope": r["scope"], "text": r["text"], "check": r["check"]}
-            for r in accepted if r["kind"] == "obligation" and r.get("check")]
+            for r in accepted
+            if r["kind"] == "obligation" and r.get("check")
+        ]
         frame0["principles"] = frame0.get("principles", []) + [
-            {"id": r["id"], "text": rule_words(r)} for r in accepted if r["kind"] == "principle"]
+            {"id": r["id"], "text": rule_words(r)} for r in accepted if r["kind"] == "principle"
+        ]
         frame0["triggers"] = frame0.get("triggers", []) + [
-            {"id": r["id"], "text": rule_words(r)} for r in accepted if r["kind"] == "trigger"]
+            {"id": r["id"], "text": rule_words(r)} for r in accepted if r["kind"] == "trigger"
+        ]
         frame0["semantic"] = [r for r in accepted if r["kind"] == "semantic"]
     if state.NODE and state.NODE != "root" and not frame0.get("unwritten"):
         import tree
+
         nodes = _tree_nodes(frame0)
         if state.NODE in nodes:  # the engaged node: its asks, and every rule above it
             return tree.frame0_for(nodes[state.NODE], frame0, nodes)
@@ -69,8 +77,11 @@ def rules_lost(cwd: str) -> list[str]:
     source = rules.get("source") or {}
     guide = project_root(cwd) / source.get("file", "AGENTS.md")
     words = " ".join(guide.read_text(encoding="utf-8").split()) if guide.is_file() else ""
-    return [r["id"] for r in rules.get("rules", []) if r.get("accepted")
-            and any(" ".join(q.split()) not in words for q in r.get("quote") or [])]
+    return [
+        r["id"]
+        for r in rules.get("rules", [])
+        if r.get("accepted") and any(" ".join(q.split()) not in words for q in r.get("quote") or [])
+    ]
 
 
 def _router():
@@ -83,6 +94,7 @@ def route(completion: dict[str, Any], frame0: dict[str, Any]) -> tuple[str | Non
     """The (node, hole) a carried completion fills, as Gadfly's walk reads it over the
     tree's node frames, or why the climb stops: a frontier, no fit, or more than one."""
     import tree
+
     nodes = _tree_nodes(load_frame0_root())
     walked = _router()(completion, [tree.node_frame(n, completion["battery"]) for n in nodes.values()])
     if walked.get("error"):
@@ -93,7 +105,7 @@ def route(completion: dict[str, Any], frame0: dict[str, Any]) -> tuple[str | Non
     if len(fits) != 1:
         return None, None, f"the walk found {len(fits)} holes for it, not one"
     frame, hole = fits[0]
-    return frame[len("node-"):], hole, None
+    return frame[len("node-") :], hole, None
 
 
 def _engaged() -> str | None:
@@ -106,6 +118,7 @@ def _engaged() -> str | None:
 
 def _tree_nodes(frame0: dict[str, Any]) -> dict[str, dict[str, Any]]:
     import tree
+
     root = load_frame0_root() if frame0.get("node") else frame0
     return tree.load(os.environ.get("FRAME_LOOP_TREE"), root)
 
@@ -126,12 +139,16 @@ def node_file_faults(path: str, tool: str, tool_input: dict[str, Any], frame0: d
     if not folder or Path(folder).resolve() not in Path(path).resolve().parents:
         return []
     import tree
+
     if tool == "Write":
         text = tool_input.get("content") or ""
     else:
         old = Path(path).read_text(encoding="utf-8") if Path(path).is_file() else ""
-        text = old.replace(tool_input.get("old_string", ""), tool_input.get("new_string", ""),
-                           -1 if tool_input.get("replace_all") else 1)
+        text = old.replace(
+            tool_input.get("old_string", ""),
+            tool_input.get("new_string", ""),
+            -1 if tool_input.get("replace_all") else 1,
+        )
     try:
         node = json.loads(text)
     except ValueError:
@@ -146,10 +163,14 @@ def node_file_faults(path: str, tool: str, tool_input: dict[str, Any], frame0: d
 def with_semantic(frame0: dict[str, Any], paths: list[str]) -> dict[str, Any]:
     """Frame 0 with the semantic rules whose scope the change touches read beside the
     principles, each by its guide's words (listed but never read before)."""
-    due = [r for r in frame0.get("semantic") or []
-           if any(fnmatch.fnmatch(p, g) for p in paths for g in r.get("scope") or [])]
+    due = [
+        r
+        for r in frame0.get("semantic") or []
+        if any(fnmatch.fnmatch(p, g) for p in paths for g in r.get("scope") or [])
+    ]
     if not due:
         return frame0
-    return {**frame0, "principles": list(frame0.get("principles") or [])
-            + [{"id": r["id"], "text": rule_words(r)} for r in due]}
-
+    return {
+        **frame0,
+        "principles": list(frame0.get("principles") or []) + [{"id": r["id"], "text": rule_words(r)} for r in due],
+    }

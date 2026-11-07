@@ -86,6 +86,7 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
 def _home() -> str:
     try:
         import pwd
+
         return pwd.getpwuid(os.getuid()).pw_dir
     except (ImportError, KeyError):
         return str(Path.home())
@@ -97,8 +98,11 @@ def private_names() -> list[str]:
     path = Path(os.environ.get("FRAME_LOOP_PRIVATE_NAMES") or Path(_home()) / ".config/frame-loop/private-names.txt")
     if not path.is_file():
         return []
-    return [line.strip() for line in path.read_text(encoding="utf-8").splitlines()
-            if line.strip() and not line.strip().startswith("#")]
+    return [
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.strip().startswith("#")
+    ]
 
 
 def _withhold(work: Path) -> str:
@@ -109,9 +113,14 @@ def _withhold(work: Path) -> str:
     if given and Path(given).is_file():
         return given
     import signals
+
     path = work / "withhold.json"
-    path.write_text(json.dumps({"always": {"patterns": [p for _, p in signals.SECRET_PATTERNS]},
-                                "training": {"names": private_names()}}), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {"always": {"patterns": [p for _, p in signals.SECRET_PATTERNS]}, "training": {"names": private_names()}}
+        ),
+        encoding="utf-8",
+    )
     return str(path)
 
 
@@ -141,9 +150,20 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
     battery = os.environ.get("FRAME_LOOP_BATTERY", "midwife.batteries.unified:Unified")
     if only:
         out = work / "records.jsonl"
-        args = ["run", str(path), *withhold, "--battery", battery, "--out", str(out), "--calls",
-                "auto", "--output-tokens", str(CAP),
-                "--json"]
+        args = [
+            "run",
+            str(path),
+            *withhold,
+            "--battery",
+            battery,
+            "--out",
+            str(out),
+            "--calls",
+            "auto",
+            "--output-tokens",
+            str(CAP),
+            "--json",
+        ]
         for trial in only:
             args += ["--only", trial]
         if int(os.environ.get("FRAME_LOOP_PARALLEL", "1")) > 1:
@@ -153,12 +173,24 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             return json.loads(ran.stdout or ran.stderr)
         made = json.loads(ran.stdout)
         read = _gadfly(["report", str(path), str(out), "--json"])
-        return {**json.loads(read.stdout or read.stderr), "made": made.get("made"),
-                "usage": made.get("usage") or {}}
+        return {**json.loads(read.stdout or read.stderr), "made": made.get("made"), "usage": made.get("usage") or {}}
     parallel = int(os.environ.get("FRAME_LOOP_PARALLEL", "1"))  # the frame names its most runs
-    ran = _gadfly(["firm", str(path), *withhold, "--battery", battery, "--runs", str(work / "runs"),
-                   "--calls", "auto", "--output-tokens", str(CAP), "--json",
-                   *(["--parallel", str(parallel)] if parallel > 1 else [])], watch=work / "runs")
+    ran = _gadfly(
+        [
+            "firm",
+            str(path),
+            *withhold,
+            "--battery",
+            battery,
+            "--runs",
+            str(work / "runs"),
+            "--calls",
+            "auto",
+            "--output-tokens",
+            str(CAP),
+            "--json",
+            *(["--parallel", str(parallel)] if parallel > 1 else []),
+        ],
+        watch=work / "runs",
+    )
     return {**json.loads(ran.stdout or ran.stderr), "reader": {"parallel": parallel}}
-
-

@@ -34,11 +34,18 @@ CATEGORIES: list[tuple[str, re.Pattern[str]]] = [
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n(.*?)^\s*\2\s*$", re.S | re.M)
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 # Wrappers that run the command after them, and their options that take a value.
-WRAPPERS = {"sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"}, "env": {"-u", "-C", "-S"},
-            "command": set(), "exec": {"-a"}, "time": set(), "nice": {"-n"}, "nohup": set(),
-            "xargs": {"-n", "-I", "-P", "-L", "-s", "-d", "-E", "-a"}, "timeout": {"-s", "-k"}}
-GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix",
-              "--config-env"}
+WRAPPERS = {
+    "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"},
+    "env": {"-u", "-C", "-S"},
+    "command": set(),
+    "exec": {"-a"},
+    "time": set(),
+    "nice": {"-n"},
+    "nohup": set(),
+    "xargs": {"-n", "-I", "-P", "-L", "-s", "-d", "-E", "-a"},
+    "timeout": {"-s", "-k"},
+}
+GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env"}
 GH_VALUED = {"-R", "--repo", "--hostname"}
 NPM_VALUED = {"--prefix", "-C", "--workspace", "-w", "--registry", "--userconfig", "--tag", "--otp"}
 
@@ -59,12 +66,12 @@ def _split(command: str) -> list[str]:
                 c = command[i]
             elif quote == '"' and (command.startswith("$(", i) or c == "`"):
                 end = _closing(command, i)  # a substitution runs even inside double quotes
-                parts += _split(command[i + (2 if c == "$" else 1):end])
+                parts += _split(command[i + (2 if c == "$" else 1) : end])
                 i = end + 1
                 continue
             cur.append(c)
         elif c == "\\" and i + 1 < len(command):
-            cur.append(command[i:i + 2])
+            cur.append(command[i : i + 2])
             i += 1
         elif c in "'\"":
             quote = c
@@ -132,8 +139,9 @@ def _act(words: list[str], depth: int) -> str | None:
         rest = _flags(args, GIT_VALUED)
         if rest[:1] == ["push"]:
             return "git push"
-        if rest[:1] == ["clean"] and ("f" in "".join(a[1:] for a in rest if re.fullmatch(r"-[A-Za-z]+", a))
-                                      or "--force" in rest):
+        if rest[:1] == ["clean"] and (
+            "f" in "".join(a[1:] for a in rest if re.fullmatch(r"-[A-Za-z]+", a)) or "--force" in rest
+        ):
             return "git clean"
     if name == "gh" and _flags(args, GH_VALUED)[:1] == ["release"]:
         return "gh release"
@@ -146,15 +154,15 @@ def _act(words: list[str], depth: int) -> str | None:
             return "find -delete"
         for flag in ("-exec", "-execdir", "-ok", "-okdir"):
             if flag in args:
-                inner = args[args.index(flag) + 1:]
-                inner = inner[:next((k for k, w in enumerate(inner) if w in (";", "+")), len(inner))]
+                inner = args[args.index(flag) + 1 :]
+                inner = inner[: next((k for k, w in enumerate(inner) if w in (";", "+")), len(inner))]
                 found = _act(inner, depth)
                 if found:
                     return found
     if depth < 3 and name in SHELLS:
         opts = [a for a in args if re.fullmatch(r"-[A-Za-z]+", a)]
         if any("c" in a for a in opts):
-            after = args[args.index(next(a for a in opts if "c" in a)) + 1:]
+            after = args[args.index(next(a for a in opts if "c" in a)) + 1 :]
             return outward(after[0], depth + 1) if after else None
     if depth < 3 and name == "eval":
         return outward(" ".join(args), depth + 1)
@@ -167,10 +175,10 @@ def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
     bodies, kept, at = [], [], 0
     for heredoc in HEREDOC.finditer(command):
         opening = heredoc.group(0).split("\n", 1)[0]
-        line = command[:heredoc.start()].rsplit("\n", 1)[-1]
+        line = command[: heredoc.start()].rsplit("\n", 1)[-1]
         parts = _split(line)
         bodies.append((parts[-1] if parts else "", heredoc.group(3)))
-        kept.append(command[at:heredoc.start()] + re.sub(r"^<<-?\s*(['\"]?)\w+\1", " ", opening))
+        kept.append(command[at : heredoc.start()] + re.sub(r"^<<-?\s*(['\"]?)\w+\1", " ", opening))
         at = heredoc.end()
     return "".join(kept) + command[at:], bodies
 
@@ -195,7 +203,10 @@ def category(path: str) -> str:
 def changed_files(repo: Path, rev: str = "HEAD") -> list[str]:
     done = subprocess.run(
         ["git", "show", "--name-only", "--format=", rev],
-        cwd=repo, capture_output=True, text=True, check=True,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return [line for line in done.stdout.splitlines() if line.strip()]
 
@@ -203,14 +214,23 @@ def changed_files(repo: Path, rev: str = "HEAD") -> list[str]:
 def commit_subject(repo: Path, rev: str = "HEAD") -> str:
     done = subprocess.run(
         ["git", "show", "-s", "--format=%s", rev],
-        cwd=repo, capture_output=True, text=True, check=True,
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
     )
     return done.stdout.strip()
 
 
-def step_from_files(step_id: str, summary: str, files: list[str], *,
-                    tests: str = "not run", money: str = "none spent",
-                    outward: str = "none") -> dict[str, Any]:
+def step_from_files(
+    step_id: str,
+    summary: str,
+    files: list[str],
+    *,
+    tests: str = "not run",
+    money: str = "none spent",
+    outward: str = "none",
+) -> dict[str, Any]:
     """A step for the frames: its facts only. The declaration is added by the agent
     separately, as `claim`, and never reaches the reader."""
     cats = sorted({category(f) for f in files})
@@ -226,8 +246,14 @@ def step_from_files(step_id: str, summary: str, files: list[str], *,
     }
 
 
-def triggers(files: list[str], *, command: str = "", spent_usd: float = 0.0,
-             cap_usd: float | None = None, personal: list[str] | None = None) -> list[str]:
+def triggers(
+    files: list[str],
+    *,
+    command: str = "",
+    spent_usd: float = 0.0,
+    cap_usd: float | None = None,
+    personal: list[str] | None = None,
+) -> list[str]:
     """The deterministic mismatches: each rises to the human, whatever the reader says."""
     found = []
     if any(category(f) == "frontend" for f in files):

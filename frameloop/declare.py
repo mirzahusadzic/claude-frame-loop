@@ -37,7 +37,7 @@ def _marks() -> list[str]:
     """The declaration lines this session's markers made since its last turn ended."""
     rows = [r for r in _records_all() if r.get("session") == state.SESSION]
     last = max((i for i, r in enumerate(rows) if r.get("event") == "stop"), default=-1)
-    return [x for r in rows[last + 1:] if r.get("event") == "declare" for x in r.get("lines", [])]
+    return [x for r in rows[last + 1 :] if r.get("event") == "declare" for x in r.get("lines", [])]
 
 
 def _declare_lines(command: str) -> list[str]:
@@ -75,4 +75,3 @@ def _declared(plan: str, frame0: dict[str, Any]) -> list[str]:
     asks = {a["id"] for a in frame0["asks"]}
     ids = [x.strip(" .*") for x in _value(plan, "serves").split(",")]
     return [x for x in ids if x in asks]
-

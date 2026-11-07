@@ -61,4 +61,3 @@ def effort_for(said: str, facts: dict[str, Any] | None, tier: str) -> tuple[str 
     if effort not in rules.get("calibrated", {}).get(readers.READERS[tier]["model"], {}):
         notes.append("uncalibrated")
     return effort, notes, None
-

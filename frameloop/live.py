@@ -41,8 +41,10 @@ def _live(**fields: Any) -> None:
         # per thread, so a write never cuts another short (seen as half a file in the band).
         tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         pid = {"pid": state.LIVE["background"]} if state.LIVE.get("background") else {}
-        tmp.write_text(json.dumps({"session": state.SESSION, "at": time.time(), **pid, **fields}, ensure_ascii=False),
-                       encoding="utf-8")
+        tmp.write_text(
+            json.dumps({"session": state.SESSION, "at": time.time(), **pid, **fields}, ensure_ascii=False),
+            encoding="utf-8",
+        )
         tmp.replace(path)
     except OSError:
         pass
@@ -59,8 +61,9 @@ def _live_interrupted() -> None:
     try:
         shown = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
         if shown.get("state") == "reading" and not _alive(shown.get("pid")):  # a background read lives on
-            _live(state="done", decision="interrupted", lines=["frame-loop · the last check was interrupted"],
-                  detail=[])
+            _live(
+                state="done", decision="interrupted", lines=["frame-loop · the last check was interrupted"], detail=[]
+            )
     except (OSError, ValueError):
         pass
 
@@ -69,24 +72,42 @@ def _live_step(what: str, n: int = 0, of: int = 0, key: str | None = None) -> No
     """A reading's step as it starts: what is asked now, which of how many, and what the
     same step took last time, for an estimate of what is left."""
     state.LIVE.setdefault("started", time.time())
-    state.LIVE["step"] = {"what": what, "n": n, "of": of, "key": key, "at": time.time(), "answers": 0,
-                     "expected": _history().get(key) if key else None}
+    state.LIVE["step"] = {
+        "what": what,
+        "n": n,
+        "of": of,
+        "key": key,
+        "at": time.time(),
+        "answers": 0,
+        "expected": _history().get(key) if key else None,
+    }
     _live_now()
 
 
 def _live_now() -> None:
     step = state.LIVE.get("step") or {}
     expected = step.get("expected") or {}
-    _live(state="reading", what=state.LIVE.get("what", "checking"), why=state.LIVE.get("why"),
-          so_far=state.LIVE.get("so_far"), step=step.get("what"), n=step.get("n"), of=step.get("of"),
-          started=state.LIVE["started"], step_started=step.get("at"), answers=step.get("answers", 0),
-          expected=expected.get("calls"), expected_seconds=expected.get("seconds"))
+    _live(
+        state="reading",
+        what=state.LIVE.get("what", "checking"),
+        why=state.LIVE.get("why"),
+        so_far=state.LIVE.get("so_far"),
+        step=step.get("what"),
+        n=step.get("n"),
+        of=step.get("of"),
+        started=state.LIVE["started"],
+        step_started=step.get("at"),
+        answers=step.get("answers", 0),
+        expected=expected.get("calls"),
+        expected_seconds=expected.get("seconds"),
+    )
 
 
 def _on_answers(n: int) -> None:
     """The reader's answers so far in this step (reader.on_progress), summed over the
     questions running at once."""
     import threading
+
     if state.LIVE.get("step"):
         counts = state.LIVE["step"].setdefault("counts", {})
         counts[threading.get_ident()] = n
@@ -120,4 +141,3 @@ def _ran(read: dict[str, Any]) -> None:
         tmp.replace(path)
     except OSError:
         tmp.unlink(missing_ok=True)
-

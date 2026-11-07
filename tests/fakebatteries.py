@@ -16,8 +16,9 @@ def _body(prompt: str) -> str:
 
 
 def _answer(label: str) -> Observation:
-    return Observation(label=label, raw=json.dumps({"label": label, "name": ""}),
-                       usage={"output_tokens": 1}, served="fake")
+    return Observation(
+        label=label, raw=json.dumps({"label": label, "name": ""}), usage={"output_tokens": 1}, served="fake"
+    )
 
 
 class Ideal:

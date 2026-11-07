@@ -21,8 +21,9 @@ def _log(record: dict[str, Any]) -> None:
         return
     node = {"node": state.NODE} if state.NODE and "node" not in record else {}
     with open(path, "a", encoding="utf-8") as log:
-        log.write(json.dumps({"at": time.time(), "session": state.SESSION, **node, **record},
-                             ensure_ascii=False) + "\n")
+        log.write(
+            json.dumps({"at": time.time(), "session": state.SESSION, **node, **record}, ensure_ascii=False) + "\n"
+        )
 
 
 _ROWS: dict[str, tuple[tuple[int, int], list[dict[str, Any]]]] = {}
@@ -63,4 +64,3 @@ def _records_all() -> list[dict[str, Any]]:
     if not path or not Path(path).exists():
         return []
     return rows(path)
-

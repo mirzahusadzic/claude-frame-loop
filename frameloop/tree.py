@@ -52,8 +52,11 @@ def _ancestors(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[d
 
 def _circle(nid: str, nodes: dict[str, dict[str, Any]]) -> bool:
     chain = _ancestors(nodes[nid], nodes)
-    return nid != "root" and (not chain or chain[-1].get("id") != "root") and \
-        (chain[-1] if chain else nodes[nid]).get("parent") in nodes
+    return (
+        nid != "root"
+        and (not chain or chain[-1].get("id") != "root")
+        and (chain[-1] if chain else nodes[nid]).get("parent") in nodes
+    )
 
 
 def scope_of(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[str]:
@@ -110,7 +113,7 @@ def node_faults(node: dict[str, Any], parent: dict[str, Any], nodes: dict[str, d
     faults += premise_faults(node)
     above = {r["id"]: r["text"] for kind in ("principles", "triggers") for r in _rules(parent, nodes, kind)}
     for kind in ("principles", "triggers"):  # rules above are inherited by construction;
-        for rule in node.get(kind) or []:     # a child may add rules, never reword one above
+        for rule in node.get(kind) or []:  # a child may add rules, never reword one above
             if rule["id"] in above and above[rule["id"]] != rule["text"]:
                 faults.append(f"{rule['id']} rewords a rule above it: a child may add rules, never loosen one")
     return faults
@@ -156,12 +159,15 @@ def frame0_for(
     """A node read as frame 0: its asks, and every rule above it and its own."""
     nodes = {"root": {**frame0, "id": "root"}, **(nodes or {})}
     nodes.setdefault(node["id"], node)
-    return {**{k: v for k, v in frame0.items() if k not in ("asks", "principles", "triggers")},
-            "id": f"{frame0.get('id', 'root')}-{node['id']}", "node": node["id"],
-            "asks": [{k: v for k, v in a.items() if k not in ("quotes", "owner")} for a in node["asks"]],
-            "principles": _rules(node, nodes, "principles"),
-            "triggers": _rules(node, nodes, "triggers"),
-            "scope": scope_of(node, nodes)}
+    return {
+        **{k: v for k, v in frame0.items() if k not in ("asks", "principles", "triggers")},
+        "id": f"{frame0.get('id', 'root')}-{node['id']}",
+        "node": node["id"],
+        "asks": [{k: v for k, v in a.items() if k not in ("quotes", "owner")} for a in node["asks"]],
+        "principles": _rules(node, nodes, "principles"),
+        "triggers": _rules(node, nodes, "triggers"),
+        "scope": scope_of(node, nodes),
+    }
 
 
 def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:
@@ -216,7 +222,8 @@ def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> 
             else:
                 quoting = [(c["id"], a["id"]) for c in children[nid] for a in c["asks"] if a.get("quotes") == ask["id"]]
                 filled[ask["id"]] = bool(quoting) and all(
-                    state[c]["complete"] and state[c]["filled"][a] for c, a in quoting)
+                    state[c]["complete"] and state[c]["filled"][a] for c, a in quoting
+                )
         state[nid] = {"filled": filled, "complete": bool(filled) and all(filled.values())}
         return state[nid]
 

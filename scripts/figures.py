@@ -1,20 +1,24 @@
 """Builds docs/images/frames-{light,dark}.svg: nested frames filled with one request, each span of the
 request in its own hue, its rule beside it in the complementary hue, one shade deeper per
 level, every shade chosen by contrast against the box it sits in."""
+
 import colorsys
 from pathlib import Path
 
 
 def lum(h):
-    r, g, b = [int(h[i:i + 2], 16) / 255 for i in (1, 3, 5)]
+    r, g, b = [int(h[i : i + 2], 16) / 255 for i in (1, 3, 5)]
+
     def f(v):
         return v / 12.92 if v <= 0.03928 else ((v + 0.055) / 1.055) ** 2.4
 
     return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
 
+
 def cr(a, b):
     x, y = sorted((lum(a), lum(b)), reverse=True)
     return (x + 0.05) / (y + 0.05)
+
 
 def shade(hue, sat, fill, target, dark):
     """The colour of this hue whose contrast on `fill` is closest above `target`."""
@@ -29,6 +33,7 @@ def shade(hue, sat, fill, target, dark):
                 best = (c, k)
     return best[0]
 
+
 THEMES = {
     "light": dict(
         dark=False, ink="#1f2328", line="#1f2328", fills=["#ffffff", "#f6f8fa", "#eaeef2", "#dde2e7", "#d0d7de"]
@@ -42,6 +47,7 @@ HUES = {"a": (212, 0.85), "ar": (36, 0.95), "b": (140, 0.7), "br": (320, 0.75)}
 LEVEL_FILL = {1: 0, 2: 0, 3: 2, 4: 3, 5: 4}
 TARGETS = {1: 4.8, 2: 5.4, 3: 6.0, 4: 6.6, 5: 7.2}
 
+
 def svg(theme):
     t = THEMES[theme]
     css = ""
@@ -49,25 +55,27 @@ def svg(theme):
         for lv in range(1, 6):
             css += f"    .{k}{lv} {{ fill: {shade(h, s, t['fills'][LEVEL_FILL[lv]], TARGETS[lv], t['dark'])}; }}\n"
     f = t["fills"]
+
     def box(x, y, w, h, fill, r=12):
         return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{r}" class="box" style="fill: {fill}"/>'
+
     def column(x, k, req, label):
         return f'''
   {box(x, 304, 290, 392, f[2])}
-  <text x="{x+16}" y="338" class="{k}3"><tspan class="b">Requirement</tspan>: {req[0]}</text>
-  <text x="{x+16}" y="362" class="{k}3">{req[1]}</text>
-  <text x="{x+16}" y="386" class="{k}3">{req[2]}</text>
-  <text x="{x+16}" y="410" class="{k}r3">rule: with a test</text>
-  {box(x+16, 426, 258, 254, f[3])}
-  <text x="{x+32}" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
-  <text x="{x+32}" y="482" class="i {k}4">{label[0]}</text>
-  <text x="{x+32}" y="506" class="i {k}4">{label[1]}</text>
-  <text x="{x+32}" y="530" class="i {k}r4">with its test”</text>
-  {box(x+22, 546, 246, 118, f[4], 10)}
-  <text x="{x+38}" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
-  <text x="{x+38}" y="600" class="{k}5">with the requirement: fits</text>
-  <text x="{x+38}" y="624" class="{k}5">without it: doesn’t ✓</text>
-  <text x="{x+38}" y="648" class="{k}r5">breaks no rule ✓</text>'''
+  <text x="{x + 16}" y="338" class="{k}3"><tspan class="b">Requirement</tspan>: {req[0]}</text>
+  <text x="{x + 16}" y="362" class="{k}3">{req[1]}</text>
+  <text x="{x + 16}" y="386" class="{k}3">{req[2]}</text>
+  <text x="{x + 16}" y="410" class="{k}r3">rule: with a test</text>
+  {box(x + 16, 426, 258, 254, f[3])}
+  <text x="{x + 32}" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
+  <text x="{x + 32}" y="482" class="i {k}4">{label[0]}</text>
+  <text x="{x + 32}" y="506" class="i {k}4">{label[1]}</text>
+  <text x="{x + 32}" y="530" class="i {k}r4">with its test”</text>
+  {box(x + 22, 546, 246, 118, f[4], 10)}
+  <text x="{x + 38}" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
+  <text x="{x + 38}" y="600" class="{k}5">with the requirement: fits</text>
+  <text x="{x + 38}" y="624" class="{k}5">without it: doesn’t ✓</text>
+  <text x="{x + 38}" y="648" class="{k}r5">breaks no rule ✓</text>'''
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
   <title id="t">The frames, filled in with one request</title>
@@ -115,8 +123,10 @@ def svg(theme):
 </svg>
 """
 
+
 if __name__ == "__main__":
     import sys
+
     out = Path(sys.argv[1])
     for theme in THEMES:
         (out / f"frames-{theme}.svg").write_text(svg(theme))

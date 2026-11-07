@@ -31,8 +31,10 @@ class LauncherTest(unittest.TestCase):
 
     def test_named_checkout_wins_over_path(self):
         os.environ["GADFLY_CHECKOUT"] = str(self.tmp)
-        with mock.patch.object(reader, "GADFLY", self.tmp), \
-                mock.patch.object(reader.shutil, "which", return_value="/venv/bin/gadfly"):
+        with (
+            mock.patch.object(reader, "GADFLY", self.tmp),
+            mock.patch.object(reader.shutil, "which", return_value="/venv/bin/gadfly"),
+        ):
             self.assertEqual(reader.launcher(), (["uv", "run", "--project", str(self.tmp), "gadfly"], self.tmp))
 
     def test_home_checkout_when_nothing_on_path(self):
@@ -44,8 +46,11 @@ class LauncherTest(unittest.TestCase):
             self.assertEqual(reader.launcher()[1], self.tmp)
 
     def test_not_installed_is_never_a_pass(self):
-        with self.nowhere(), mock.patch.object(reader.shutil, "which", return_value=None), \
-                mock.patch.object(reader.subprocess, "run") as ran:
+        with (
+            self.nowhere(),
+            mock.patch.object(reader.shutil, "which", return_value=None),
+            mock.patch.object(reader.subprocess, "run") as ran,
+        ):
             done = reader._gadfly(["run", "frame.json"])
         ran.assert_not_called()
         result = __import__("json").loads(done.stdout)
@@ -62,11 +67,15 @@ class ProgressTest(unittest.TestCase):
         watch = Path(tempfile.mkdtemp()) / "records.jsonl"
         watch.write_text("")
         sleeper = ([sys.executable, "-c", "import time; time.sleep(2.2)"], None)
-        with mock.patch.object(reader, "launcher", return_value=sleeper), \
-                mock.patch.object(reader, "on_progress", heard.append), mock.patch.object(reader, "HEARTBEAT", 0.4):
+        with (
+            mock.patch.object(reader, "launcher", return_value=sleeper),
+            mock.patch.object(reader, "on_progress", heard.append),
+            mock.patch.object(reader, "HEARTBEAT", 0.4),
+        ):
             reader._gadfly([], watch=watch)
         self.assertGreaterEqual(len(heard), 3, heard)  # the first count, then heartbeats with no new answer
         self.assertEqual(set(heard), {0})
+
 
 if __name__ == "__main__":
     unittest.main()

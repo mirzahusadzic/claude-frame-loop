@@ -67,8 +67,14 @@ class DocsTests(unittest.TestCase):
         """The cold read: Node.js, the Codex CLI and Python 3.13 surfaced mid-install."""
         for name in ("README.md", "docs/setup.md"):
             text = (ROOT / name).read_text()
-            needs = ("Node.js 20", "Codex CLI", "Python 3.13", "uv tool install 'midwife>=0.13'", "OpenRouter API key",
-                     "startup service")
+            needs = (
+                "Node.js 20",
+                "Codex CLI",
+                "Python 3.13",
+                "uv tool install 'midwife>=0.13'",
+                "OpenRouter API key",
+                "startup service",
+            )
             for need in needs:
                 self.assertIn(need, text, f"{name}: {need}")
 
@@ -79,13 +85,17 @@ class DocsTests(unittest.TestCase):
                 self.assertIn(readers.tier(tier), readers.READERS, f"{name}: {tier}")
             self.assertIn("contributor", named, name)
 
-
     def test_mode_means_shadow_or_enforce_only(self):
-        """"cooperative mode" read as a third mode beside shadow and enforce, and no doc
+        """ "cooperative mode" read as a third mode beside shadow and enforce, and no doc
         defined it."""
         import subprocess
-        found = subprocess.run(["git", "grep", "-n", "-i", "-I", "cooperative mode", "--", ".", ":!tests/testdocs.py"],
-                               cwd=ROOT, capture_output=True, text=True).stdout
+
+        found = subprocess.run(
+            ["git", "grep", "-n", "-i", "-I", "cooperative mode", "--", ".", ":!tests/testdocs.py"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        ).stdout
         self.assertEqual(found, "")
 
     def test_switching_to_enforce_is_shown(self):
@@ -101,6 +111,7 @@ class DocsTests(unittest.TestCase):
         self.assertEqual(listed, "frame-loop: a semantic workflow linter for Claude Code")
         self.assertIn("A semantic workflow linter for Claude Code:", (ROOT / "README.md").read_text())
         self.assertIn("semantic", json.loads((ROOT / ".claude-plugin/plugin.json").read_text())["keywords"])
+
 
 if __name__ == "__main__":
     unittest.main()

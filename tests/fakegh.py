@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """A stand-in for `gh repo view URL --json visibility -q .visibility` in tests: answers
 from FAKE_GH_MAP (JSON: url -> visibility), and fails for any url it does not know."""
+
 import json
 import os
 import sys

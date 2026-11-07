@@ -23,10 +23,12 @@ class NoEffectTests(unittest.TestCase):
         self.assertTrue(signals.no_effect("README.md", "+## Usage\n+Run it."))
 
     def test_working_code_has_effect(self):
-        for path, diff in (("cli.py", "+    parser.add_argument('--name', default='world')"),
-                           ("tests/t.py", "+def test_name(): assert run('--name', 'Ada') == 'Hello, Ada!'"),
-                           ("telemetry.py", "+import urllib.request\n+def report(): urllib.request.urlopen('https://x')"),
-                           ("convert.py", "+def km_to_miles(km): return km * 0.621371")):
+        for path, diff in (
+            ("cli.py", "+    parser.add_argument('--name', default='world')"),
+            ("tests/t.py", "+def test_name(): assert run('--name', 'Ada') == 'Hello, Ada!'"),
+            ("telemetry.py", "+import urllib.request\n+def report(): urllib.request.urlopen('https://x')"),
+            ("convert.py", "+def km_to_miles(km): return km * 0.621371"),
+        ):
             self.assertFalse(signals.no_effect(path, diff), path)
 
     def test_a_syntax_error_is_not_called_no_effect(self):

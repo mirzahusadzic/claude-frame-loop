@@ -19,18 +19,17 @@ import gate  # noqa: E402
 import readers  # noqa: E402
 
 FRAME0 = json.loads((ROOT / "tests/fixtures/greeter-frame0.json").read_text())
-STEP = {"id": "contract", "summary": "a step", "claim": {"serves": "A5"},
-        "facts": {"files touched": "review notes"}}
+STEP = {"id": "contract", "summary": "a step", "claim": {"serves": "A5"}, "facts": {"files touched": "review notes"}}
 
 
-NAMES = {"Ideal": "fake-ideal", "Literal": "fake-literal", "Stuck": "fake-stuck",
-         "Broken": "fake-broken"}
+NAMES = {"Ideal": "fake-ideal", "Literal": "fake-literal", "Stuck": "fake-stuck", "Broken": "fake-broken"}
 
 
 def _gadfly(args, work):
     env = {**os.environ, "PYTHONPATH": str(ROOT / "tests")}
-    return subprocess.run(["uv", "run", "--project", str(GADFLY), "gadfly", *args],
-                          capture_output=True, text=True, env=env, cwd=GADFLY)
+    return subprocess.run(
+        ["uv", "run", "--project", str(GADFLY), "gadfly", *args], capture_output=True, text=True, env=env, cwd=GADFLY
+    )
 
 
 def stage_one(frame, battery):
@@ -41,9 +40,28 @@ def stage_one(frame, battery):
     work.mkdir(parents=True)
     path, out = work / "frame.json", work / "records.jsonl"
     path.write_text(json.dumps(frame))
-    ran = _gadfly(["run", str(path), "--battery", f"fakebatteries:{battery}", "--out",
-                   str(out), "--calls", "6", "--output-tokens", "10", "--token-budget",
-                   "1000", "--only", "baseline", "--only", "repeat", "--json"], work)
+    ran = _gadfly(
+        [
+            "run",
+            str(path),
+            "--battery",
+            f"fakebatteries:{battery}",
+            "--out",
+            str(out),
+            "--calls",
+            "6",
+            "--output-tokens",
+            "10",
+            "--token-budget",
+            "1000",
+            "--only",
+            "baseline",
+            "--only",
+            "repeat",
+            "--json",
+        ],
+        work,
+    )
     if ran.returncode != 0:
         return ran.returncode, json.loads(ran.stdout or ran.stderr)
     read = _gadfly(["report", str(path), str(out), "--json"], work)
@@ -57,10 +75,26 @@ def firm(frame, battery, only=None):
     (work / "runs").mkdir(parents=True)
     path = work / "frame.json"
     path.write_text(json.dumps(frame))
-    cmd = ["uv", "run", "--project", str(GADFLY), "gadfly", "firm", str(path),
-           "--battery", f"fakebatteries:{battery}", "--runs", str(work / "runs"),
-           "--calls", "48", "--output-tokens", "10",
-           "--token-budget", "2000", "--json"]
+    cmd = [
+        "uv",
+        "run",
+        "--project",
+        str(GADFLY),
+        "gadfly",
+        "firm",
+        str(path),
+        "--battery",
+        f"fakebatteries:{battery}",
+        "--runs",
+        str(work / "runs"),
+        "--calls",
+        "48",
+        "--output-tokens",
+        "10",
+        "--token-budget",
+        "2000",
+        "--json",
+    ]
     for trial in only or []:
         cmd += ["--only", trial]
     env = {**os.environ, "PYTHONPATH": str(ROOT / "tests")}
@@ -73,6 +107,7 @@ class FloorTests(unittest.TestCase):
 
     def test_the_docs_name_the_floor_the_code_needs(self):
         import reader
+
         floor = ".".join(map(str, reader.GADFLY_FLOOR))
         for doc in ("docs/setup.md", "README.md"):
             self.assertIn(f"{floor} or later", (ROOT / doc).read_text(), doc)
@@ -82,6 +117,7 @@ class FloorTests(unittest.TestCase):
         import re
 
         import reader
+
         found = re.search(r'^version = "(\d+)\.(\d+)', (GADFLY / "pyproject.toml").read_text(), re.M)
         self.assertGreaterEqual((int(found.group(1)), int(found.group(2))), reader.GADFLY_FLOOR)
 
@@ -91,6 +127,7 @@ class ContractTests(unittest.TestCase):
     def test_each_answer_has_room_for_high_reasoning(self):
         # Try 3: at high reasoning, 4 of 42 calls ended incomplete at a 4,000-token cap.
         import reader
+
         self.assertGreaterEqual(reader.CAP, 16000)
 
     def test_gadfly_reads_the_frames_most_and_refuses_another(self):
@@ -100,20 +137,47 @@ class ContractTests(unittest.TestCase):
         path.write_text(
             json.dumps({**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": NAMES["Ideal"]}})
         )
-        done = subprocess.run(["uv", "run", "--project", str(GADFLY), "gadfly", "firm", str(path),
-                               "--battery", "fakebatteries:Ideal", "--runs", str(work / "runs"), "--most", "3",
-                               "--calls", "48", "--output-tokens", "10", "--json"],
-                              capture_output=True, text=True, cwd=GADFLY,
-                              env={**os.environ, "PYTHONPATH": str(ROOT / "tests")})
+        done = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--project",
+                str(GADFLY),
+                "gadfly",
+                "firm",
+                str(path),
+                "--battery",
+                "fakebatteries:Ideal",
+                "--runs",
+                str(work / "runs"),
+                "--most",
+                "3",
+                "--calls",
+                "48",
+                "--output-tokens",
+                "10",
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=GADFLY,
+            env={**os.environ, "PYTHONPATH": str(ROOT / "tests")},
+        )
         self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
         self.assertIn("declares most 2", done.stderr)
 
     def test_the_reader_leaves_the_most_runs_to_the_frame(self):
         import reader
+
         seen = []
-        with mock.patch.object(reader, "_gadfly", lambda args, watch=None: seen.append(args) or
-                               subprocess.CompletedProcess(args, 0, "{}", "")), \
-             mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": str(ROOT / "tests/.work")}):
+        with (
+            mock.patch.object(
+                reader,
+                "_gadfly",
+                lambda args, watch=None: seen.append(args) or subprocess.CompletedProcess(args, 0, "{}", ""),
+            ),
+            mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": str(ROOT / "tests/.work")}),
+        ):
             reader.run(frames.which_ask(FRAME0, STEP, "anthropic"))
         self.assertNotIn("--most", seen[0])
 
@@ -133,19 +197,28 @@ class ContractTests(unittest.TestCase):
         frame = frames.which_ask(FRAME0, {**STEP, "claim": {"serves": everything}}, "anthropic")
         path = ROOT / "tests/.work/every-ask.json"
         path.write_text(json.dumps({**frame, "battery": {"kind": "fake-ideal"}}))
-        done = subprocess.run(["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
-                              capture_output=True, text=True, cwd=GADFLY)
+        done = subprocess.run(
+            ["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
+            capture_output=True,
+            text=True,
+            cwd=GADFLY,
+        )
         self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
     def test_a_completion_frame_is_accepted_by_gadfly(self):
         sys.path.insert(0, str(ROOT / "tests"))
         from testframes import ASK0, STEPS
+
         for with_diffs in (True, False):
             frame = frames.completion(ASK0, "A1", STEPS, "public", with_diffs=with_diffs)
             path = ROOT / f"tests/.work/completion-{with_diffs}.json"
             path.write_text(json.dumps(frame))
-            done = subprocess.run(["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
-                                  capture_output=True, text=True, cwd=GADFLY)
+            done = subprocess.run(
+                ["uv", "run", "--project", str(GADFLY), "gadfly", "check-frame", str(path)],
+                capture_output=True,
+                text=True,
+                cwd=GADFLY,
+            )
             self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
     def test_a_reader_that_ignores_the_body_rises(self):
@@ -199,9 +272,11 @@ class LiveReaderTests(unittest.TestCase):
         import reader
 
         os.environ["FRAME_LOOP_PARALLEL"] = "3"
-        for battery, kind, expected in (("Ideal", "fake-ideal", gate.PASS),
-                                        ("Literal", "fake-literal", gate.RISE),
-                                        ("Broken", "fake-broken", gate.BLOCK)):
+        for battery, kind, expected in (
+            ("Ideal", "fake-ideal", gate.PASS),
+            ("Literal", "fake-literal", gate.RISE),
+            ("Broken", "fake-broken", gate.BLOCK),
+        ):
             os.environ["FRAME_LOOP_BATTERY"] = f"fakebatteries:{battery}"
             frame = {**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": kind}}
             result = reader.run(frame)
@@ -232,6 +307,7 @@ class LiveReaderTests(unittest.TestCase):
         so every turn touching it was refused unread. Masked, it is read; the name never goes."""
         import privacy
         import reader
+
         names = ROOT / "tests/.work/private-names.txt"
         names.write_text("secret-project\n")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
@@ -241,20 +317,25 @@ class LiveReaderTests(unittest.TestCase):
         self.assertNotIn("secret-project", masked.casefold().replace("secret-projects", ""))
         self.assertIn("mods/[private]-live/", masked)
         self.assertIn("secret-projects.md", masked)  # never inside a longer word, as Gadfly reads it
-        frame = {**frames.which_ask(FRAME0, {**STEP, "summary": masked}, "public"),
-                 "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"}}
+        frame = {
+            **frames.which_ask(FRAME0, {**STEP, "summary": masked}, "public"),
+            "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"},
+        }
         self.assertNotIn("withheld", json.dumps(reader.run(frame)))
 
     def test_a_training_reader_never_gets_a_private_name(self):
         # The audit: the scratch fixture's own text carried "frame-loop" to Contributor in
         # 116 frames, through battery runs that bypass the hook's channel guard.
         import reader
+
         names = ROOT / "tests/.work/private-names.txt"
         names.write_text("# one name per line\nsecret-project\n")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
-        frame = {**frames.which_ask(FRAME0, {**STEP, "summary": "touches Secret-Project code"}, "public"),
-                 "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"}}
+        frame = {
+            **frames.which_ask(FRAME0, {**STEP, "summary": "touches Secret-Project code"}, "public"),
+            "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"},
+        }
         result = reader.run(frame)
         self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.BLOCK, result)
         self.assertIn("withheld", json.dumps(result))  # Gadfly refuses it (29fe18c), before any call
@@ -264,10 +345,22 @@ class LiveReaderTests(unittest.TestCase):
     def test_frameloops_line_hash_is_gadflys(self):
         sys.path.insert(0, str(ROOT / "frameloop"))
         import privacy
+
         line = "   def private_algorithm(x):    return sum(v for v in x)  "
-        done = subprocess.run(["uv", "run", "--project", str(GADFLY), "python", "-c",
-                               f"from midwife.withhold import line_sha256; print(line_sha256({line!r}))"],
-                              capture_output=True, text=True, cwd=GADFLY)
+        done = subprocess.run(
+            [
+                "uv",
+                "run",
+                "--project",
+                str(GADFLY),
+                "python",
+                "-c",
+                f"from midwife.withhold import line_sha256; print(line_sha256({line!r}))",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=GADFLY,
+        )
         self.assertEqual(done.stdout.strip(), privacy._hash(privacy._norm(line)))
 
     def test_reader_runs_stage_one_as_run_then_report(self):
@@ -282,15 +375,20 @@ class LiveReaderTests(unittest.TestCase):
         self.assertEqual(gate.violation_stage_one(result)[0], gate.RISE, result)
 
 
-
 class GateErrorTests(unittest.TestCase):
     """Any error object or failing exit is never read as a verdict: it blocks."""
 
     def test_an_error_object_or_a_failing_exit_blocks(self):
-        for result in ({"error": {"type": "UsageError", "exit": 2, "message": "the battery stopped the run"}},
-                       {"exit": 2}, {"exit": 7}, {"exit": 3}, {"stopped": "StopRun"}):
+        for result in (
+            {"error": {"type": "UsageError", "exit": 2, "message": "the battery stopped the run"}},
+            {"exit": 2},
+            {"exit": 7},
+            {"exit": 3},
+            {"stopped": "StopRun"},
+        ):
             self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.BLOCK, result)
             self.assertEqual(gate.violation_stage_one(result)[0], gate.BLOCK, result)
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -318,16 +416,45 @@ class WalkContractTests(unittest.TestCase):
         "principles": [{"id": "P1", "text": "No new dependency is added."}],
         "triggers": [],
     }
-    GREETER = {"id": "greeter", "parent": "root", "scope": ["hello.py", "tests/*", "README.md"], "asks": [
-        {"id": "N1", "text": "hello.py takes a --name option", "quotes": "A1", "owner": "children",
-         "inversion": {"hello.py takes a --name option": "hello.py takes no --name option"}},
-        {"id": "N2", "text": "the README has a Usage section", "quotes": "A2", "owner": "leaves",
-         "inversion": {"the README has a Usage section": "the README has no Usage section"}}]}
-    NAME_FLAG = {"id": "name-flag", "parent": "greeter", "scope": ["hello.py", "tests/*"], "asks": [
-        {"id": "M1", "text": "the --name option greets by the name given", "quotes": "N1", "owner": "leaves",
-         "inversion": {"the --name option greets by the name given": "the --name option ignores the name"}}]}
-    STEPS = [{"id": "S1", "label": "adds --name and its test", "claims": ["M1", "N2"], "diff": "+--name"},
-             {"id": "S2", "label": "adds notes", "claims": [], "diff": "+notes"}]
+    GREETER = {
+        "id": "greeter",
+        "parent": "root",
+        "scope": ["hello.py", "tests/*", "README.md"],
+        "asks": [
+            {
+                "id": "N1",
+                "text": "hello.py takes a --name option",
+                "quotes": "A1",
+                "owner": "children",
+                "inversion": {"hello.py takes a --name option": "hello.py takes no --name option"},
+            },
+            {
+                "id": "N2",
+                "text": "the README has a Usage section",
+                "quotes": "A2",
+                "owner": "leaves",
+                "inversion": {"the README has a Usage section": "the README has no Usage section"},
+            },
+        ],
+    }
+    NAME_FLAG = {
+        "id": "name-flag",
+        "parent": "greeter",
+        "scope": ["hello.py", "tests/*"],
+        "asks": [
+            {
+                "id": "M1",
+                "text": "the --name option greets by the name given",
+                "quotes": "N1",
+                "owner": "leaves",
+                "inversion": {"the --name option greets by the name given": "the --name option ignores the name"},
+            }
+        ],
+    }
+    STEPS = [
+        {"id": "S1", "label": "adds --name and its test", "claims": ["M1", "N2"], "diff": "+--name"},
+        {"id": "S2", "label": "adds notes", "claims": [], "diff": "+notes"},
+    ]
 
     def setUp(self):
         os.environ["FRAME_LOOP_WORK"] = str(ROOT / "tests/.work" / f"walk-{uuid.uuid4().hex}")
@@ -337,6 +464,7 @@ class WalkContractTests(unittest.TestCase):
         import reader
         import reading
         import tree
+
         nodes = {"root": {**self.FRAME0, "id": "root"}, "greeter": self.GREETER, "name-flag": self.NAME_FLAG}
         battery = {**readers.READERS["contributor"], "reasoning": "low", "output": {"label": "/label"}}
         frames = [tree.node_frame(n, battery) for n in nodes.values()]

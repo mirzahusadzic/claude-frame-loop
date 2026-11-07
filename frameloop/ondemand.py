@@ -67,8 +67,7 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
-def reading(root: Path, serves: str, effort: str | None, base: str,
-            done: str | None = None) -> tuple[int, str]:
+def reading(root: Path, serves: str, effort: str | None, base: str, done: str | None = None) -> tuple[int, str]:
     """One on-demand reading with the settings already in the environment."""
     frame0 = load_frame0()
     before = _git(str(root), "rev-parse", f"{base}^{{tree}}").stdout.strip()
@@ -77,8 +76,7 @@ def reading(root: Path, serves: str, effort: str | None, base: str,
         return 2, "frame-loop · read · not read: no snapshot"
     if before == after:
         return 0, f"frame-loop · read · nothing changed since {base}"
-    said = (f"Serves: {serves}" + (f"\nEffort: {effort}" if effort else "")
-            + (f"\nDone: {done}" if done else ""))
+    said = f"Serves: {serves}" + (f"\nEffort: {effort}" if effort else "") + (f"\nDone: {done}" if done else "")
     return 0, read_change(str(root), before, after, said, frame0, "read")["tell"]
 
 

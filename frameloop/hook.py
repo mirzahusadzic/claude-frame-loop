@@ -87,9 +87,13 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
     root = project_root(state.CWD)
     notes = []
     if frame0.get("semantic"):
-        notes += ["Rules that need a reading, by scope (each is read by its guide's words):",
-                  *[f"- {r['id']} ({', '.join(r.get('scope') or [r.get('act', '')])}): {r['text']}"
-                    for r in frame0["semantic"]]]
+        notes += [
+            "Rules that need a reading, by scope (each is read by its guide's words):",
+            *[
+                f"- {r['id']} ({', '.join(r.get('scope') or [r.get('act', '')])}): {r['text']}"
+                for r in frame0["semantic"]
+            ],
+        ]
     source = rules.get("source") or {}
     guide = root / source.get("file", "AGENTS.md")
     words = " ".join(guide.read_text(encoding="utf-8").split()) if guide.is_file() else ""
@@ -102,13 +106,17 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
             notes.append(f"Rule {r['id']} ({', '.join(scope)}) matches no file: offer the author an update.")
         gone = [q for q in r.get("quote") or [] if " ".join(q.split()) not in words]
         if gone:
-            notes.append(f"Rule {r['id']}'s lines are no longer in {source.get('file', 'AGENTS.md')}: "
-                         "re-index it from the guide as it stands.")
+            notes.append(
+                f"Rule {r['id']}'s lines are no longer in {source.get('file', 'AGENTS.md')}: "
+                "re-index it from the guide as it stands."
+            )
     if source.get("sha256") and guide.is_file():
         import hashlib
+
         if hashlib.sha256(guide.read_bytes()).hexdigest() != source["sha256"]:
-            notes.append(f"{source.get('file', 'AGENTS.md')} changed since its rules were indexed: "
-                         "index its new lines.")
+            notes.append(
+                f"{source.get('file', 'AGENTS.md')} changed since its rules were indexed: index its new lines."
+            )
     return notes
 
 
@@ -121,20 +129,22 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     With a heredoc (`<<'EOF' … EOF`), its text is read as a proposal, as a plan is: for
     a crossing, where there is no diff yet. Without one, the change is read."""
     import ondemand
+
     first, _, rest = command.strip().partition("\n")
     if "--complete" in shlex.split(first):
         frame0 = load_frame0()
         text = complete(frame0)
-        return {"systemMessage": text,
-                "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
+        return {"systemMessage": text, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
     heredoc = HEREDOC.search(first)
     if heredoc:
-        first = first[:heredoc.start()] + first[heredoc.end():]
+        first = first[: heredoc.start()] + first[heredoc.end() :]
     try:
         args = ondemand.parser().parse_args(shlex.split(first)[2:])
     except (SystemExit, ValueError):
-        return {"systemMessage": "frame-loop · read · not read: usage: : frame-loop-read "
-                                 "--serves A1[,A2] [--effort high] [--base REV] [<<'EOF' proposal EOF]"}
+        return {
+            "systemMessage": "frame-loop · read · not read: usage: : frame-loop-read "
+            "--serves A1[,A2] [--effort high] [--base REV] [<<'EOF' proposal EOF]"
+        }
     if heredoc:
         dash, word = heredoc.group(1), heredoc.group(3)
         body = []
@@ -150,8 +160,7 @@ def _read_on_demand(command: str) -> dict[str, Any]:
             text += f"\n  owes {', '.join(due)} (checked when the change is read)"
     else:
         code, text = ondemand.reading(project_root(state.CWD), args.serves, args.effort, args.base, args.done)
-    return {"systemMessage": text,
-            "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
+    return {"systemMessage": text, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
 
 
 def _marker_only(command: str) -> bool:
@@ -161,9 +170,9 @@ def _marker_only(command: str) -> bool:
     text = command.strip()
     body = F.HEREDOC.search(text)
     if body:
-        if text[body.end():].strip() or not re.fullmatch(r"<<-?\s*(['\"]?)\w+\1\s*", body.group(0).split("\n", 1)[0]):
+        if text[body.end() :].strip() or not re.fullmatch(r"<<-?\s*(['\"]?)\w+\1\s*", body.group(0).split("\n", 1)[0]):
             return False
-        text = text[:body.start()]
+        text = text[: body.start()]
     if "\n" in text.strip() or len(F._split(text)) != 1:
         return False
     try:
@@ -179,13 +188,18 @@ def _rise(mode: str, reason: str, decision: str) -> dict[str, Any]:
     """A rise for a tool call. The human hears it too (systemMessage), whatever the
     agent then says."""
     if mode == "enforce":
-        return {"systemMessage": reason,
-                "hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                       "permissionDecision": decision,
-                                       "permissionDecisionReason": reason}}
-    return {"systemMessage": reason,
-            "hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                   "additionalContext": f"[shadow] {reason}"}}
+        return {
+            "systemMessage": reason,
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": decision,
+                "permissionDecisionReason": reason,
+            },
+        }
+    return {
+        "systemMessage": reason,
+        "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": f"[shadow] {reason}"},
+    }
 
 
 # A marker after another command in one line (`cd x && : frame-loop-declare …`): not read.
@@ -199,10 +213,14 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     plugin_defaults(event)
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
         if event.get("hook_event_name") == "SessionStart":
-            return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
-                    "frame-loop is switched off for this project "
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": "frame-loop is switched off for this project "
                     "(/frame-loop on turns it back on): "
-                    "nothing is checked or read, and no marker is needed."}}
+                    "nothing is checked or read, and no marker is needed.",
+                }
+            }
         return None
     out = _answer(event)
     if out and out.get("systemMessage"):
@@ -213,8 +231,13 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
         out["systemMessage"] = for_user(out["systemMessage"], frame0)
         if (state.LIVE or event.get("hook_event_name") == "Stop") and not state.LIVE.get("queued"):
             short = _short_lines(frame0)
-            _live(state="done", decision=state.LIVE.get("decision", "quiet"), started=state.LIVE.get("started"),
-                  lines=short.split("\n") if short else [], detail=out["systemMessage"].split("\n"))
+            _live(
+                state="done",
+                decision=state.LIVE.get("decision", "quiet"),
+                started=state.LIVE.get("started"),
+                lines=short.split("\n") if short else [],
+                detail=out["systemMessage"].split("\n"),
+            )
             if os.environ.get("FRAME_LOOP_LINES") != "full":  # the details stay in the band's fold
                 if short:
                     out["systemMessage"] = short
@@ -240,8 +263,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         _live_interrupted()
     frame0 = load_frame0()
     if name == "SessionStart":
-        return {"hookSpecificOutput": {"hookEventName": "SessionStart",
-                                       "additionalContext": briefing(frame0, mode)}}
+        return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": briefing(frame0, mode)}}
     if name == "UserPromptSubmit":
         prompt = event.get("prompt") or ""
         if _training_on() and "<cross-session-message" in prompt:
@@ -274,10 +296,13 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if path and touches_config(path):
             faults = node_file_faults(path, tool, tool_input, frame0)
             _log({"event": "config", "tool": tool, "path": path, **({"faults": faults} if faults else {})})
-            return _rise(mode, "frame-loop: L1: the loop's own configuration or record is "
-                         f"touched ({path}). This rises to the human."
-                         + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else ""),
-                         "ask")
+            return _rise(
+                mode,
+                "frame-loop: L1: the loop's own configuration or record is "
+                f"touched ({path}). This rises to the human."
+                + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else ""),
+                "ask",
+            )
         return None
 
     if tool == "Bash":
@@ -285,13 +310,19 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         parts = [x for x in re.split(r"\s*(?:&&|;|\n)\s*", command.strip()) if x] if "<<" not in command else [command]
         if len(parts) > 1 and all(x.startswith(": frame-loop-") and _marker_only(x) for x in parts):
             # Only markers, chained: each is read, declarations before a reading.
-            outs = [_answer({**event, "tool_input": {**tool_input, "command": x}})
-                    for x in sorted(parts, key=lambda x: x.startswith(": frame-loop-read"))]
+            outs = [
+                _answer({**event, "tool_input": {**tool_input, "command": x}})
+                for x in sorted(parts, key=lambda x: x.startswith(": frame-loop-read"))
+            ]
             outs = [o for o in outs if o]
             said = [o["systemMessage"] for o in outs if o.get("systemMessage")]
             told = [(o.get("hookSpecificOutput") or {}).get("additionalContext") for o in outs]
-            merged: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                                             "additionalContext": "\n".join(x for x in told if x)}}
+            merged: dict[str, Any] = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": "\n".join(x for x in told if x),
+                }
+            }
             if said:
                 merged["systemMessage"] = "\n".join(said)
             return merged
@@ -299,9 +330,15 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         # the rest of the chain is checked as any command is.
         mixed = len(parts) > 1 and any(x.startswith(": frame-loop-") for x in parts)
         mixed = mixed or (command.strip().startswith(": frame-loop-") and not _marker_only(command))
-        stray = ("frame-loop: the marker was not read: a marker is a command of its own, never after "
-                 "`cd … &&`, in a chain, with a redirect or `&`, or with a line after its heredoc; run it "
-                 "alone.") if mixed or MARKER_IN_CHAIN.search(command) else ""
+        stray = (
+            (
+                "frame-loop: the marker was not read: a marker is a command of its own, never after "
+                "`cd … &&`, in a chain, with a redirect or `&`, or with a line after its heredoc; run it "
+                "alone."
+            )
+            if mixed or MARKER_IN_CHAIN.search(command)
+            else ""
+        )
         if stray:
             pass
         elif command.strip().startswith(": frame-loop-read"):
@@ -310,24 +347,40 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             wanted = (shlex.split(command.split("\n", 1)[0])[2:] or ["root"])[0]
             known = _tree_nodes(frame0) if os.environ.get("FRAME_LOOP_TREE") else {}
             if wanted not in known:
-                return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
-                        f"frame-loop: no node {wanted!r} "
-                        f"(nodes: {', '.join(known) or 'no tree set'})"}}
+                return {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "additionalContext": f"frame-loop: no node {wanted!r} "
+                        f"(nodes: {', '.join(known) or 'no tree set'})",
+                    }
+                }
             if known[wanted].get("circle"):
-                return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
-                        f"frame-loop: node {wanted} is not engaged: "
+                return {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "additionalContext": f"frame-loop: node {wanted} is not engaged: "
                         "its parents run in a circle, so no path "
-                        "leads to frame 0; ask the author to mend the tree"}}
+                        "leads to frame 0; ask the author to mend the tree",
+                    }
+                }
             state.NODE = wanted
             _log({"event": "engage", "id": wanted})
             asks = "; ".join(f"{a['id']}: {a['text']}" for a in load_frame0()["asks"])
-            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
-                    f"frame-loop: engaged node {wanted}; its asks: {asks}"}}
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": f"frame-loop: engaged node {wanted}; its asks: {asks}",
+                }
+            }
         elif command.strip().startswith(": frame-loop-declare"):
             lines = _declare_lines(command)
             _log({"event": "declare", "lines": lines})
-            return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
-                                           "additionalContext": "frame-loop: declared " + "; ".join(lines)}}
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "additionalContext": "frame-loop: declared " + "; ".join(lines),
+                }
+            }
         found = F.triggers([], command=command)
         if shell_touches_config(command):
             found.append("L1: the loop's own configuration or record is touched")
@@ -336,18 +389,19 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
                 {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": stray}} if stray else None
             )
         _log({"event": "outward", "command": command, "triggers": found})
-        return _rise(mode, "frame-loop: " + "; ".join(found) + ". This rises to the human."
-                     + (f"\n{stray}" if stray else ""), "ask")
+        return _rise(
+            mode,
+            "frame-loop: " + "; ".join(found) + ". This rises to the human." + (f"\n{stray}" if stray else ""),
+            "ask",
+        )
 
     if tool == "ExitPlanMode":
         started = time.time()
         plan = unicodedata.normalize("NFKC", tool_input.get("plan", ""))
         said = "\n".join([plan, *_marks()])  # a marker declares; the plan's text holds no ids
         declared = _declared(said, frame0)
-        result, tier, tier_note = _read(frame0, plan, declared, "a plan", f"plan-{int(started)}",
-                                        said=said)
-        _log({"event": "plan", "declared": declared, "tier": tier, "tier_note": tier_note,
-              **result})
+        result, tier, tier_note = _read(frame0, plan, declared, "a plan", f"plan-{int(started)}", said=said)
+        _log({"event": "plan", "declared": declared, "tier": tier, "tier_note": tier_note, **result})
         tell = _tell("plan", result, tier, started, frame0)
         if result["decision"] == gate.PASS:
             return {"systemMessage": tell}  # the normal approval dialog appears
@@ -361,17 +415,24 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
     engagement, crossings and authority, how to declare, and what rises."""
     tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
     reader = readers.READERS.get(tier, {}).get("model", f"unknown tier {tier!r}")
-    trains = " It trains on its inputs; the human allowed that for this project." if (
-        tier in readers.READERS and _trains(tier)) else ""
+    trains = (
+        " It trains on its inputs; the human allowed that for this project."
+        if (tier in readers.READERS and _trains(tier))
+        else ""
+    )
     if trains:
-        trains += (" frame-loop checks each reading before it leaves: GitHub must confirm this "
-                   "repository is public, and no line you read from outside this project, nor "
-                   "anything that looks like a secret, may be in it. Work as usual.")
+        trains += (
+            " frame-loop checks each reading before it leaves: GitHub must confirm this "
+            "repository is public, and no line you read from outside this project, nor "
+            "anything that looks like a secret, may be in it. Work as usual."
+        )
         if not_public(state.CWD) is not None:
-            trains += (" This repository is not confirmed public; the human allowed labels here, "
-                       "so only labels of your changes leave it, never the changes." if
-                       _writer() and os.environ.get("FRAME_LOOP_LABELS_OK") == "1" else
-                       " This repository is not confirmed public, so frame-loop will not read here.")
+            trains += (
+                " This repository is not confirmed public; the human allowed labels here, "
+                "so only labels of your changes leave it, never the changes."
+                if _writer() and os.environ.get("FRAME_LOOP_LABELS_OK") == "1"
+                else " This repository is not confirmed public, so frame-loop will not read here."
+            )
     read = ": frame-loop-read --serves <ids>"
     lines = [
         "This project runs frame-loop. Its way of working: the human authored frame 0 "
@@ -479,20 +540,28 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "or record also rise to the human.",
     ]
     if mode == "enforce":
-        lines.append("Enforce mode: a rising act asks the human first; a plan is still only "
-                     "informed. Revise the work or tell the human.")
+        lines.append(
+            "Enforce mode: a rising act asks the human first; a plan is still only "
+            "informed. Revise the work or tell the human."
+        )
     else:
-        lines.append("Shadow mode: nothing is blocked. A rise arrives as a note marked "
-                     "[shadow]; tell the human about each one plainly, in your reply, in their "
-                     "words: never the [shadow] mark, an id or the loop's own terms.")
+        lines.append(
+            "Shadow mode: nothing is blocked. A rise arrives as a note marked "
+            "[shadow]; tell the human about each one plainly, in your reply, in their "
+            "words: never the [shadow] mark, an id or the loop's own terms."
+        )
     return "\n".join(lines)
+
 
 def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """answer(), failing closed: an error in enforce mode denies a plan and asks the
     human about any other act; in shadow mode it is only noted."""
     if not isinstance(event, dict):  # valid JSON, but no event: as unreadable as broken JSON
-        return _rise(os.environ.get("FRAME_LOOP_MODE", "shadow"), "frame-loop error: an unreadable event "
-                     f"(a {type(event).__name__}, not an object)", "ask")
+        return _rise(
+            os.environ.get("FRAME_LOOP_MODE", "shadow"),
+            f"frame-loop error: an unreadable event (a {type(event).__name__}, not an object)",
+            "ask",
+        )
     try:
         return answer(event)
     except Exception as error:  # noqa: BLE001  (any failure must close, not open)
@@ -505,11 +574,14 @@ def safe_answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if name == "Stop":
             return {"systemMessage": reason}
         if name == "SessionStart":
-            return {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext":
-                    f"frame-loop is installed here but not running ({reason}). Tell the human."}}
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": f"frame-loop is installed here but not running ({reason}). Tell the human.",
+                }
+            }
         if name in ("UserPromptSubmit", "PostToolUse", "PostToolUseFailure"):  # no decision to make here
-            return {"systemMessage": reason, "hookSpecificOutput": {"hookEventName": name,
-                                                                    "additionalContext": reason}}
+            return {"systemMessage": reason, "hookSpecificOutput": {"hookEventName": name, "additionalContext": reason}}
         if event.get("tool_name") == "ExitPlanMode":
             return _rise("shadow", reason, "deny")  # plan mode stays as it is
         return _rise(os.environ.get("FRAME_LOOP_MODE", "shadow"), reason, "ask")

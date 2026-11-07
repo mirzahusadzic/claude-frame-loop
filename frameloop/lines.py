@@ -46,8 +46,11 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     the exact command or path, for the details."""
     said = " ".join(record.get("triggers") or []) if record.get("event") == "outward" else "L1:"
     # The command as it ran, its heredocs' text left out, so a line after one still shows.
-    exact = (" ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
-             if record.get("event") == "outward" else record.get("path", ""))
+    exact = (
+        " ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
+        if record.get("event") == "outward"
+        else record.get("path", "")
+    )
     for key, words, needs in ACT_WORDS:
         if key in said:
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
@@ -87,31 +90,42 @@ def _verdict(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     if result["decision"] == gate.PASS:
         rules = "no rules set" if reason == "violation: frame 0 states no rules" else "breaks no rule"
         return f"{result['fit']} · {rules}" if result.get("fit") else rules
-    reason = reason.replace("(category ", "(").replace(": the fit does not rest on its declared ask",
-                                                        " (not on its declared ask)")
+    reason = reason.replace("(category ", "(").replace(
+        ": the fit does not rest on its declared ask", " (not on its declared ask)"
+    )
     for prefix, short in (("which-ask: ", "fit "), ("violation: ", "rules ")):
         if reason.startswith(prefix):
-            return short + reason[len(prefix):]
+            return short + reason[len(prefix) :]
     return reason
 
 
 # A turn's signals as the author reads them: why the reader is asked.
-SIGNAL_WORDS = (("an area no rule covers", "it touches files none of your rules cover"),
-                ("a claimed change with no effect", "a change Claude claimed has no effect"),
-                ("checks you owe are unmet", "checks you owe are unmet"), (" unmet", "a check you owe is unmet"),
-                ("not authorized", "a change lies outside what you authorized"))
+SIGNAL_WORDS = (
+    ("an area no rule covers", "it touches files none of your rules cover"),
+    ("a claimed change with no effect", "a change Claude claimed has no effect"),
+    ("checks you owe are unmet", "checks you owe are unmet"),
+    (" unmet", "a check you owe is unmet"),
+    ("not authorized", "a change lies outside what you authorized"),
+)
 
 
-RULE_WORDS = {"large-diff": "it is a large change", "deleted-file": "it deletes a file",
-              "dependency-manifest": "it changes a dependency", "loop-settings": "it touches the loop's settings"}
+RULE_WORDS = {
+    "large-diff": "it is a large change",
+    "deleted-file": "it deletes a file",
+    "dependency-manifest": "it changes a dependency",
+    "loop-settings": "it touches the loop's settings",
+}
 
 
 def signal_words(signals: list[str]) -> str:
     said: list[str] = []
     for sig in _signals_short(signals):
         rule = re.match(r"a rule signal \((.+)\)", sig)
-        words = ([RULE_WORDS.get(x.strip(), f"an effort rule ({x.strip()})") for x in rule.group(1).split(",")] if rule
-                 else [next((w for k, w in SIGNAL_WORDS if k in sig), sig)])
+        words = (
+            [RULE_WORDS.get(x.strip(), f"an effort rule ({x.strip()})") for x in rule.group(1).split(",")]
+            if rule
+            else [next((w for k, w in SIGNAL_WORDS if k in sig), sig)]
+        )
         said += [w for w in words if w not in said]
     return ", ".join(said)
 
@@ -120,10 +134,12 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     """Why a reading did not pass, as a sentence the author reads: no ids, no category
     names (frame 0: plain words). Ids left in it are put in the author's words later."""
     reason, question = result.get("reason") or "", result.get("question")
-    by_question = {"declare": "Claude didn't say which of your requirements this serves",
-                   "missing-ask": "this serves a purpose none of your requirements has: add one?",
-                   "padding": "this serves none of your requirements",
-                   "not-settled": "the reader couldn't settle what this is for"}
+    by_question = {
+        "declare": "Claude didn't say which of your requirements this serves",
+        "missing-ask": "this serves a purpose none of your requirements has: add one?",
+        "padding": "this serves none of your requirements",
+        "not-settled": "the reader couldn't settle what this is for",
+    }
     if question in by_question:
         return by_question[question]
     if reason.startswith("frame 0 is not ready"):
@@ -146,10 +162,11 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         return "the reader doesn't see this resting on the requirement Claude named"
     other = re.match(r"which-ask: the reader names '([^']+)'", reason)
     if other:
-        return {"other": "the reader sees a purpose none of your requirements has",
-                "none": "the reader sees it serving none of your requirements",
-                "unclear": "the reader couldn't settle which of your requirements this serves"}.get(
-            other.group(1), f"the reader sees it serving {other.group(1)}, not the requirement Claude named")
+        return {
+            "other": "the reader sees a purpose none of your requirements has",
+            "none": "the reader sees it serving none of your requirements",
+            "unclear": "the reader couldn't settle which of your requirements this serves",
+        }.get(other.group(1), f"the reader sees it serving {other.group(1)}, not the requirement Claude named")
     return _verdict(result, frame0)
 
 
@@ -157,8 +174,9 @@ def _short(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     """The one line the author reads for a reading, Claude Code's way: a mark and words."""
     if result.get("scope"):  # the author's first; a reading that failed beside it is said too
         unread = result["decision"] == gate.BLOCK or (result.get("reason") or "").startswith("not read")
-        return (f"frame-loop ▲ needs you: a change lies outside what you authorized ({', '.join(result['scope'])})"
-                + (" · not checked: " + re.sub(r"^not read: ", "", _plain(result, frame0)) if unread else ""))
+        return f"frame-loop ▲ needs you: a change lies outside what you authorized ({', '.join(result['scope'])})" + (
+            " · not checked: " + re.sub(r"^not read: ", "", _plain(result, frame0)) if unread else ""
+        )
     if result["decision"] == gate.PASS:
         return "frame-loop ✓ checked: does what you asked, breaks none of your rules"
     if result["decision"] == gate.BLOCK or (result.get("reason") or "").startswith("not read"):
@@ -176,8 +194,9 @@ def _signals_short(signals: list[str]) -> list[str]:
     return [f"{len(unmet)} checks you owe are unmet"] + rest
 
 
-def _tell(kind: str, result: dict[str, Any], tier: str | None, started: float,
-          frame0: dict[str, Any] | None = None) -> str:
+def _tell(
+    kind: str, result: dict[str, Any], tier: str | None, started: float, frame0: dict[str, Any] | None = None
+) -> str:
     """Two lines that fit a laptop: the verdict, then the reader, effort, time, tokens.
     The author reads one shorter line (`_short`); these two are the details."""
     refused = (result.get("reason") or "").startswith("not read") and not result.get("scope")
@@ -186,8 +205,9 @@ def _tell(kind: str, result: dict[str, Any], tier: str | None, started: float,
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
     notes = []
     for note in result.get("effort_notes") or []:
-        notes.append(", ".join("↑" + x for x in note[len("raised: "):].split(", "))
-                     if note.startswith("raised: ") else note)
+        notes.append(
+            ", ".join("↑" + x for x in note[len("raised: ") :].split(", ")) if note.startswith("raised: ") else note
+        )
     effort = f" {result['effort']}" if result.get("effort") else ""
     effort += f" {', '.join(notes)}" if notes else ""
     if "usage" not in result and not result.get("effort"):
@@ -216,7 +236,7 @@ def _guide_words(change: str, lost: list[str]) -> str:
     said = []
     for n in counts.replace(" lines", "").replace(" line", "").split():
         said.append(f"{n[1:]} line{'s' if n[1:] != '1' else ''} {'added' if n[0] == '+' else 'removed'}")
-    held = (f"{len(lost)} of your rules lost their wording" if lost else "your rules all still hold")
+    held = f"{len(lost)} of your rules lost their wording" if lost else "your rules all still hold"
     return f"{name}: {', '.join(said)}; {held}"
 
 
@@ -227,15 +247,19 @@ def for_user(text: str, frame0: dict[str, Any] | None) -> str:
     """A line the human reads: every id of frame 0 or the rules in its own words, cut
     short and quoted; no built-in guard's id; a step by its number. Ids stay for agents
     (Asked for: "these are cryptic and of no use for the user")."""
-    words = {x["id"]: " ".join(x["text"].split()) for part in
-             ("asks", "principles", "triggers", "obligations", "semantic")
-             for x in (frame0 or {}).get(part) or [] if isinstance(x, dict) and x.get("id") and x.get("text")}
+    words = {
+        x["id"]: " ".join(x["text"].split())
+        for part in ("asks", "principles", "triggers", "obligations", "semantic")
+        for x in (frame0 or {}).get(part) or []
+        if isinstance(x, dict) and x.get("id") and x.get("text")
+    }
     text = BUILT_IN.sub("", text)
     text = re.sub(r"· S(\d+) ·", r"· step \1 ·", text)
     if words:
         short = words  # in full: never cut, never "…" (the author)
-        ids = re.compile(r"(?<![\w'])'?(" + "|".join(map(re.escape, sorted(words, key=len, reverse=True)))
-                         + r")'?(?![\w'])")
+        ids = re.compile(
+            r"(?<![\w'])'?(" + "|".join(map(re.escape, sorted(words, key=len, reverse=True))) + r")'?(?![\w'])"
+        )
         text = ids.sub(lambda m: f"“{short[m.group(1)]}”", text)
     return "\n".join(_wrap(line) for line in text.split("\n"))
 
@@ -254,9 +278,16 @@ def _wrap(line: str, width: int = 100) -> str:
             current = joined
     out.append(current)
     import textwrap  # a part still too long wraps at its words, never cut
+
     indent = " " * (len(line) - len(line.lstrip(" ")) + 4)
-    return "\n".join(x if len(x) <= width else "\n".join(textwrap.wrap(
-        x, width, subsequent_indent=indent, break_long_words=False, break_on_hyphens=False)) for x in out)
+    return "\n".join(
+        x
+        if len(x) <= width
+        else "\n".join(
+            textwrap.wrap(x, width, subsequent_indent=indent, break_long_words=False, break_on_hyphens=False)
+        )
+        for x in out
+    )
 
 
 def _short_lines(frame0: dict[str, Any] | None) -> str:
@@ -281,4 +312,3 @@ def _short_lines(frame0: dict[str, Any] | None) -> str:
         return for_user(f"frame-loop {mark} " + " · ".join(facts), frame0)
     lines = shorts[-1:] + (["  " + ("▲ needs you: " if needs else "") + " · ".join(facts)] if facts else [])
     return for_user("\n".join(lines), frame0)
-

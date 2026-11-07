@@ -41,8 +41,7 @@ def node(**over):
                 "owner": "leaves",
                 "inversion": {
                     "hello.py takes a --name option and greets by it": (
-                        "hello.py takes no --name option "
-                        "and never greets by name"
+                        "hello.py takes no --name option and never greets by name"
                     )
                 },
             }
@@ -66,12 +65,20 @@ class PremiseTests(unittest.TestCase):
 
     def test_a_node_without_a_promise_is_refused(self):
         self.assertTrue(any("no promise" in f for f in self.faults(promises=[])))
-        self.assertTrue(any("no promise" in f for f in tree.node_faults(
-            {k: v for k, v in node().items() if k != "promises"}, FRAME0, {"root": FRAME0})))
+        self.assertTrue(
+            any(
+                "no promise" in f
+                for f in tree.node_faults(
+                    {k: v for k, v in node().items() if k != "promises"}, FRAME0, {"root": FRAME0}
+                )
+            )
+        )
 
     def test_a_promise_is_one_per_concern_and_says_something(self):
-        twice = [{"concern": "greeting", "text": "a name given is greeted"},
-                 {"concern": "greeting", "text": "no name greets the world"}]
+        twice = [
+            {"concern": "greeting", "text": "a name given is greeted"},
+            {"concern": "greeting", "text": "no name greets the world"},
+        ]
         self.assertTrue(any("one promise per concern" in f for f in self.faults(promises=twice)))
         self.assertTrue(any("concern and its words" in f for f in self.faults(promises=[{"concern": "greeting"}])))
 
@@ -107,8 +114,13 @@ class NodeFaultTests(unittest.TestCase):
 
     def test_a_scope_outside_the_parents_is_refused(self):
         parent = node(id="greeter")
-        child = node(id="name-flag", parent="greeter", scope=["src/*"],
-                     asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}], predictions=M1_PREDICTED)
+        child = node(
+            id="name-flag",
+            parent="greeter",
+            scope=["src/*"],
+            asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}],
+            predictions=M1_PREDICTED,
+        )
         faults = tree.node_faults(child, parent, {"root": FRAME0, "greeter": parent})
         self.assertTrue(any("src/*" in f and "outside" in f for f in faults), faults)
 
@@ -123,8 +135,13 @@ class NodeFaultTests(unittest.TestCase):
         nodes = {"root": FRAME0, "greeter": parent, "name-flag": child}
         self.assertEqual(tree.node_faults(child, parent, nodes), [])  # left out, still inherited
         self.assertIn("P9", [p["id"] for p in tree.frame0_for(child, FRAME0, nodes)["principles"]])
-        loose = node(id="name-flag", parent="greeter", principles=[{"id": "P9", "text": "Flags may have tests."}],
-                     asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}], predictions=M1_PREDICTED)
+        loose = node(
+            id="name-flag",
+            parent="greeter",
+            principles=[{"id": "P9", "text": "Flags may have tests."}],
+            asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}],
+            predictions=M1_PREDICTED,
+        )
         faults = tree.node_faults(loose, parent, {**nodes, "name-flag": loose})
         self.assertTrue(any("P9" in f and "reword" in f for f in faults), faults)
 
@@ -150,9 +167,18 @@ class ClimbTests(unittest.TestCase):
     the root's asks are delegated when a child quotes them."""
 
     def nodes(self):
-        greeter = node(asks=[node()["asks"][0],
-                             {"id": "N2", "text": "the README has a Usage section", "quotes": "A2", "owner": "leaves",
-                              "inversion": {"the README has a Usage section": "the README has no Usage section"}}])
+        greeter = node(
+            asks=[
+                node()["asks"][0],
+                {
+                    "id": "N2",
+                    "text": "the README has a Usage section",
+                    "quotes": "A2",
+                    "owner": "leaves",
+                    "inversion": {"the README has a Usage section": "the README has no Usage section"},
+                },
+            ]
+        )
         return {"root": FRAME0, "greeter": greeter}
 
     def test_completion_climbs_to_the_root_only_when_every_ask_below_is_filled(self):

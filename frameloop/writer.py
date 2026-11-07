@@ -45,14 +45,17 @@ def facts_line(text: str, manifests: list[str]) -> str:
             modified.remove(current)
             deleted.append(current)
         elif current and line.startswith("rename from "):
-            source = line[len("rename from "):]
+            source = line[len("rename from ") :]
             if current in modified:
                 modified.remove(current)
             renamed.append(f"{source} to {current}")
     if not (added or deleted or renamed or modified):
         return ""
-    parts = [f"{name} {', '.join(paths)}" for name, paths in
-             (("added", added), ("deleted", deleted), ("renamed", renamed), ("modified", modified)) if paths]
+    parts = [
+        f"{name} {', '.join(paths)}"
+        for name, paths in (("added", added), ("deleted", deleted), ("renamed", renamed), ("modified", modified))
+        if paths
+    ]
     touched = sorted({p.rsplit("/", 1)[-1] for p in added + deleted + modified if p.rsplit("/", 1)[-1] in manifests})
     return "Files: " + "; ".join(parts) + "." + (f" Manifests: {', '.join(touched)}." if touched else "")
 
@@ -73,7 +76,10 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
     avoid = tuple(avoid)
     ask = "Write the label for this change." + (
         " Your last label repeated these phrases of the change word for word; describe them "
-        "in other words: " + "; ".join(f'"{a}"' for a in avoid) if avoid else "")
+        "in other words: " + "; ".join(f'"{a}"' for a in avoid)
+        if avoid
+        else ""
+    )
     cached = _cache(text, avoid)
     keep = os.environ.get("FRAME_LOOP_WRITER_CACHE", "1") != "0"  # off: a fresh label each time
     if keep and cached.exists():
@@ -83,11 +89,32 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
     started = time.time()
     try:
         done = subprocess.run(
-            ["claude", "-p", ask, "--model", MODEL,
-             "--system-prompt", INSTRUCTION, "--tools", "", "--setting-sources", "user",
-             "--strict-mcp-config", "--disable-slash-commands", "--no-session-persistence",
-             "--max-turns", "1", "--output-format", "json"],
-            input=text, capture_output=True, text=True, cwd=folder, timeout=180)
+            [
+                "claude",
+                "-p",
+                ask,
+                "--model",
+                MODEL,
+                "--system-prompt",
+                INSTRUCTION,
+                "--tools",
+                "",
+                "--setting-sources",
+                "user",
+                "--strict-mcp-config",
+                "--disable-slash-commands",
+                "--no-session-persistence",
+                "--max-turns",
+                "1",
+                "--output-format",
+                "json",
+            ],
+            input=text,
+            capture_output=True,
+            text=True,
+            cwd=folder,
+            timeout=180,
+        )
     except (OSError, subprocess.TimeoutExpired) as error:
         return {"error": f"the writer did not run ({type(error).__name__})"}
     try:
@@ -96,8 +123,12 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
         return {"error": f"the writer gave no result (exit {done.returncode})"}
     if done.returncode != 0 or out.get("is_error") or not (out.get("result") or "").strip():
         return {"error": f"the writer failed ({str(out.get('result') or out.get('subtype'))[:80]})"}
-    made = {"label": out["result"].strip(), "seconds": round(time.time() - started, 1),
-            "cost": out.get("total_cost_usd"), "model": MODEL}
+    made = {
+        "label": out["result"].strip(),
+        "seconds": round(time.time() - started, 1),
+        "cost": out.get("total_cost_usd"),
+        "model": MODEL,
+    }
     if keep:
         cached.write_text(json.dumps(made), encoding="utf-8")
     return made
@@ -109,9 +140,9 @@ def copied(label: str, text: str) -> list[str]:
     flat_label, flat_text = " ".join(label.split()), " ".join(text.split())
     runs, i = [], 0
     while i <= len(flat_label) - WIDTH:
-        if flat_label[i:i + WIDTH] in flat_text:
+        if flat_label[i : i + WIDTH] in flat_text:
             end = i + WIDTH
-            while end < len(flat_label) and flat_label[i:end + 1] in flat_text:
+            while end < len(flat_label) and flat_label[i : end + 1] in flat_text:
                 end += 1
             runs.append(flat_label[i:end].strip())
             i = end
@@ -123,4 +154,4 @@ def copied(label: str, text: str) -> list[str]:
 def quotes(label: str, text: str) -> bool:
     """Whether the label copies the change: any WIDTH characters in a row, spaces collapsed."""
     flat_label, flat_text = " ".join(label.split()), " ".join(text.split())
-    return any(flat_label[i:i + WIDTH] in flat_text for i in range(max(0, len(flat_label) - WIDTH + 1)))
+    return any(flat_label[i : i + WIDTH] in flat_text for i in range(max(0, len(flat_label) - WIDTH + 1)))

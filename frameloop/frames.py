@@ -40,9 +40,7 @@ def _spans(frame0: dict[str, Any], kinds: tuple[str, ...]) -> list[dict[str, str
         for item in frame0.get(keys[kind]) or []:
             if not (isinstance(item, dict) and item.get("id") and item.get("text")):
                 raise FrameError(f"frame 0's {keys[kind]} must each have an id and a text")
-            out.append(
-                {"id": item["id"], "text": NAMED[kind].format(**item), "kind": kind}
-            )
+            out.append({"id": item["id"], "text": NAMED[kind].format(**item), "kind": kind})
     return out
 
 
@@ -72,8 +70,21 @@ def _output(labels: list[str]) -> dict[str, Any]:
 MOST = {"step": 2, "completion": 3}
 
 
-def _frame(name, relation, purpose, promise, body, anchors, step, labels, instruction,
-           interventions, allowed, tier, most=MOST["step"]) -> dict[str, Any]:
+def _frame(
+    name,
+    relation,
+    purpose,
+    promise,
+    body,
+    anchors,
+    step,
+    labels,
+    instruction,
+    interventions,
+    allowed,
+    tier,
+    most=MOST["step"],
+) -> dict[str, Any]:
     tier = readers_tier(tier)
     if tier not in READERS:
         raise FrameError(f"tier is one of {', '.join(READERS)}, not {tier!r}")
@@ -138,8 +149,10 @@ def frame0_faults(frame0: dict[str, Any]) -> list[str]:
             faults.append(f"{ask['id']}: no inversion")
         elif [k.strip() for k in inversion] != [text]:
             covered = sum(len(k) for k in inversion)
-            faults.append(f"{ask['id']}: the inversion restates {covered} of {len(text)} "
-                          "characters; it must restate the whole ask")
+            faults.append(
+                f"{ask['id']}: the inversion restates {covered} of {len(text)} "
+                "characters; it must restate the whole ask"
+            )
     return faults + obligation_faults(frame0)
 
 
@@ -182,7 +195,14 @@ def which_ask(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
         "the step serves " + " and ".join(mine) + " of frame 0",
         "decide which of frame 0's asks the step serves, by its facts alone",
         "a step serves an ask only by what frame 0's asks state, never by the agent's account",
-        body, mine, step, labels, instruction, interventions, allowed, tier,
+        body,
+        mine,
+        step,
+        labels,
+        instruction,
+        interventions,
+        allowed,
+        tier,
     )
 
 
@@ -199,8 +219,14 @@ def undeclared(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[
         "the step serves one of frame 0's asks",
         "read which of frame 0's asks an undeclared step fulfils, by its facts alone",
         "a step serves an ask only by what frame 0's asks state, never by the agent's account",
-        body, [asks[0]], step, labels, FULFIL_INSTRUCTION,
-        {"repeat": True, "ablation": True}, {"ablation": [label for label in labels if label != asks[0]]}, tier,
+        body,
+        [asks[0]],
+        step,
+        labels,
+        FULFIL_INSTRUCTION,
+        {"repeat": True, "ablation": True},
+        {"ablation": [label for label in labels if label != asks[0]]},
+        tier,
     )
 
 
@@ -235,8 +261,13 @@ def violation(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
         "the step breaks none of frame 0's principles and trips none of its triggers",
         "read whether the step breaks a principle or trips a trigger, by its facts alone",
         "a step breaks a rule only by what frame 0's rules state, never by the agent's account",
-        body, [rules[0]], step, labels, VIOLATION_INSTRUCTION,
-        {"repeat": True, "ablation": True}, {"ablation": [label for label in labels if label != rules[0]]},
+        body,
+        [rules[0]],
+        step,
+        labels,
+        VIOLATION_INSTRUCTION,
+        {"repeat": True, "ablation": True},
+        {"ablation": [label for label in labels if label != rules[0]]},
         tier,
     )
 
@@ -249,9 +280,7 @@ def stage_two_anchor(frame0: dict[str, Any], baseline: str, repeat: str) -> str 
     return baseline if baseline == repeat and baseline in rules else None
 
 
-def violation_confirm(
-    frame0: dict[str, Any], step: dict[str, Any], named: str, tier: str
-) -> dict[str, Any]:
+def violation_confirm(frame0: dict[str, Any], step: dict[str, Any], named: str, tier: str) -> dict[str, Any]:
     """Stage 2, only when stage 1's baseline names a rule: the anchor is exactly that
     id, by rule, never chosen by hand. Carried means the finding rests on that rule's
     text, a confirmed break. Cooled means the reader names it even with it cut, which
@@ -264,7 +293,11 @@ def violation_confirm(
         f"the step breaks {named} of frame 0",
         f"decide whether the reader's finding that the step breaks {named} rests on {named}",
         "a step breaks a rule only by what frame 0's rules state, never by the agent's account",
-        body, [named], step, labels, VIOLATION_INSTRUCTION,
+        body,
+        [named],
+        step,
+        labels,
+        VIOLATION_INSTRUCTION,
         {"ablation": True, "sham": {"draws": 1}, **({"control": rules} if len(rules) > 1 else {})},
         {"ablation": [label for label in labels if label != named]},
         tier,
@@ -279,8 +312,9 @@ COMPLETION_INSTRUCTION = (
 )
 
 
-def completion(frame0: dict[str, Any], ask_id: str, steps: list[dict[str, Any]], tier: str,
-               with_diffs: bool = True) -> dict[str, Any]:
+def completion(
+    frame0: dict[str, Any], ask_id: str, steps: list[dict[str, Any]], tier: str, with_diffs: bool = True
+) -> dict[str, Any]:
     """One ask at completion or a crossing. The ask is the input; the
     steps are the body, each with its deterministic label, and the steps claimed for the
     ask carry their diff snippets when `with_diffs`. The claimed steps are the anchors; a
@@ -292,9 +326,14 @@ def completion(frame0: dict[str, Any], ask_id: str, steps: list[dict[str, Any]],
     claimed = [s["id"] for s in steps if ask_id in s.get("claims", [])]
     if not claimed:
         raise FrameError(f"no step is claimed for {ask_id}: unfulfilled by rule, not read")
-    body = [{"id": s["id"], "kind": "step",
-             "text": f"{s['id']}: {s['label']}" + (f"\n{s['diff']}" if with_diffs and s["id"] in claimed else "")}
-            for s in steps]
+    body = [
+        {
+            "id": s["id"],
+            "kind": "step",
+            "text": f"{s['id']}: {s['label']}" + (f"\n{s['diff']}" if with_diffs and s["id"] in claimed else ""),
+        }
+        for s in steps
+    ]
     inverted = next(iter((ask.get("inversion") or {}).values()), None)
     interventions: dict[str, Any] = {"repeat": True, "ablation": True, "sham": {"draws": 1}}
     if set(claimed) != {s["id"] for s in steps}:
@@ -313,8 +352,16 @@ def completion(frame0: dict[str, Any], ask_id: str, steps: list[dict[str, Any]],
         f"the steps claimed for {ask_id} fulfil it",
         f"decide whether {ask_id} is fulfilled by the steps claimed for it",
         "an ask is fulfilled only by what the steps did, never by the agent's claim",
-        body, claimed, {"id": "completion", "summary": "", "facts": {}}, labels,
-        COMPLETION_INSTRUCTION, interventions, allowed, tier, most=MOST["completion"])
+        body,
+        claimed,
+        {"id": "completion", "summary": "", "facts": {}},
+        labels,
+        COMPLETION_INSTRUCTION,
+        interventions,
+        allowed,
+        tier,
+        most=MOST["completion"],
+    )
     frame["inputs"] = [{"id": "ask", "text": f"The ask: {ask['text']}"}]
     frame["locus"] = "the workflow's steps and one ask of frame 0"
     frame["grain"] = "one ask of frame 0 over the workflow's steps"
