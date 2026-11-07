@@ -63,6 +63,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # module, not a second copy with an empty session and folder.
 sys.modules.setdefault("hook", sys.modules[__name__])
 import readers  # noqa: E402
+import state  # noqa: E402
 import frames  # noqa: E402
 import facts as F  # noqa: E402
 import gate  # noqa: E402
@@ -76,8 +77,6 @@ READ_ONLY = {"cat", "head", "tail", "less", "more", "grep", "rg", "ls", "wc", "s
              "sort", "uniq", "cut", "tr", "nl", "column", "sed"}
 # sed reads unless it edits in place or its script writes (w/W): those calls are writes.
 SED_WRITES = re.compile(r"(^|\s)(-i\S*|--in-place\S*|-[a-zA-Z]*i)(\s|$)|(^|['\";/}\s])[wW]\s+\S")
-_SESSION: str | None = None
-_CWD: str | None = None
 _EXCUSED: set[str] = set()
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 RANK = {level: i for i, level in enumerate(EFFORTS)}
@@ -162,11 +161,11 @@ def load_frame0() -> dict[str, Any]:
         frame0["triggers"] = frame0.get("triggers", []) + [
             {"id": r["id"], "text": rule_words(r)} for r in accepted if r["kind"] == "trigger"]
         frame0["semantic"] = [r for r in accepted if r["kind"] == "semantic"]
-    if _NODE and _NODE != "root" and not frame0.get("unwritten"):
+    if state.NODE and state.NODE != "root" and not frame0.get("unwritten"):
         import tree
         nodes = _tree_nodes(frame0)
-        if _NODE in nodes:  # the engaged node: its asks, and every rule above it
-            return tree.frame0_for(nodes[_NODE], frame0, nodes)
+        if state.NODE in nodes:  # the engaged node: its asks, and every rule above it
+            return tree.frame0_for(nodes[state.NODE], frame0, nodes)
     return frame0
 
 
@@ -221,7 +220,7 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
     rules = project_rules()
     if not rules:
         return []
-    root = project_root(_CWD)
+    root = project_root(state.CWD)
     notes = []
     if frame0.get("semantic"):
         notes += ["Rules that need a reading, by scope (each is read by its guide's words):",
@@ -298,9 +297,9 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
     and frame 0's ids masked; a label that copies the change, names an id or quotes an ask
     is not sent; and code, not the writer, states the files it touches (a reviewer)."""
     write = _writer()
-    if _trains(tier) and not_public(_CWD) is not None and not (
+    if _trains(tier) and not_public(state.CWD) is not None and not (
             write and os.environ.get("FRAME_LOOP_LABELS_OK") == "1"):
-        return None, (f"{_short_path(project_root(_CWD))} is not confirmed public, and "
+        return None, (f"{_short_path(project_root(state.CWD))} is not confirmed public, and "
                       f"{_reader_name(tier)} trains on its inputs")
     sent, sent_kind = text, kind
     if write and not text.strip():
@@ -361,20 +360,17 @@ def _log(record: dict[str, Any]) -> None:
     path = os.environ.get("FRAME_LOOP_LOG")
     if not path:
         return
-    node = {"node": _NODE} if _NODE and "node" not in record else {}
+    node = {"node": state.NODE} if state.NODE and "node" not in record else {}
     with open(path, "a", encoding="utf-8") as log:
-        log.write(json.dumps({"at": time.time(), "session": _SESSION, **node, **record},
+        log.write(json.dumps({"at": time.time(), "session": state.SESSION, **node, **record},
                              ensure_ascii=False) + "\n")
-
-
-_NODE: str | None = None  # the node this session engaged (`: frame-loop-node <id>`)
 
 
 def _engaged() -> str | None:
     """The last node this session engaged, if a tree is set (FRAME_LOOP_TREE)."""
     if not os.environ.get("FRAME_LOOP_TREE"):
         return None
-    marks = [r for r in _records_all() if r.get("session") == _SESSION and r.get("event") == "engage"]
+    marks = [r for r in _records_all() if r.get("session") == state.SESSION and r.get("event") == "engage"]
     return marks[-1]["id"] if marks else None
 
 
@@ -386,12 +382,11 @@ def _tree_nodes(frame0: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 def load_frame0_root() -> dict[str, Any]:
     """Frame 0 itself, whichever node is engaged."""
-    global _NODE
-    saved, _NODE = _NODE, None
+    saved, state.NODE = state.NODE, None
     try:
         return load_frame0()
     finally:
-        _NODE = saved
+        state.NODE = saved
 
 
 def node_file_faults(path: str, tool: str, tool_input: dict[str, Any], frame0: dict[str, Any]) -> list[str]:
@@ -507,7 +502,7 @@ def _strings(value: Any) -> list[str]:
 
 
 def _held_dir() -> Path:
-    return Path(os.environ.get("FRAME_LOOP_WORK", Path(_CWD or os.getcwd()) / ".frame-loop")) / "held"
+    return Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop")) / "held"
 
 
 def hold(content: Any, source: str) -> int:
@@ -518,7 +513,7 @@ def hold(content: Any, source: str) -> int:
         return 0
     folder = _held_dir()
     folder.mkdir(parents=True, exist_ok=True)
-    with open(folder / f"{_SESSION or 'none'}.jsonl", "a", encoding="utf-8") as out:
+    with open(folder / f"{state.SESSION or 'none'}.jsonl", "a", encoding="utf-8") as out:
         for line in lines:
             out.write(json.dumps({"h": _hash(line), "from": source}) + "\n")
     return len(lines)
@@ -539,10 +534,10 @@ def _held(session: str | None) -> dict[str, str]:
 
 def _outside_path(token: str) -> bool:
     expanded = token.replace("~", real_home(), 1) if token.startswith("~") else token
-    candidate = Path(expanded) if Path(expanded).is_absolute() else Path(_CWD or os.getcwd()) / expanded
+    candidate = Path(expanded) if Path(expanded).is_absolute() else Path(state.CWD or os.getcwd()) / expanded
     if not candidate.exists():
         return False
-    root = project_root(_CWD)
+    root = project_root(state.CWD)
     resolved = candidate.resolve()
     return not (resolved == root or root in resolved.parents)
 
@@ -565,7 +560,7 @@ def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
 
 def _in_repository(line: str) -> bool:
     """Whether the public repository's HEAD already holds this exact line."""
-    root = str(project_root(_CWD))
+    root = str(project_root(state.CWD))
     files = _git(root, "grep", "-F", "-l", "-e", line, "HEAD", "--")
     for name in files.stdout.splitlines():
         shown = _git(root, "show", name if name.startswith("HEAD:") else f"HEAD:{name}")
@@ -582,7 +577,7 @@ def outbound_faults(text: str, kind: str) -> list[str]:
     else:
         lines = text.splitlines()
     faults = []
-    held = _held(_SESSION)
+    held = _held(state.SESSION)
     matched = []
     for line in lines:
         norm = _norm(line)
@@ -637,7 +632,7 @@ def _read_on_demand(command: str) -> dict[str, Any]:
         if due:
             text += f"\n  owes {', '.join(due)} (checked when the change is read)"
     else:
-        code, text = ondemand.reading(project_root(_CWD), args.serves, args.effort, args.base, args.done)
+        code, text = ondemand.reading(project_root(state.CWD), args.serves, args.effort, args.base, args.done)
     return {"systemMessage": text,
             "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
 
@@ -677,12 +672,12 @@ def withhold_file() -> str:
     reader that trains on its inputs, the user's private names and the hashes of the lines
     this session read from outside the project, less those the public repository holds."""
     import reader
-    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(_CWD or os.getcwd()) / ".frame-loop"))
+    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
     folder.mkdir(parents=True, exist_ok=True)
-    lines = sorted(set(_held(_SESSION)) - _EXCUSED)
+    lines = sorted(set(_held(state.SESSION)) - _EXCUSED)
     data = {"always": {"patterns": [p for _, p in S.SECRET_PATTERNS]},
             "training": {"names": reader.private_names(), "lines": lines}}
-    path = folder / f"withhold-{_SESSION or 'none'}.json"
+    path = folder / f"withhold-{state.SESSION or 'none'}.json"
     path.write_text(json.dumps(data), encoding="utf-8")
     os.environ["FRAME_LOOP_WITHHOLD"] = str(path)
     return str(path)
@@ -755,7 +750,7 @@ def _protected() -> list[Path]:
     for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
         if os.environ.get(name):
             paths.append(Path(os.environ[name]).resolve())
-    paths.append(switch_path({"cwd": _CWD}).resolve())  # the author's switch: Claude never flips it
+    paths.append(switch_path({"cwd": state.CWD}).resolve())  # the author's switch: Claude never flips it
     return paths
 
 
@@ -836,9 +831,6 @@ def _verdict(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     return reason
 
 
-_LIVE: dict[str, Any] = {}  # this answer's reading, for the live view: started, decision
-
-
 def _alive(pid: Any) -> bool:
     try:
         os.kill(int(pid), 0)
@@ -850,21 +842,21 @@ def _alive(pid: Any) -> bool:
 _LIVE_LOCK = threading.Lock()
 
 
-def _live(**state: Any) -> None:
+def _live(**fields: Any) -> None:
     """The loop's state now, for a live view (the frame-loop-live mod): one small file per
     session in FRAME_LOOP_LIVE, rewritten whole. Off unless set; never fails a hook."""
     folder = os.environ.get("FRAME_LOOP_LIVE")
-    if not folder or not _SESSION:
+    if not folder or not state.SESSION:
         return
     try:
         _LIVE_LOCK.acquire()
         Path(folder).mkdir(parents=True, exist_ok=True)
-        path = Path(folder) / f"{_SESSION}.json"
+        path = Path(folder) / f"{state.SESSION}.json"
         # Two questions run at once and both report progress: one lock, one temporary file
         # per thread, so a write never cuts another short (seen as half a file in the band).
         tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
-        pid = {"pid": _LIVE["background"]} if _LIVE.get("background") else {}
-        tmp.write_text(json.dumps({"session": _SESSION, "at": time.time(), **pid, **state}, ensure_ascii=False),
+        pid = {"pid": state.LIVE["background"]} if state.LIVE.get("background") else {}
+        tmp.write_text(json.dumps({"session": state.SESSION, "at": time.time(), **pid, **fields}, ensure_ascii=False),
                        encoding="utf-8")
         tmp.replace(path)
     except OSError:
@@ -878,10 +870,10 @@ def _live_interrupted() -> None:
     """A read the user interrupted never wrote its end: at the next prompt or session
     start, its state is closed, so the band never shows a check that is not running."""
     folder = os.environ.get("FRAME_LOOP_LIVE")
-    path = Path(folder) / f"{_SESSION}.json" if folder and _SESSION else None
+    path = Path(folder) / f"{state.SESSION}.json" if folder and state.SESSION else None
     try:
-        state = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
-        if state.get("state") == "reading" and not _alive(state.get("pid")):  # a background read lives on
+        shown = json.loads(path.read_text(encoding="utf-8")) if path and path.is_file() else {}
+        if shown.get("state") == "reading" and not _alive(shown.get("pid")):  # a background read lives on
             _live(state="done", decision="quiet", lines=["frame-loop · the last check was interrupted"], detail=[])
     except (OSError, ValueError):
         pass
@@ -890,18 +882,18 @@ def _live_interrupted() -> None:
 def _live_step(what: str, n: int = 0, of: int = 0, key: str | None = None) -> None:
     """A reading's step as it starts: what is asked now, which of how many, and what the
     same step took last time, for an estimate of what is left."""
-    _LIVE.setdefault("started", time.time())
-    _LIVE["step"] = {"what": what, "n": n, "of": of, "key": key, "at": time.time(), "answers": 0,
+    state.LIVE.setdefault("started", time.time())
+    state.LIVE["step"] = {"what": what, "n": n, "of": of, "key": key, "at": time.time(), "answers": 0,
                      "expected": _history().get(key) if key else None}
     _live_now()
 
 
 def _live_now() -> None:
-    step = _LIVE.get("step") or {}
+    step = state.LIVE.get("step") or {}
     expected = step.get("expected") or {}
-    _live(state="reading", what=_LIVE.get("what", "checking"), why=_LIVE.get("why"),
-          so_far=_LIVE.get("so_far"), step=step.get("what"), n=step.get("n"), of=step.get("of"),
-          started=_LIVE["started"], step_started=step.get("at"), answers=step.get("answers", 0),
+    _live(state="reading", what=state.LIVE.get("what", "checking"), why=state.LIVE.get("why"),
+          so_far=state.LIVE.get("so_far"), step=step.get("what"), n=step.get("n"), of=step.get("of"),
+          started=state.LIVE["started"], step_started=step.get("at"), answers=step.get("answers", 0),
           expected=expected.get("calls"), expected_seconds=expected.get("seconds"))
 
 
@@ -909,10 +901,10 @@ def _on_answers(n: int) -> None:
     """The reader's answers so far in this step (reader.on_progress), summed over the
     questions running at once."""
     import threading
-    if _LIVE.get("step"):
-        counts = _LIVE["step"].setdefault("counts", {})
+    if state.LIVE.get("step"):
+        counts = state.LIVE["step"].setdefault("counts", {})
         counts[threading.get_ident()] = n
-        _LIVE["step"]["answers"] = sum(counts.values())
+        state.LIVE["step"]["answers"] = sum(counts.values())
         _live_now()
 
 
@@ -931,7 +923,7 @@ def _history() -> dict[str, Any]:
 
 def _ran(read: dict[str, Any]) -> None:
     """What a step took, kept for the next estimate: the reader's answers and seconds."""
-    step, path = _LIVE.get("step") or {}, _history_path()
+    step, path = state.LIVE.get("step") or {}, _history_path()
     if not (path and step.get("key") and isinstance(read.get("made"), int) and os.environ.get("FRAME_LOOP_LIVE")):
         return
     known = _history()
@@ -1023,8 +1015,8 @@ def _tell(kind: str, result: dict[str, Any], tier: str | None, started: float,
           frame0: dict[str, Any] | None = None) -> str:
     """Two lines that fit a laptop: the verdict, then the reader, effort, time, tokens.
     The author reads one shorter line (`_short`); these two are the details."""
-    _LIVE["decision"] = result["decision"]
-    _LIVE.setdefault("shorts", []).append(_short(result, frame0))
+    state.LIVE["decision"] = result["decision"]
+    state.LIVE.setdefault("shorts", []).append(_short(result, frame0))
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
     notes = []
     for note in result.get("effort_notes") or []:
@@ -1067,13 +1059,13 @@ def _read(frame0: dict[str, Any], text: str, declared: list[str], kind: str,
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if tier is None:
         return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
-    _LIVE["what"] = "checking " + {"the turn's change": "Claude's change", "a plan": "Claude's plan",
+    state.LIVE["what"] = "checking " + {"the turn's change": "Claude's change", "a plan": "Claude's plan",
                                    "a proposal": "Claude's proposal"}.get(kind, kind) + " against your requirements"
     if _writer() is not None:
         _live_step("putting the change into plain words", key="label")
     sent, refusal = outgoing(text, kind, tier, frame0)
     if refusal:
-        return ({"decision": gate.RISE, "where": _short_path(project_root(_CWD)),
+        return ({"decision": gate.RISE, "where": _short_path(project_root(state.CWD)),
                  "reason": "not read: " + refusal}, tier, tier_note)
     step["summary"] = _masked(_without_declaration(sent), frame0)
     effort, notes, error = effort_for(said if said is not None else text, facts, tier)
@@ -1098,7 +1090,7 @@ def snapshot(cwd: str) -> str | None:
     if top.returncode != 0:
         return None
     root = Path(top.stdout.strip())
-    mine = Path(_git(cwd, "rev-parse", "--git-path", f"frame-loop-index-{_SESSION or 'none'}").stdout.strip())
+    mine = Path(_git(cwd, "rev-parse", "--git-path", f"frame-loop-index-{state.SESSION or 'none'}").stdout.strip())
     mine = mine if mine.is_absolute() else Path(cwd) / mine
     real = Path(_git(cwd, "rev-parse", "--git-path", "index").stdout.strip())
     real = real if real.is_absolute() else Path(cwd) / real
@@ -1155,7 +1147,7 @@ def guide_changes(before: dict[str, list[str]], cwd: str) -> list[str]:
 def _last_reading() -> str:
     """What the last turn's reading decided, if not a pass, for the agent: the Stop lines
     reach only the human, so the agent hears of them at the next prompt, once."""
-    mine = [r for r in _records_all() if r.get("session") == _SESSION]
+    mine = [r for r in _records_all() if r.get("session") == state.SESSION]
     start = max((i for i, r in enumerate(mine) if r.get("event") == "turn-start"), default=-1)
     turns = [r for r in mine[start + 1:] if r.get("event") == "turn"]
     acts = [act_words(r) for r in mine[start + 1:] if r.get("event") in ("outward", "config")]
@@ -1295,7 +1287,7 @@ def ran(event: dict[str, Any], frame0: dict[str, Any], ok: bool) -> None:
     hits = sorted(set(_ran_parts(command)) & _ran_checks(frame0))
     if hits:
         _log({"event": "ran", "commands": hits, "ok": ok,
-              "tree": snapshot(event.get("cwd") or _CWD) if ok else None})
+              "tree": snapshot(event.get("cwd") or state.CWD) if ok else None})
 
 
 def _ran_on(root: Path, commands: list[str]) -> tuple[bool, str]:
@@ -1303,7 +1295,7 @@ def _ran_on(root: Path, commands: list[str]) -> tuple[bool, str]:
     path = os.environ.get("FRAME_LOOP_LOG")
     runs = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()] if (
         path and Path(path).exists()) else []
-    runs = [r for r in runs if r.get("session") == _SESSION and r.get("event") == "ran"]
+    runs = [r for r in runs if r.get("session") == state.SESSION and r.get("event") == "ran"]
     now = snapshot(str(root))
     for item in commands:
         forms = _forms(item)
@@ -1368,7 +1360,7 @@ def _records(kind: str) -> list[dict[str, Any]]:
     if not path or not Path(path).exists():
         return []
     rows = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()]
-    return [r for r in rows if r.get("session") == _SESSION and r.get("event") == kind]
+    return [r for r in rows if r.get("session") == state.SESSION and r.get("event") == kind]
 
 
 def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims: list[str]) -> dict[str, Any]:
@@ -1411,7 +1403,7 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
 
 
 def _keep_step(step: dict[str, Any]) -> None:
-    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(_CWD or os.getcwd()) / ".frame-loop")) / "steps" / (_SESSION or "none")
+    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop")) / "steps" / (state.SESSION or "none")
     folder.mkdir(parents=True, exist_ok=True)
     (folder / f"{step['id']}.diff").write_text(step["diff"], encoding="utf-8")
     _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"},
@@ -1424,14 +1416,14 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     is unfulfilled by rule, unread."""
     steps = [{"id": r["id"], "label": r["text"], "claims": r.get("claims", []),
               "diff": _cut(Path(r["diff_file"]).read_text(encoding="utf-8"), 4000) if Path(r["diff_file"]).exists() else ""}
-             for r in _records("step") if (r.get("node") or "root") == (_NODE or "root")]  # this node's leaves
+             for r in _records("step") if (r.get("node") or "root") == (state.NODE or "root")]  # this node's leaves
     if not steps:
         return "frame-loop · completion · nothing to read: no step was labelled in this session"
     started = time.time()
     tier, tier_note = tier_for(said)
     parts, used = [], {}
     run = _reader()
-    _LIVE["what"] = "checking the work is done"
+    state.LIVE["what"] = "checking the work is done"
     for n, ask in enumerate(frame0["asks"], 1):
         claimed = [s for s in steps if ask["id"] in s["claims"]]
         if not claimed:
@@ -1462,7 +1454,7 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         result = run(frame)
         level = ((result.get("findings") or [{}])[0].get("levels") or {}).get("baseline")
         ok = (not gate._failed(result)) and result.get("firm") and result.get("category") == "carried" and level == "yes"
-        _LIVE["decision"] = _LIVE.get("decision", gate.PASS) if ok else gate.RISE
+        state.LIVE["decision"] = state.LIVE.get("decision", gate.PASS) if ok else gate.RISE
         parts.append(f"{ask['id']} ✓" if ok else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'})")
         if ok and not os.environ.get("FRAME_LOOP_TREE"):
             _log({"event": "filled", "ask": ask["id"]})
@@ -1478,16 +1470,16 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     if os.environ.get("FRAME_LOOP_TREE"):  # the host rule climbs, no call (recoil 1)
         import tree
         filled = {((r.get("node") or "root"), r["ask"]) for r in _records_all() if r.get("event") == "filled"}
-        state = tree.climb(_tree_nodes(load_frame0_root()), filled)
-        if _NODE and _NODE != "root" and state.get(_NODE, {}).get("complete"):
-            parts.append(f"node {_NODE} complete")
-        if state.get("root", {}).get("complete"):
+        climbed = tree.climb(_tree_nodes(load_frame0_root()), filled)
+        if state.NODE and state.NODE != "root" and climbed.get(state.NODE, {}).get("complete"):
+            parts.append(f"node {state.NODE} complete")
+        if climbed.get("root", {}).get("complete"):
             parts.append("frame 0 complete")
     _log({"event": "completion", "parts": parts, "usage": used})
     done = sum(1 for x in parts if x.endswith(" ✓"))
     asks = len(frame0["asks"])
-    _LIVE["decision"] = gate.PASS if done == asks else gate.RISE
-    _LIVE["shorts"] = ["frame-loop ✓ every requirement is done" if done == asks else
+    state.LIVE["decision"] = gate.PASS if done == asks else gate.RISE
+    state.LIVE["shorts"] = ["frame-loop ✓ every requirement is done" if done == asks else
                        f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"]
     first = "frame-loop · completion · " + " · ".join(parts)
     second = f"  {_reader_name(tier)} · {time.time() - started:.0f}s"
@@ -1503,7 +1495,7 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     cwd = event.get("cwd") or os.getcwd()
     path = os.environ.get("FRAME_LOOP_LOG")
     records = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()] if path and Path(path).exists() else []
-    records = [r for r in records if r.get("session") == _SESSION]
+    records = [r for r in records if r.get("session") == state.SESSION]
     last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
     starts = [r for r in records[last_stop + 1:] if r.get("event") == "turn-start"]
     # The turn's first start: a message the author sends mid-turn starts no new turn.
@@ -1519,11 +1511,11 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     step = step_label(cwd, before, after, frame0, _declared(said, frame0))
     _keep_step(step)
     if not step["signals"]:  # checked for free: say so, so quiet never reads as "never ran"
-        _LIVE["decision"] = gate.PASS
-        _LIVE["shorts"] = ["frame-loop ✓ checked: nothing in this change needed a closer look"]
+        state.LIVE["decision"] = gate.PASS
+        state.LIVE["shorts"] = ["frame-loop ✓ checked: nothing in this change needed a closer look"]
         return {"systemMessage": f"frame-loop · turn · {step['id']} · {step['text']}"
                 + "\n  not read (no signal)"}
-    _LIVE["why"] = signal_words(step["signals"])
+    state.LIVE["why"] = signal_words(step["signals"])
     if mode != "enforce" and os.environ.get("FRAME_LOOP_BACKGROUND") == "1":
         return _read_in_background(event, cwd, before, after, said)
     read = read_change(cwd, before, after, said, frame0, "turn")
@@ -1542,33 +1534,32 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     work.mkdir(parents=True, exist_ok=True)
     payload = work / f"background-{int(time.time() * 1000)}.json"
     payload.write_text(json.dumps({"event": event, "cwd": cwd, "before": before, "after": after, "said": said,
-                                   "session": _SESSION, "node": _NODE, "why": _LIVE.get("why")}), encoding="utf-8")
+                                   "session": state.SESSION, "node": state.NODE, "why": state.LIVE.get("why")}), encoding="utf-8")
     flags = ["-I"] if sys.flags.isolated else []
     subprocess.Popen([sys.executable, *flags, str(Path(__file__).resolve()), "--background", str(payload)],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True, env=os.environ.copy())
     _log({"event": "turn-queued"})
-    _LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
-    _LIVE["queued"] = True  # the background process writes the band from here on
+    state.LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
+    state.LIVE["queued"] = True  # the background process writes the band from here on
     return {"systemMessage": "frame-loop · turn · checking in the background"}
 
 
 def _background(payload_path: str) -> int:
     """The background read: the turn's read as the Stop hook would make it, its outcome in
     the record and the band."""
-    global _SESSION, _CWD, _NODE
     payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
-    _SESSION, _CWD, _NODE = payload["session"], payload["cwd"], payload.get("node")
-    _LIVE.clear()
-    _LIVE["background"] = os.getpid()
+    state.SESSION, state.CWD, state.NODE = payload["session"], payload["cwd"], payload.get("node")
+    state.LIVE.clear()
+    state.LIVE["background"] = os.getpid()
     plugin_defaults(payload["event"])
     try:
         frame0 = load_frame0()
-        _LIVE["why"] = payload.get("why")
+        state.LIVE["why"] = payload.get("why")
         read = read_change(payload["cwd"], payload["before"], payload["after"], payload["said"], frame0, "turn")
         detail = for_user(read["tell"], frame0)
         short = _short_lines(frame0)
-        _live(state="done", decision=_LIVE.get("decision", "quiet"), started=_LIVE.get("started"),
+        _live(state="done", decision=state.LIVE.get("decision", "quiet"), started=state.LIVE.get("started"),
               lines=short.split("\n") if short else [], detail=detail.split("\n"))
     except Exception as error:  # the band never stays "running" on a crash
         _live(state="done", decision="block", lines=[f"frame-loop ■ not read: {type(error).__name__}"], detail=[str(error)])
@@ -1583,13 +1574,13 @@ def _turn_summary() -> dict[str, Any] | None:
         return None
     mine = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()
             if line.strip()]
-    mine = [r for r in mine if r.get("session") == _SESSION]
+    mine = [r for r in mine if r.get("session") == state.SESSION]
     last = max((i for i, r in enumerate(mine) if r.get("event") == "stop"), default=-1)
     turn = mine[last + 1:]
     read = [r for r in turn if r.get("event") in ("plan", "turn", "read", "proposal")]
     acts = [r for r in turn if r.get("event") in ("outward", "config")]
     start = next((r for r in turn if r.get("event") == "guides"), None)
-    changed = guide_changes(start["lines"], _CWD) if start else []
+    changed = guide_changes(start["lines"], state.CWD) if start else []
     _log({"event": "stop"})  # every turn closes in the record, a quiet one too
     if not read and not acts and not changed:
         return None
@@ -1597,10 +1588,10 @@ def _turn_summary() -> dict[str, Any] | None:
     parts = [f"{len(read)} read", f"{count[gate.PASS]} pass", f"{count[gate.RISE]} rise"] if read else []
     if count[gate.BLOCK]:
         parts.append(f"{count[gate.BLOCK]} block")
-    lost = rules_lost(_CWD) if changed else []
-    _LIVE["acts"], _LIVE["guides"], _LIVE["lost"] = [act_words(a) for a in acts], changed, lost
+    lost = rules_lost(state.CWD) if changed else []
+    state.LIVE["acts"], state.LIVE["guides"], state.LIVE["lost"] = [act_words(a) for a in acts], changed, lost
     lines = ["frame-loop · this turn" + (": " + " · ".join(parts) if parts else "")]
-    lines += [f"  {words}: {exact}" for words, _, exact in _LIVE["acts"]]
+    lines += [f"  {words}: {exact}" for words, _, exact in state.LIVE["acts"]]
     lines += [f"  {_guide_words(x, lost)}" for x in changed]
     return {"systemMessage": "\n".join(lines)}
 
@@ -1697,7 +1688,7 @@ def loop_off(event: dict[str, Any]) -> bool:
 def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """The hook's stdout object, or None for no opinion. What the human reads
     (systemMessage) speaks in words; what the agent reads keeps the ids."""
-    _LIVE.clear()
+    state.LIVE.clear()
     plugin_defaults(event)
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
         if event.get("hook_event_name") == "SessionStart":
@@ -1712,9 +1703,9 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
         except (OSError, ValueError, KeyError):
             frame0 = None
         out["systemMessage"] = for_user(out["systemMessage"], frame0)
-        if (_LIVE or event.get("hook_event_name") == "Stop") and not _LIVE.get("queued"):
+        if (state.LIVE or event.get("hook_event_name") == "Stop") and not state.LIVE.get("queued"):
             short = _short_lines(frame0)
-            _live(state="done", decision=_LIVE.get("decision", "quiet"), started=_LIVE.get("started"),
+            _live(state="done", decision=state.LIVE.get("decision", "quiet"), started=state.LIVE.get("started"),
                   lines=short.split("\n") if short else [], detail=out["systemMessage"].split("\n"))
             if os.environ.get("FRAME_LOOP_LINES") != "full":  # the details stay in the band's fold
                 if short:
@@ -1728,35 +1719,34 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
 def _short_lines(frame0: dict[str, Any] | None) -> str:
     """What the author reads under the reply: one line, two at most, never cut. A quiet
     turn says nothing; flagged acts and changed guides ride on the line."""
-    shorts = _LIVE.get("shorts") or []
-    acts = _LIVE.get("acts") or []
+    shorts = state.LIVE.get("shorts") or []
+    acts = state.LIVE.get("acts") or []
     counted: dict[str, int] = {}
     for words, _, _ in acts:
         counted[words] = counted.get(words, 0) + 1
     facts = [w + (f" ({n} times)" if n > 1 else "") for w, n in counted.items()]
-    facts += [_guide_words(x, _LIVE.get("lost") or []) for x in _LIVE.get("guides") or []]
-    needs = any(n for _, n, _ in acts) or bool(_LIVE.get("lost"))
+    facts += [_guide_words(x, state.LIVE.get("lost") or []) for x in state.LIVE.get("guides") or []]
+    needs = any(n for _, n, _ in acts) or bool(state.LIVE.get("lost"))
     if needs:
-        _LIVE["decision"] = gate.RISE  # an act that needs the author, or rules that lost their words
+        state.LIVE["decision"] = gate.RISE  # an act that needs the author, or rules that lost their words
     if not shorts and not facts:
         return ""
     if not shorts:
-        mark = "▲ needs you:" if _LIVE.get("decision") == gate.RISE else "·"
+        mark = "▲ needs you:" if state.LIVE.get("decision") == gate.RISE else "·"
         return for_user(f"frame-loop {mark} " + " · ".join(facts), frame0)
     lines = shorts[-1:] + (["  " + ("▲ needs you: " if needs else "") + " · ".join(facts)] if facts else [])
     return for_user("\n".join(lines), frame0)
 
 
 def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
-    global _SESSION, _CWD, _NODE
-    _SESSION = event.get("session_id")
+    state.SESSION = event.get("session_id")
     # The project is the session's, as Claude Code names it, never the shell's directory
     # of the moment: Claude may `cd` into another repository to read it.
     project = os.environ.get("CLAUDE_PROJECT_DIR")
     if project and Path(project).is_dir():
         event = {**event, "cwd": project}
-    _CWD = event.get("cwd") or os.getcwd()
-    _NODE = _engaged()
+    state.CWD = event.get("cwd") or os.getcwd()
+    state.NODE = _engaged()
     mode = os.environ.get("FRAME_LOOP_MODE", "shadow")
     name, tool = event.get("hook_event_name"), event.get("tool_name")
     tool_input = event.get("tool_input") or {}
@@ -1821,13 +1811,13 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
                  "`cd … &&` or in a chain; run it alone.") if MARKER_IN_CHAIN.search(command) else ""
         if command.strip().startswith(": frame-loop-read"):
             return _read_on_demand(command)
-        if command.strip().startswith(": frame-loop-node"):  # _NODE is global in _answer
+        if command.strip().startswith(": frame-loop-node"):
             wanted = (shlex.split(command.split("\n", 1)[0])[2:] or ["root"])[0]
             known = _tree_nodes(frame0) if os.environ.get("FRAME_LOOP_TREE") else {}
             if wanted not in known:
                 return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
                         f"frame-loop: no node {wanted!r} (nodes: {', '.join(known) or 'no tree set'})"}}
-            _NODE = wanted
+            state.NODE = wanted
             _log({"event": "engage", "id": wanted})
             asks = "; ".join(f"{a['id']}: {a['text']}" for a in load_frame0()["asks"])
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
@@ -1874,7 +1864,7 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         trains += (" frame-loop checks each reading before it leaves: GitHub must confirm this "
                    "repository is public, and no line you read from outside this project, nor "
                    "anything that looks like a secret, may be in it. Work as usual.")
-        if not_public(_CWD) is not None:
+        if not_public(state.CWD) is not None:
             trains += (" This repository is not confirmed public; the human allowed labels here, "
                        "so only labels of your changes leave it, never the changes." if
                        _writer() and os.environ.get("FRAME_LOOP_LABELS_OK") == "1" else
@@ -2005,7 +1995,7 @@ def _value(plan: str, key: str) -> str:
 
 def _marks() -> list[str]:
     """The declaration lines this session's markers made since its last turn ended."""
-    rows = [r for r in _records_all() if r.get("session") == _SESSION]
+    rows = [r for r in _records_all() if r.get("session") == state.SESSION]
     last = max((i for i, r in enumerate(rows) if r.get("event") == "stop"), default=-1)
     return [x for r in rows[last + 1:] if r.get("event") == "declare" for x in r.get("lines", [])]
 

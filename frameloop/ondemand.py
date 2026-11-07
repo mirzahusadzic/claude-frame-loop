@@ -24,6 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hook  # noqa: E402
+import state  # noqa: E402
 
 
 def project_env(root: Path) -> dict[str, str] | None:
@@ -93,7 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     for key in [k for k in os.environ if k.startswith("FRAME_LOOP_")]:
         del os.environ[key]  # the project's settings, never the caller's
     os.environ.update(found)
-    hook._SESSION, hook._CWD = "read", str(root)
+    state.SESSION, state.CWD = "read", str(root)
     code, text = reading(root, args.serves, args.effort, args.base, args.done)
     print(text)
     return code

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
 import hook  # noqa: E402
+import state  # noqa: E402
 
 SEEN = []
 FIXTURE = ROOT / "tests/fixtures/frame0.json"
@@ -992,7 +993,7 @@ class WriterTests(unittest.TestCase):
     def test_with_labels_allowed_the_briefing_never_says_a_private_project_is_not_read(self):
         """Seen live on frame-loop itself: the briefing said "will not read here" while its
         labels were read."""
-        hook._CWD = str(self.private)
+        state.CWD = str(self.private)
         text = hook.briefing(hook.load_frame0(), "shadow")
         self.assertNotIn("will not read here", text)
         self.assertIn("only labels of your changes leave it", text)
@@ -1437,7 +1438,7 @@ class CoreTests(unittest.TestCase):
         out = self.turn({name: f"print({id(self)})\n" * 400}, "done")  # undeclared: it rises
         self.assertEqual(out, "frame-loop ▲ needs you: this serves none of your requirements")
         self.assertNotIn("…", out)
-        hook._LIVE.clear()
+        state.LIVE.clear()
         self.assertEqual(hook._short_lines(None), "")  # a quiet turn says nothing
 
     def test_each_reason_has_a_plain_sentence(self):
@@ -1507,12 +1508,12 @@ class CoreTests(unittest.TestCase):
 
     def test_a_fact_that_needs_the_author_says_so_after_a_check_mark(self):
         """Seen on the loop's release: "✓ checked" beside rules that lost their wording."""
-        hook._LIVE.clear()
-        hook._LIVE.update(shorts=["frame-loop ✓ checked: nothing in this change needed a closer look"],
+        state.LIVE.clear()
+        state.LIVE.update(shorts=["frame-loop ✓ checked: nothing in this change needed a closer look"],
                           guides=["AGENTS.md +1 line"], lost=["R1"], acts=[])
         lines = hook._short_lines(None).split("\n")
         self.assertEqual(lines[1], "  ▲ needs you: AGENTS.md: 1 line added; 1 of your rules lost their wording")
-        self.assertEqual(hook._LIVE["decision"], "rise")
+        self.assertEqual(state.LIVE["decision"], "rise")
 
     def test_a_command_on_the_loops_files_is_not_called_a_change(self):
         """Seen on the loop's release: a read of the loop's files was told as "Claude
@@ -1844,7 +1845,7 @@ class TreeHookTests(CoreTests):
         self.marker(": frame-loop-declare --serves N1")
         self.turn({"tests/test_hello.py": f"def test_settings(): pass  # {id(self)}\n"}, "done")
         seen = loaded_seen()
-        hook._SESSION = self.session
+        state.SESSION = self.session
         rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text().splitlines()]
         steps = [r for r in rows if r.get("event") == "step" and r.get("session") == self.session]
         self.assertTrue(all(s.get("node") == "greeter" for s in steps))
@@ -2061,7 +2062,7 @@ class RulesTests(unittest.TestCase):
         """Claude Code 2.1.319, seen live: exit 0 sends PostToolUse, any other
         PostToolUseFailure. A pipe or `;` hides the suite's own status."""
         def r7():
-            hook._SESSION = "ru"
+            state.SESSION = "ru"
             ob = next(o for o in hook.load_frame0()["obligations"] if o["id"] == "R7")
             return hook.checked(ob, REPO, ["hello.py"])
         (REPO / "hello.py").write_text(f"print('ran {id(self)}')\n")
@@ -2099,7 +2100,7 @@ class RulesTests(unittest.TestCase):
                                                              '"ran": [["uv run pytest", "uv run pytest -q"]]'))
         (REPO / "hello.py").write_text(f"print('forms {id(self)}')\n")
         self.bash("set -o pipefail && uv run pytest 2>&1 | tail -1")
-        hook._SESSION = "ru"
+        state.SESSION = "ru"
         ob = next(o for o in hook.load_frame0()["obligations"] if o["id"] == "R7")
         self.assertEqual(hook.checked(ob, REPO, ["hello.py"]), (True, ""))
 
