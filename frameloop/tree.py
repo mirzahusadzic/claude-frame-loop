@@ -34,14 +34,44 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
         for path in sorted(Path(folder).glob("*.json")):
             raw = json.loads(path.read_text(encoding="utf-8"))
             nodes[raw.get("id", path.stem)] = raw
+    for nid in list(nodes):  # a node whose parents run in a circle never reaches the root
+        if _circle(nid, nodes):
+            nodes[nid] = {**nodes[nid], "circle": True}
     return nodes
+
+
+def _ancestors(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """A node's parents, nearest first, stopping at the root or where they circle back."""
+    found, seen = [], {node.get("id")}
+    while node.get("parent") in nodes and node["parent"] not in seen:
+        seen.add(node["parent"])
+        node = nodes[node["parent"]]
+        found.append(node)
+    return found
+
+
+def _circle(nid: str, nodes: dict[str, dict[str, Any]]) -> bool:
+    chain = _ancestors(nodes[nid], nodes)
+    return nid != "root" and (not chain or chain[-1].get("id") != "root") and \
+        (chain[-1] if chain else nodes[nid]).get("parent") in nodes
+
+
+def scope_of(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[str]:
+    """A node's scope, or its nearest parent's when it names none: never every path by
+    omission."""
+    for n in [node] + _ancestors(node, nodes):
+        if n.get("scope"):
+            return n["scope"]
+    return []
 
 
 def _rules(node: dict[str, Any], nodes: dict[str, dict[str, Any]], kind: str) -> list[dict[str, Any]]:
     """A node's rules of one kind, the ones above it first: nothing above is ever dropped."""
-    above = _rules(nodes[node["parent"]], nodes, kind) if node.get("parent") in nodes else []
-    seen = {r["id"] for r in above}
-    return above + [r for r in node.get(kind) or [] if r["id"] not in seen]
+    found: list[dict[str, Any]] = []
+    for n in reversed([node] + _ancestors(node, nodes)):  # the root's first
+        seen = {r["id"] for r in found}
+        found += [r for r in n.get(kind) or [] if r["id"] not in seen]
+    return found
 
 
 def _under(glob: str, parent: list[str]) -> bool:
@@ -70,8 +100,12 @@ def node_faults(node: dict[str, Any], parent: dict[str, Any], nodes: dict[str, d
     if len(set(texts)) != len(texts):
         faults.append("two asks share their words: asks are disjoint")
     faults += [f for f in frames.frame0_faults({"asks": node.get("asks") or []}) if "inversion" in f or "no asks" in f]
+    if not node.get("scope"):
+        faults.append("it names no scope: a node lists the paths it may change")
+    if node.get("circle") or node.get("id") in {a.get("id") for a in _ancestors(parent, nodes)} | {parent.get("id")}:
+        faults.append("its parents run in a circle: no path leads to frame 0")
     for glob in node.get("scope") or []:
-        if not _under(glob, parent.get("scope") or []):
+        if not _under(glob, scope_of(parent, nodes)):
             faults.append(f"scope {glob} is outside the parent's ({', '.join(parent.get('scope') or [])})")
     faults += premise_faults(node)
     above = {r["id"]: r["text"] for kind in ("principles", "triggers") for r in _rules(parent, nodes, kind)}
@@ -127,7 +161,7 @@ def frame0_for(
             "asks": [{k: v for k, v in a.items() if k not in ("quotes", "owner")} for a in node["asks"]],
             "principles": _rules(node, nodes, "principles"),
             "triggers": _rules(node, nodes, "triggers"),
-            "scope": node.get("scope") or []}
+            "scope": scope_of(node, nodes)}
 
 
 def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:

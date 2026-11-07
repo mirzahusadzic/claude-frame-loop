@@ -310,6 +310,10 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             if wanted not in known:
                 return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
                         f"frame-loop: no node {wanted!r} (nodes: {', '.join(known) or 'no tree set'})"}}
+            if known[wanted].get("circle"):
+                return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
+                        f"frame-loop: node {wanted} is not engaged: its parents run in a circle, so no path "
+                        "leads to frame 0; ask the author to mend the tree"}}
             state.NODE = wanted
             _log({"event": "engage", "id": wanted})
             asks = "; ".join(f"{a['id']}: {a['text']}" for a in load_frame0()["asks"])

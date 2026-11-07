@@ -2096,6 +2096,33 @@ class TreeHookTests(CoreTests):
         self.assertIn("configuration or record is touched", out["systemMessage"])
         self.assertIn("outside", out["systemMessage"])
 
+    def test_a_node_with_no_scope_is_a_fault_and_never_the_whole_project(self):
+        """The first review: a node that named no scope authorized every path."""
+        loose = {k: v for k, v in self.GREETER.items() if k != "scope"}
+        loose = {**loose, "id": "loose", "parent": "greeter",
+                 "asks": [{**self.GREETER["asks"][0], "id": "L1x", "quotes": "N1"}]}
+        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Write", "session_id": self.session,
+                           "cwd": str(REPO), "tool_input": {"file_path": str(self.tree / "loose.json"),
+                                                            "content": json.dumps(loose)}})
+        self.assertIn("names no scope", out["systemMessage"])
+        (self.tree / "loose.json").write_text(json.dumps(loose))  # written before this check existed
+        self.marker(": frame-loop-node loose")
+        line = self.turn({"README.md": f"usage {uid(self)}\n"}, "done")
+        self.assertIn("not authorized", line)  # it inherits its parent's scope
+
+    def test_a_tree_whose_parents_run_in_a_circle_never_crashes_a_hook(self):
+        """The first review: a parent cycle recursed until Python gave up, in every hook."""
+        for nid, parent in (("ping", "pong"), ("pong", "ping")):
+            node = {**self.GREETER, "id": nid, "parent": parent,
+                    "asks": [{**self.GREETER["asks"][0], "id": f"{nid}1", "quotes": "N1"}]}
+            (self.tree / f"{nid}.json").write_text(json.dumps(node))
+        out = self.marker(": frame-loop-node ping")
+        self.assertNotIn("error", json.dumps(out))
+        self.assertIn("circle", json.dumps(out))
+        out = hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO),
+                           "prompt": "go on"})
+        self.assertNotIn("Recursion", json.dumps(out))
+
     def test_a_change_outside_the_nodes_scope_is_not_authorized(self):
         self.marker(": frame-loop-node greeter")
         line = self.turn({"README.md": f"usage {uid(self)}\n"}, "done")
