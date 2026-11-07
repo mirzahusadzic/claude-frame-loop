@@ -23,7 +23,7 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 - **Frame 0:** your requirements, in your words, on your OK.
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
 - **Reader:** on a signal only, under Gadfly's trials; a fit without your requirement is rejected.
-- **Labels, not code:** Haiku, on your login, labels the change; the reader gets the label and file names; secrets are refused. [Privacy](docs/privacy.md).
+- **Labels, not code:** Haiku, on your login, labels the change; the reader (another model, Muse Spark) gets the label and file names; secrets are refused. [Privacy](docs/privacy.md).
 - **Authority:** pushes, releases, recursive deletes, the loop's own files: reported; in enforce mode, wait for your OK.
 - **Live:** a band above the prompt.
 
