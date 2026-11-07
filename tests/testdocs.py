@@ -89,6 +89,14 @@ class DocsTests(unittest.TestCase):
                 self.assertIn(readers.tier(tier), readers.READERS, f"{name}: {tier}")
             self.assertIn("contributor", named, name)
 
+    def test_setup_lists_the_tiers_a_user_may_name_and_no_other(self):
+        """Mirza: the other tiers are for calibration only; Setup's table is the user's list."""
+        setup = (ROOT / "docs/setup.md").read_text(encoding="utf-8")
+        table = setup.split("| `FRAME_LOOP_TIER` | Model", 1)[1].split("\n\n", 1)[0]
+        listed = set(re.findall(r"^\| `([a-z-]+)`", table, re.M))
+        self.assertEqual({readers.tier(t) for t in listed}, set(readers.USER_TIERS))
+        self.assertIn("calibration runs only", setup)
+
     def test_mode_means_shadow_or_enforce_only(self):
         """ "cooperative mode" read as a third mode beside shadow and enforce, and no doc
         defined it."""

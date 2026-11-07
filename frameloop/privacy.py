@@ -430,12 +430,14 @@ def tier_for(plan: str) -> tuple[str | None, str]:
     (a training tier to one that does not train) and never loosen or move it sideways.
     A training tier is read only with the human's allowance."""
     tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
+    if tier in readers.READERS and tier not in readers.USER_TIERS:
+        return None, f"reader tier {tier!r} is for calibration runs only: use {' or '.join(readers.USER_TIERS)}"
     if tier not in readers.READERS:
         return None, f"unknown reader tier {tier!r}"
     note, requested = "", _value(plan, "reader")
     requested = readers.tier(requested) if requested else requested
     if requested:
-        if requested in readers.READERS and _trains(tier) and not _trains(requested):
+        if requested in readers.USER_TIERS and _trains(tier) and not _trains(requested):
             tier, note = requested, f"tightened to {requested}"
         else:
             note = f"reader request {requested!r} ignored: a plan may only tighten privacy"

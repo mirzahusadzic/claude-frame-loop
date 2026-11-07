@@ -31,6 +31,9 @@ READERS: dict[str, dict[str, Any]] = {
         "trainsOnInputs": ["openrouter/meta/muse-spark-1.3-contributor"],
     },
 }
+# The tiers a setting or a plan may name. The others are for calibration runs (frames.py):
+# "anthropic" is a model of the worker's own family, never a reader of the work.
+USER_TIERS = ("contributor", "private")
 # Earlier names, still accepted: "public" was the contributor tier's name until it read as
 # the safe one for public repositories, when it is the one that trains.
 ALIASES = {"public": "contributor"}

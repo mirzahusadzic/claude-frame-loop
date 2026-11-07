@@ -430,16 +430,34 @@ class AttackTests(unittest.TestCase):
             env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_TIER="public", FRAME_LOOP_TRAINING_OK="1")
         )
         seen = loaded_seen()
-        hook.answer(plan_event("Serves: A2\nReader: anthropic\nAdd a test."))
-        self.assertEqual(seen[-1]["battery"]["model"], "anthropic/claude-sonnet-5-5")
+        hook.answer(plan_event("Serves: A2\nReader: private\nAdd a test."))
+        self.assertEqual(seen[-1]["battery"]["model"], "openrouter/meta/muse-spark-1.3")
         self.assertNotIn("Reader", seen[-1]["inputs"][0]["text"])
-        os.environ["FRAME_LOOP_TIER"] = "anthropic"
+        os.environ["FRAME_LOOP_TIER"] = "private"
         os.environ.pop("FRAME_LOOP_TRAINING_OK")
         hook.answer(plan_event("Serves: A2\nReader: public\nAdd a test."))
-        self.assertEqual(seen[-1]["battery"]["model"], "anthropic/claude-sonnet-5-5")
+        self.assertEqual(seen[-1]["battery"]["model"], "openrouter/meta/muse-spark-1.3")
         last = json.loads((WORK / "hook-log.jsonl").read_text(encoding="utf-8").splitlines()[-1])
-        self.assertEqual(last["tier"], "anthropic")
+        self.assertEqual(last["tier"], "private")
         self.assertIn("only tighten", last["tier_note"])
+
+    def test_a_reader_of_claudes_own_family_is_for_calibration_only(self):
+        """Sparky's second review: a plan's `reader: anthropic` tightened a contributor
+        reading to a Claude model, and a setting could name it, though Setup promises a
+        reader from another family. Mirza: calibration only."""
+        os.environ.update(
+            env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_TIER="contributor", FRAME_LOOP_TRAINING_OK="1")
+        )
+        seen = loaded_seen()
+        for asked in ("anthropic", "ultra-spark-private"):
+            hook.answer(plan_event(f"Serves: A2\nReader: {asked}\nAdd a test."))
+            self.assertEqual(seen[-1]["battery"]["model"], "openrouter/meta/muse-spark-1.3-contributor", asked)
+        for setting in ("anthropic", "ultra-spark-private"):
+            os.environ["FRAME_LOOP_TIER"] = setting
+            count = len(seen)
+            out = hook.answer(plan_event("Serves: A2\nAdd a test."))
+            self.assertEqual(len(seen), count, setting)
+            self.assertIn("for calibration runs only", json.dumps(out), setting)
 
     def test_ask_ids_in_the_plan_never_reach_the_reader(self):
         os.environ.update(env(FRAME_LOOP_READER="testhook:passing"))
@@ -1417,7 +1435,7 @@ class WriterTests(unittest.TestCase):
             "renamed old_name.py to new_name.py; modified pyproject.toml. Manifests: pyproject.toml.",
         )
         self.assertEqual(writer.facts_line("Add a test.", []), "")
-        sent, why = privacy.outgoing(diff, "the turn's change", "anthropic", framezero.load_frame0())
+        sent, why = privacy.outgoing(diff, "the turn's change", "private", framezero.load_frame0())
         self.assertIsNone(why)
         self.assertTrue(sent.startswith("Files: added new.py;"), sent)
         self.assertTrue(sent.endswith("adds a short greeting and a test for it"), sent)
@@ -1473,7 +1491,7 @@ class VisibilityTests(unittest.TestCase):
             self.assertEqual(seen, [], cwd)
 
     def test_a_non_training_reader_reads_anywhere(self):
-        os.environ["FRAME_LOOP_TIER"] = "anthropic"
+        os.environ["FRAME_LOOP_TIER"] = "private"
         seen = loaded_seen()
         hook.answer(plan_event("Serves: A2\nAdd a test.", cwd=OUTSIDE))
         self.assertEqual(len(seen), 2)
