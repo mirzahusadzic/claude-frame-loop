@@ -1,0 +1,243 @@
+"""A turn: its snapshot at the prompt, its free label and signals at its end, the read
+the signals call for (in a background process in shadow mode), and its summary.
+
+Standard library only.
+"""
+
+from __future__ import annotations
+
+import fnmatch
+import json
+import os
+import subprocess
+import sys
+import time
+import unicodedata
+from pathlib import Path
+from typing import Any
+
+import gate
+import signals as S
+import state
+from record import _log, _records, _records_all
+from declare import _declared
+from repo import _git, project_root, snapshot
+from effort import _effort_rules, _rule_hits
+from lines import act_words, for_user, _guide_words, _short_lines, signal_words, _signals_short
+from live import _live
+from privacy import _hash
+from framezero import load_frame0, rules_lost
+from obligations import obligations_line, outside_scope
+from config import plugin_defaults
+from reading import read_change
+
+
+def guides(cwd: str) -> dict[str, str]:
+    """The guides a turn may change: the project's AGENTS.md and CLAUDE.md, and the
+    author's own (FRAME_LOOP_USER_GUIDE, default ~/.claude/CLAUDE.md), by shown name."""
+    root = project_root(cwd)
+    user = Path(os.environ.get("FRAME_LOOP_USER_GUIDE") or Path.home() / ".claude/CLAUDE.md")
+    return {"AGENTS.md": str(root / "AGENTS.md"), "CLAUDE.md": str(root / "CLAUDE.md"),
+            "~/.claude/CLAUDE.md": str(user)}
+
+
+def _guide_lines(path: str) -> list[str]:
+    """A guide's lines as short hashes: enough to count what a turn added and removed,
+    and no guide text in the log."""
+    p = Path(path)
+    return [_hash(x)[:16] for x in p.read_text(encoding="utf-8").splitlines()] if p.is_file() else []
+
+
+def guide_changes(before: dict[str, list[str]], cwd: str) -> list[str]:
+    """How each guide changed since `before`: "AGENTS.md +1 line", "+2 −1 lines"."""
+    from collections import Counter
+    out = []
+    for name, path in guides(cwd).items():
+        old, new = Counter(before.get(name, [])), Counter(_guide_lines(path))
+        added, removed = sum((new - old).values()), sum((old - new).values())
+        if added or removed:
+            n = "+" + str(added) if added else ""
+            n += (" " if n and removed else "") + ("−" + str(removed) if removed else "")
+            out.append(f"{name} {n} line{'s' if added + removed != 1 else ''}")
+    return out
+
+
+def _last_reading() -> str:
+    """What the last turn's reading decided, if not a pass, for the agent: the Stop lines
+    reach only the human, so the agent hears of them at the next prompt, once."""
+    mine = [r for r in _records_all() if r.get("session") == state.SESSION]
+    start = max((i for i, r in enumerate(mine) if r.get("event") == "turn-start"), default=-1)
+    turns = [r for r in mine[start + 1:] if r.get("event") == "turn"]
+    acts = [act_words(r) for r in mine[start + 1:] if r.get("event") in ("outward", "config")]
+    said = []
+    if turns and turns[-1].get("decision") != gate.PASS:
+        said.append(f"your last turn's reading: {turns[-1].get('decision')}: {turns[-1].get('reason')}")
+    if acts:
+        said.append("the acts it told the author of: " + "; ".join(f"{w} ({e})" for w, _, e in acts))
+    if not said:
+        return ""
+    return ("frame-loop, shown to the author under your reply: " + " · ".join(said)
+            + ". Tell the author in plain words what it means and what you will do about it, never in ids.")
+
+
+def _turn_start(event: dict[str, Any]) -> None:
+    cwd = event.get("cwd") or os.getcwd()
+    _log({"event": "guides", "lines": {name: _guide_lines(path) for name, path in guides(cwd).items()}})
+    if os.environ.get("FRAME_LOOP_READ_TURNS") == "1":
+        _log({"event": "turn-start", "tree": snapshot(event.get("cwd") or os.getcwd())})
+
+
+def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims: list[str]) -> dict[str, Any]:
+    """A turn's free, deterministic label: its files and size, the asks it claims, what
+    it owes, and its signals. No model is involved."""
+    status = [l.split("\t") for l in _git(cwd, "diff", "--name-status", before, after).stdout.splitlines() if "\t" in l]
+    paths = [x[-1] for x in status]
+    numstat = [l.split("\t") for l in _git(cwd, "diff", "--numstat", before, after).stdout.splitlines() if "\t" in l]
+    added = sum(int(x[0]) for x in numstat if x[0].isdigit())
+    removed = sum(int(x[1]) for x in numstat if x[1].isdigit())
+    diff = _git(cwd, "diff", "--patch", before, after).stdout
+    root = project_root(cwd)
+    owed_line, owed_faults = obligations_line(frame0, root, paths, [], status)
+    found = [f.split(" (")[0].replace("owed ", "").replace(" not met", " unmet") for f in owed_faults]
+    found += outside_scope(frame0, paths)
+    known = [g for ob in frame0.get("obligations", []) for g in ob["scope"] + list(ob["check"].get("changed", []))]
+    # A rule scoped to some files covers them, as an obligation's scope does: a change
+    # there is read by that rule when a read happens, not sent to the reader for itself.
+    scoped = [g for r in frame0.get("semantic") or [] for g in r.get("scope") or []] + list(frame0.get("scope") or [])
+    known += scoped
+    uncovered = [p for p in paths if not any(fnmatch.fnmatch(p, g) for g in known)]
+    if uncovered:
+        found.append(f"an area no rule covers ({uncovered[0]})")
+    per_file = [_git(cwd, "diff", "--patch", before, after, "--", p).stdout for p in paths]
+    # A docs edit has no effect on code, but it is the work when the node or a rule
+    # scopes the docs (the docs branch): only unscoped paths can be "no effect".
+    if claims and paths and all(S.no_effect(p, d) and not any(fnmatch.fnmatch(p, g) for g in scoped)
+                                for p, d in zip(paths, per_file)):
+        found.append("a claimed change with no effect")
+    facts = {"deleted": [x[-1] for x in status if x[0].startswith("D")], "paths": paths, "chars": len(diff)}
+    hit = [r["id"] for r in _effort_rules()["rules"] if _rule_hits(r, facts)]
+    docs_only = bool(paths) and all(S.DOCS.search(p) or p.endswith(".svg") for p in paths)
+    if hit and not (docs_only and not found):  # a large docs edit alone starts no read
+        found.append("a rule signal (" + ", ".join(hit) + ")")
+    sid = f"S{len(_records('step')) + 1}"
+    where = ", ".join(paths[:2]) + (f" +{len(paths) - 2} more" if len(paths) > 2 else "")
+    text = f"{where} +{added}/-{removed}" + (f" · claims {', '.join(claims)}" if claims else "") + (
+        " · " + owed_line.strip() if owed_line else "")
+    return {"id": sid, "paths": paths, "claims": claims, "text": text, "signals": found, "diff": diff}
+
+
+def _keep_step(step: dict[str, Any]) -> None:
+    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop")) / "steps" / (state.SESSION or "none")
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / f"{step['id']}.diff").write_text(step["diff"], encoding="utf-8")
+    _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"},
+          "diff_file": str(folder / f"{step['id']}.diff")})
+
+
+def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict[str, Any] | None:
+    """At a turn's end: read what the turn changed. None when nothing changed."""
+    if os.environ.get("FRAME_LOOP_READ_TURNS") != "1":
+        return None
+    cwd = event.get("cwd") or os.getcwd()
+    path = os.environ.get("FRAME_LOOP_LOG")
+    records = [json.loads(x) for x in Path(path).read_text(encoding="utf-8").splitlines() if x.strip()] if path and Path(path).exists() else []
+    records = [r for r in records if r.get("session") == state.SESSION]
+    last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
+    starts = [r for r in records[last_stop + 1:] if r.get("event") == "turn-start"]
+    # The turn's first start: a message the author sends mid-turn starts no new turn.
+    before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
+    if before is None or after is None:
+        return {"systemMessage": "frame-loop · turn not read: no snapshot (not a git repository?)"}
+    if before == after:
+        return None
+    said = unicodedata.normalize("NFKC", event.get("last_assistant_message") or "")
+    marked = [x for r in records[last_stop + 1:] if r.get("event") == "declare" for x in r.get("lines", [])]
+    if marked:  # the turn's markers, after any line the reply still holds
+        said += "\n" + "\n".join(marked)
+    step = step_label(cwd, before, after, frame0, _declared(said, frame0))
+    _keep_step(step)
+    if not step["signals"]:  # checked for free: say so, so quiet never reads as "never ran"
+        state.LIVE["decision"] = gate.PASS
+        state.LIVE["shorts"] = ["frame-loop ✓ checked: nothing in this change needed a closer look"]
+        return {"systemMessage": f"frame-loop · turn · {step['id']} · {step['text']}"
+                + "\n  not read (no signal)"}
+    state.LIVE["why"] = signal_words(step["signals"])
+    if mode != "enforce" and os.environ.get("FRAME_LOOP_BACKGROUND") == "1":
+        return _read_in_background(event, cwd, before, after, said)
+    read = read_change(cwd, before, after, said, frame0, "turn")
+    result = read["result"]
+    tell = f"frame-loop · turn · {step['id']} · signal: {', '.join(_signals_short(step['signals']))}" + "\n" + read["tell"]
+    if result["decision"] != gate.PASS and mode == "enforce" and not event.get("stop_hook_active"):
+        return {"decision": "block", "reason": f"frame-loop: {result['reason']}", "systemMessage": tell}
+    return {"systemMessage": tell}
+
+
+def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str, said: str) -> dict[str, Any]:
+    """Shadow mode blocks nothing, so the turn need not wait for its read (Asked for: "it was 2
+    min...that is unacceptable"): the read runs in a process of its own, the band shows it,
+    and Claude hears the outcome at the next prompt."""
+    work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(cwd) / ".frame-loop" / "work")
+    work.mkdir(parents=True, exist_ok=True)
+    payload = work / f"background-{int(time.time() * 1000)}.json"
+    payload.write_text(json.dumps({"event": event, "cwd": cwd, "before": before, "after": after, "said": said,
+                                   "session": state.SESSION, "node": state.NODE, "why": state.LIVE.get("why")}), encoding="utf-8")
+    flags = ["-I"] if sys.flags.isolated else []
+    subprocess.Popen([sys.executable, *flags, str(Path(__file__).resolve().parent / "hook.py"), "--background", str(payload)],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                     start_new_session=True, env=os.environ.copy())
+    _log({"event": "turn-queued"})
+    state.LIVE["shorts"] = ["frame-loop · checking this turn in the background; the band shows how it goes"]
+    state.LIVE["queued"] = True  # the background process writes the band from here on
+    return {"systemMessage": "frame-loop · turn · checking in the background"}
+
+
+def _background(payload_path: str) -> int:
+    """The background read: the turn's read as the Stop hook would make it, its outcome in
+    the record and the band."""
+    payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
+    state.SESSION, state.CWD, state.NODE = payload["session"], payload["cwd"], payload.get("node")
+    state.LIVE.clear()
+    state.LIVE["background"] = os.getpid()
+    plugin_defaults(payload["event"])
+    try:
+        frame0 = load_frame0()
+        state.LIVE["why"] = payload.get("why")
+        read = read_change(payload["cwd"], payload["before"], payload["after"], payload["said"], frame0, "turn")
+        detail = for_user(read["tell"], frame0)
+        short = _short_lines(frame0)
+        _live(state="done", decision=state.LIVE.get("decision", "quiet"), started=state.LIVE.get("started"),
+              lines=short.split("\n") if short else [], detail=detail.split("\n"))
+    except Exception as error:  # the band never stays "running" on a crash
+        _live(state="done", decision="block", lines=[f"frame-loop ■ not read: {type(error).__name__}"], detail=[str(error)])
+    finally:
+        Path(payload_path).unlink(missing_ok=True)
+    return 0
+
+
+def _turn_summary() -> dict[str, Any] | None:
+    path = os.environ.get("FRAME_LOOP_LOG")
+    if not path or not Path(path).exists():
+        return None
+    mine = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines()
+            if line.strip()]
+    mine = [r for r in mine if r.get("session") == state.SESSION]
+    last = max((i for i, r in enumerate(mine) if r.get("event") == "stop"), default=-1)
+    turn = mine[last + 1:]
+    read = [r for r in turn if r.get("event") in ("plan", "turn", "read", "proposal")]
+    acts = [r for r in turn if r.get("event") in ("outward", "config")]
+    start = next((r for r in turn if r.get("event") == "guides"), None)
+    changed = guide_changes(start["lines"], state.CWD) if start else []
+    _log({"event": "stop"})  # every turn closes in the record, a quiet one too
+    if not read and not acts and not changed:
+        return None
+    count = {d: sum(1 for r in read if r.get("decision") == d) for d in (gate.PASS, gate.RISE, gate.BLOCK)}
+    parts = [f"{len(read)} read", f"{count[gate.PASS]} pass", f"{count[gate.RISE]} rise"] if read else []
+    if count[gate.BLOCK]:
+        parts.append(f"{count[gate.BLOCK]} block")
+    lost = rules_lost(state.CWD) if changed else []
+    state.LIVE["acts"], state.LIVE["guides"], state.LIVE["lost"] = [act_words(a) for a in acts], changed, lost
+    lines = ["frame-loop · this turn" + (": " + " · ".join(parts) if parts else "")]
+    lines += [f"  {words}: {exact}" for words, _, exact in state.LIVE["acts"]]
+    lines += [f"  {_guide_words(x, lost)}" for x in changed]
+    return {"systemMessage": "\n".join(lines)}
+

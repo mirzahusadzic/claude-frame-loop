@@ -211,13 +211,13 @@ class LiveReaderTests(unittest.TestCase):
         """Seen on the loop's release: the mod's folder carried the project's private name,
         so every turn touching it was refused unread. Masked, it is read; the name never goes."""
         import reader
-        import hook
+        import privacy
         names = ROOT / "tests/.work/private-names.txt"
         names.write_text("secret-project\n")
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
         text = "Files: modified mods/Secret-Project-live/hooks/register.tsx, secret-projects.md\nadds a band"
-        masked = hook.mask_private(text)
+        masked = privacy.mask_private(text)
         self.assertNotIn("secret-project", masked.casefold().replace("secret-projects", ""))
         self.assertIn("mods/[private]-live/", masked)
         self.assertIn("secret-projects.md", masked)  # never inside a longer word, as Gadfly reads it
@@ -243,12 +243,12 @@ class LiveReaderTests(unittest.TestCase):
 
     def test_frameloops_line_hash_is_gadflys(self):
         sys.path.insert(0, str(ROOT / "frameloop"))
-        import hook
+        import privacy
         line = "   def private_algorithm(x):    return sum(v for v in x)  "
         done = subprocess.run(["uv", "run", "--project", str(GADFLY), "python", "-c",
                                f"from midwife.withhold import line_sha256; print(line_sha256({line!r}))"],
                               capture_output=True, text=True, cwd=GADFLY)
-        self.assertEqual(done.stdout.strip(), hook._hash(hook._norm(line)))
+        self.assertEqual(done.stdout.strip(), privacy._hash(privacy._norm(line)))
 
     def test_reader_runs_stage_one_as_run_then_report(self):
         import reader
@@ -301,8 +301,8 @@ class WalkContractTests(unittest.TestCase):
         os.environ.setdefault("FRAME_LOOP_FRAME0", str(ROOT / "tests/fixtures/frame0.json"))
 
     def test_walk_routes_each_completion_to_its_own_hole_on_a_three_level_tree(self):
-        import hook
         import reader
+        import reading
         import tree
         nodes = {"root": {**self.FRAME0, "id": "root"}, "greeter": self.GREETER, "name-flag": self.NAME_FLAG}
         battery = {**readers.READERS["public"], "reasoning": "low", "output": {"label": "/label"}}
@@ -310,7 +310,7 @@ class WalkContractTests(unittest.TestCase):
         for nid, ask, hole in (("name-flag", "M1", "done-M1"), ("greeter", "N2", "done-N2")):
             frame0 = tree.frame0_for(nodes[nid], self.FRAME0, nodes)
             the_ask = next(a for a in frame0["asks"] if a["id"] == ask)
-            start = hook.completion_frame(frame0, the_ask, self.STEPS, "public", in_tree=True)
+            start = reading.completion_frame(frame0, the_ask, self.STEPS, "public", in_tree=True)
             walked = reader.walk(start, frames)
             for key in ("fits", "frontier", "deferred", "passed"):
                 self.assertIn(key, walked, walked)

@@ -23,8 +23,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import hook  # noqa: E402
 import state  # noqa: E402
+from framezero import load_frame0  # noqa: E402
+from reading import read_change  # noqa: E402
+from repo import _git, snapshot  # noqa: E402
 
 
 def project_env(root: Path) -> dict[str, str] | None:
@@ -68,21 +70,21 @@ def parser() -> argparse.ArgumentParser:
 def reading(root: Path, serves: str, effort: str | None, base: str,
             done: str | None = None) -> tuple[int, str]:
     """One on-demand reading with the settings already in the environment."""
-    frame0 = hook.load_frame0()
-    before = hook._git(str(root), "rev-parse", f"{base}^{{tree}}").stdout.strip()
-    after = hook.snapshot(str(root))
+    frame0 = load_frame0()
+    before = _git(str(root), "rev-parse", f"{base}^{{tree}}").stdout.strip()
+    after = snapshot(str(root))
     if not before or not after:
         return 2, "frame-loop · read · not read: no snapshot"
     if before == after:
         return 0, f"frame-loop · read · nothing changed since {base}"
     said = (f"Serves: {serves}" + (f"\nEffort: {effort}" if effort else "")
             + (f"\nDone: {done}" if done else ""))
-    return 0, hook.read_change(str(root), before, after, said, frame0, "read")["tell"]
+    return 0, read_change(str(root), before, after, said, frame0, "read")["tell"]
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
-    top = hook._git(os.getcwd(), "rev-parse", "--show-toplevel")
+    top = _git(os.getcwd(), "rev-parse", "--show-toplevel")
     if top.returncode != 0:
         print("frame-loop · read · not read: not a git repository")
         return 2

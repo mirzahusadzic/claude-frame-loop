@@ -1,0 +1,320 @@
+"""What a reading may send: a training tier's conditions, the channel seal on lines read
+from outside the project, secrets, the author's private names, and the withhold file
+Gadfly enforces.
+
+Standard library only.
+"""
+
+from __future__ import annotations
+
+import importlib
+import json
+import os
+import re
+import shutil
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import readers
+import signals as S
+import state
+from record import _log
+from declare import _masked, _value, _without_declaration
+from repo import _git, project_root
+from effort import _effort_rules
+from lines import _reader_name
+
+
+_EXCUSED: set[str] = set()
+
+
+def _writer():
+    """The writer (FRAME_LOOP_WRITER, module:function, e.g. writer:haiku), or None: with
+    one, a reading sends a label of the change, never the change."""
+    spec = os.environ.get("FRAME_LOOP_WRITER")
+    if not spec:
+        return None
+    module, _, name = spec.partition(":")
+    return getattr(importlib.import_module(module), name)
+
+
+def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[str | None, str | None]:
+    """What a reading may send of `text`, or why it may not. A reader that trains on its
+    inputs reads only a project GitHub confirms public, unless a writer labels the change
+    and the human allowed labels here (FRAME_LOOP_LABELS_OK=1). What is sent holds no line
+    read from outside and no secret. The writer sees the change alone, its declaration cut
+    and frame 0's ids masked; a label that copies the change, names an id or quotes an ask
+    is not sent; and code, not the writer, states the files it touches (a reviewer)."""
+    write = _writer()
+    if _trains(tier) and not_public(state.CWD) is not None and not (
+            write and os.environ.get("FRAME_LOOP_LABELS_OK") == "1"):
+        return None, (f"{_short_path(project_root(state.CWD))} is not confirmed public, and "
+                      f"{_reader_name(tier)} trains on its inputs")
+    sent, sent_kind = text, kind
+    if write and not text.strip():
+        return "", None
+    if write:
+        import writer
+        given = _masked(_without_declaration(text), frame0)
+        ids = [x["id"] for part in ("asks", "principles", "triggers", "obligations") for x in frame0.get(part, [])]
+
+        def refused(made: dict[str, Any]) -> str | None:
+            label = made.get("label") or ""
+            return (f"no label: {made['error']}" if made.get("error") else
+                    "the label quotes the change" if writer.quotes(label, text) else
+                    "the label names an id of frame 0" if ids and re.search(
+                        r"\b(" + "|".join(map(re.escape, ids)) + r")\b", label) else
+                    "the label quotes an ask" if any(writer.quotes(label, a["text"]) for a in frame0.get("asks", []))
+                    else None)
+
+        made = write(given)
+        refusal = refused(made)
+        if refusal == "the label quotes the change":  # one rewrite, told what it repeated
+            _log({"event": "label", "kind": kind, "label": made.get("label"), "refused": refusal,
+                  "rewritten": True})
+            try:
+                made = write(given, avoid=writer.copied(made.get("label") or "", text))
+            except TypeError:  # a writer that takes no avoid list is not asked again
+                pass
+            refusal = refused(made)
+        label = made.get("label") or ""
+        names = next((r.get("names", []) for r in _effort_rules()["rules"] if r["id"] == "dependency-manifest"), [])
+        facts = writer.facts_line(text, names)
+        sent = f"{facts}\n{label}" if facts else label
+        _log({"event": "label", "kind": kind, "label": sent, "refused": refusal,
+              **{k: v for k, v in made.items() if k != "label"}})
+        if refusal:
+            return None, refusal
+        sent_kind = "the label"
+    if _trains(tier):
+        sent = mask_private(sent)  # a path or label naming a private name still gets read
+        held = outbound_faults(sent, sent_kind)
+        if held:
+            return None, "; ".join(held)
+    return sent, None
+
+
+def mask_private(text: str) -> str:
+    """The author's private names put as "[private]", by Gadfly's own rule: a whole word,
+    in any case, beside punctuation too (mods/<name>-live/x.py). Gadfly's withhold still
+    checks what is sent; this only keeps a reading from being refused for a path."""
+    import reader
+    names = sorted({n for n in reader.private_names() if n}, key=len, reverse=True)
+    if not names:
+        return text
+    return re.sub(r"(?<!\w)(?:" + "|".join(map(re.escape, names)) + r")(?!\w)", "[private]", text, flags=re.I)
+
+
+def _trains(tier: str) -> bool:
+    return bool(readers.READERS[tier].get("trainsOnInputs"))
+
+
+def real_home() -> str:
+    """The user's home from the user record, never from $HOME (which a command can set)."""
+    try:
+        import pwd
+        return pwd.getpwuid(os.getuid()).pw_dir
+    except (ImportError, KeyError):
+        return str(Path.home())
+
+
+def _short_path(path: Path, room: int = 40) -> str:
+    """A path for the line: relative to ~ and elided in the middle when long."""
+    home = Path(real_home()).resolve()
+    text = "~/" + str(path.relative_to(home)) if home in path.parents else str(path)
+    return text  # whole: a line the author reads is never elided (Asked for: "a ui/ux SIN")
+
+
+TRUSTED_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+
+
+def _gh() -> str | None:
+    """gh from the human's setting or a trusted system path, never the caller's PATH."""
+    return os.environ.get("FRAME_LOOP_GH") or shutil.which("gh", path=TRUSTED_PATH)
+
+
+def visibility(root: Path) -> str | None:
+    """GitHub's word on the repository's origin (PUBLIC, PRIVATE, INTERNAL), or None when
+    it cannot be established: no remote, not GitHub, gh missing or failing, offline."""
+    remote = _git(str(root), "remote", "get-url", "origin") if root.is_dir() else None
+    gh = _gh()
+    if remote is None or remote.returncode != 0 or not gh:
+        return None
+    try:
+        done = subprocess.run([gh, "repo", "view", remote.stdout.strip(), "--json", "visibility",
+                               "-q", ".visibility"], capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return (done.stdout.strip() or None) if done.returncode == 0 else None
+
+
+def not_public(cwd: str | None) -> Path | None:
+    """The project's root unless GitHub confirms it public: private means not confirmed
+    public, wherever it lives."""
+    root = project_root(cwd)
+    return None if visibility(root) == "PUBLIC" else root
+
+
+def _training_on() -> bool:
+    tier = os.environ.get("FRAME_LOOP_TIER", "public")
+    return tier in readers.READERS and _trains(tier)
+
+
+# The channel seal: what the session read from outside the project, kept as line hashes.
+NETWORK = re.compile(r"(^|[\s;|&(])(gh|curl|wget|scp|ssh|rsync|ftp|nc|http|https)\b|"
+                     r"\bgit\s+(clone|fetch|pull|archive|ls-remote|remote\s+add)\b")
+
+
+SECRETS = [(name, re.compile(pattern)) for name, pattern in S.SECRET_PATTERNS]
+
+
+def _norm(line: str) -> str | None:
+    """A line worth holding: trimmed, spaces collapsed, at least 24 characters with letters."""
+    text = " ".join(line.split())
+    return text if len(text) >= 24 and re.search(r"[A-Za-z]{3}", text) else None
+
+
+def _hash(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, dict):
+        return [x for v in value.values() for x in _strings(v)]
+    if isinstance(value, list):
+        return [x for v in value for x in _strings(v)]
+    return []
+
+
+def _held_dir() -> Path:
+    return Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop")) / "held"
+
+
+def hold(content: Any, source: str) -> int:
+    """Keep the hashes of content read from outside the project, for this session."""
+    lines = {_norm(line) for text in _strings(content) for line in text.splitlines()}
+    lines.discard(None)
+    if not lines:
+        return 0
+    folder = _held_dir()
+    folder.mkdir(parents=True, exist_ok=True)
+    with open(folder / f"{state.SESSION or 'none'}.jsonl", "a", encoding="utf-8") as out:
+        for line in lines:
+            out.write(json.dumps({"h": _hash(line), "from": source}) + "\n")
+    return len(lines)
+
+
+def _held(session: str | None) -> dict[str, str]:
+    folder = _held_dir()
+    files = ([folder / f"{session}.jsonl"] if session and session != "read"
+             else list(folder.glob("*.jsonl")) if folder.is_dir() else [])
+    found: dict[str, str] = {}
+    for path in files:
+        if path.exists():
+            for line in path.read_text(encoding="utf-8").splitlines():
+                record = json.loads(line)
+                found.setdefault(record["h"], record["from"])
+    return found
+
+
+def _outside_path(token: str) -> bool:
+    expanded = token.replace("~", real_home(), 1) if token.startswith("~") else token
+    candidate = Path(expanded) if Path(expanded).is_absolute() else Path(state.CWD or os.getcwd()) / expanded
+    if not candidate.exists():
+        return False
+    root = project_root(state.CWD)
+    resolved = candidate.resolve()
+    return not (resolved == root or root in resolved.parents)
+
+
+def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
+    """After a tool ran: hold what it brought in from outside the project."""
+    if tool in ("Read", "NotebookRead", "Grep"):
+        path = tool_input.get("file_path") or tool_input.get("notebook_path") or tool_input.get("path")
+        if path and _outside_path(path):
+            hold(response, path)
+    elif tool == "Bash":
+        command = tool_input.get("command", "")
+        tokens = [t for t in re.split(r"[\s'\"=]+", command) if "/" in t or t.startswith("~")]
+        outside = next((t for t in tokens if _outside_path(t)), None)
+        if outside or NETWORK.search(command):
+            hold(response, outside or command.split()[0])
+    elif tool.startswith("mcp__"):
+        hold(response, tool)
+
+
+def _in_repository(line: str) -> bool:
+    """Whether the public repository's HEAD already holds this exact line."""
+    root = str(project_root(state.CWD))
+    files = _git(root, "grep", "-F", "-l", "-e", line, "HEAD", "--")
+    for name in files.stdout.splitlines():
+        shown = _git(root, "show", name if name.startswith("HEAD:") else f"HEAD:{name}")
+        if any(" ".join(x.split()) == " ".join(line.split()) for x in shown.stdout.splitlines()):
+            return True
+    return False
+
+
+def outbound_faults(text: str, kind: str) -> list[str]:
+    """What keeps an outgoing reading from leaving: lines read from outside the project
+    (unless the public repository already has them), or anything like a secret."""
+    if kind == "the turn's change":
+        lines = [l[1:] for l in text.splitlines() if l.startswith("+") and not l.startswith("+++")]
+    else:
+        lines = text.splitlines()
+    faults = []
+    held = _held(state.SESSION)
+    matched = []
+    for line in lines:
+        norm = _norm(line)
+        if norm and _hash(norm) in held:
+            if not _in_repository(line.strip()):
+                matched.append(held[_hash(norm)])
+    _EXCUSED.update(_hash(_norm(line)) for line in lines
+                    if _norm(line) and _hash(_norm(line)) in held and _in_repository(line.strip()))
+    if matched:
+        faults.append(f"it holds {len(matched)} line(s) this session read from outside the project "
+                      f"(from {_short_path(Path(matched[0])) if '/' in matched[0] else matched[0]})")
+    for name, pattern in SECRETS:
+        if any(pattern.search(line) for line in lines):
+            faults.append(f"it looks like it holds a secret ({name})")
+    return faults
+
+
+def tier_for(plan: str) -> tuple[str | None, str]:
+    """The reader tier for this plan and a note. A plan may tighten the configured tier
+    (a training tier to one that does not train) and never loosen or move it sideways.
+    A training tier is read only with the human's allowance."""
+    tier = os.environ.get("FRAME_LOOP_TIER", "public")
+    if tier not in readers.READERS:
+        return None, f"unknown reader tier {tier!r}"
+    note, requested = "", _value(plan, "reader")
+    if requested:
+        if requested in readers.READERS and _trains(tier) and not _trains(requested):
+            tier, note = requested, f"tightened to {requested}"
+        else:
+            note = f"reader request {requested!r} ignored: a plan may only tighten privacy"
+    if _trains(tier) and os.environ.get("FRAME_LOOP_TRAINING_OK") != "1":
+        return None, (f"reader tier {tier} trains on its inputs, and the human has not "
+                      "allowed it here (FRAME_LOOP_TRAINING_OK)")
+    return tier, note
+
+
+def withhold_file() -> str:
+    """The withhold file Gadfly enforces for the next reading: secrets always; for a
+    reader that trains on its inputs, the user's private names and the hashes of the lines
+    this session read from outside the project, less those the public repository holds."""
+    import reader
+    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
+    folder.mkdir(parents=True, exist_ok=True)
+    lines = sorted(set(_held(state.SESSION)) - _EXCUSED)
+    data = {"always": {"patterns": [p for _, p in S.SECRET_PATTERNS]},
+            "training": {"names": reader.private_names(), "lines": lines}}
+    path = folder / f"withhold-{state.SESSION or 'none'}.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    os.environ["FRAME_LOOP_WITHHOLD"] = str(path)
+    return str(path)
+
