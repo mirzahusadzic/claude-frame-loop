@@ -104,3 +104,20 @@ class UnicodePathTests(unittest.TestCase):
         self.assertEqual(step["paths"], ["src/café.py"])
         self.assertFalse([s for s in step["signals"] if "not authorized" in s], step["signals"])
         self.assertIn("O1 unmet", step["signals"])  # the owed check applies to the file, as to an ASCII one
+
+
+class ConcurrentSnapshotTests(unittest.TestCase):
+    """The cold review, L2: snapshots at once shared one index, and 10 of 20 came back empty; a
+    `ran` check then read as not run on the final tree."""
+
+    def test_snapshots_at_once_all_succeed_and_leave_no_index(self):
+        from concurrent.futures import ThreadPoolExecutor
+
+        project = Path(make_repo(WORK / f"concurrent-{uid(self)}"))
+        (project / "a.py").write_text("print('a')\n", encoding="utf-8")
+        state.SESSION = f"concurrent-{uid(self)}"
+        with ThreadPoolExecutor(8) as pool:
+            trees = list(pool.map(lambda _: repo.snapshot(str(project)), range(20)))
+        self.assertEqual(len(set(trees)), 1, trees)
+        self.assertIsNotNone(trees[0])
+        self.assertEqual(sorted((project / ".git").glob("frame-loop-index-*")), [])

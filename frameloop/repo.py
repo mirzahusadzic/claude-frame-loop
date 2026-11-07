@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import threading
+import time
 from pathlib import Path
 
 import state
@@ -44,43 +46,58 @@ def snapshot(cwd: str) -> str | None:
     if top.returncode != 0:
         return None
     root = Path(top.stdout.strip())
-    mine = Path(_git(cwd, "rev-parse", "--git-path", f"frame-loop-index-{state.SESSION or 'none'}").stdout.strip())
+    # An index of this call's own, removed after: two snapshots at once never share one (the cold
+    # review, L2), and none is left behind in .git.
+    name = f"frame-loop-index-{state.SESSION or 'none'}-{os.getpid()}-{threading.get_ident()}-{time.time_ns()}"
+    mine = Path(_git(cwd, "rev-parse", "--git-path", name).stdout.strip())
     mine = mine if mine.is_absolute() else Path(cwd) / mine
     real = Path(_git(cwd, "rev-parse", "--git-path", "index").stdout.strip())
     real = real if real.is_absolute() else Path(cwd) / real
-    # The copy keeps the index's own time: a newer one hides git's racy-clean check, and a
-    # same-size edit made within the second of the index's last write reads as unchanged.
-    if real.exists():
-        shutil.copy2(real, mine)
-    elif mine.exists():
-        mine.unlink()
-    skip = []
-    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd) / ".frame-loop"
-    own = [
-        os.environ[name]
-        for name in ("FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE")
-        if os.environ.get(name)
-    ]
-    own.append(str(project / "switch"))  # the author's switch
-    if os.environ.get("FRAME_LOOP_PLUGIN") == "1":
-        own.append(str(project))  # the plugin keeps all of its files there
-    for name in own:
-        q = Path(name).resolve()
-        if root.resolve() in q.parents:
-            skip.append(str(q.relative_to(root.resolve())))
-    if _git(str(root), "add", "-A", "--", ".", index=str(mine)).returncode != 0:
-        return None
-    # Set back to their committed state in the loop's own index after, never named to
-    # `git add`, which refuses a path it ignores; the files themselves are untouched.
-    if (
-        skip
-        and _git(str(root), "reset", "-q", "--", *skip, index=str(mine)).returncode != 0
-        and _git(str(root), "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *skip, index=str(mine)).returncode
-        != 0
-    ):
-        return None  # (no commit yet: nothing to set back to, so they are left out)
-    tree = _git(str(root), "write-tree", index=str(mine))
-    return tree.stdout.strip() or None
+    try:
+        # The copy keeps the index's own time: a newer one hides git's racy-clean check, and a
+        # same-size edit made within the second of the index's last write reads as unchanged.
+        if real.exists():
+            shutil.copy2(real, mine)
+        elif mine.exists():
+            mine.unlink()
+        skip = []
+        project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd) / ".frame-loop"
+        own = [
+            os.environ[name]
+            for name in (
+                "FRAME_LOOP_LOG",
+                "FRAME_LOOP_WORK",
+                "FRAME_LOOP_FRAME0",
+                "FRAME_LOOP_RULES",
+                "FRAME_LOOP_TREE",
+            )
+            if os.environ.get(name)
+        ]
+        own.append(str(project / "switch"))  # the author's switch
+        if os.environ.get("FRAME_LOOP_PLUGIN") == "1":
+            own.append(str(project))  # the plugin keeps all of its files there
+        for name in own:
+            q = Path(name).resolve()
+            if root.resolve() in q.parents:
+                skip.append(str(q.relative_to(root.resolve())))
+        if _git(str(root), "add", "-A", "--", ".", index=str(mine)).returncode != 0:
+            return None
+        # Set back to their committed state in the loop's own index after, never named to
+        # `git add`, which refuses a path it ignores; the files themselves are untouched.
+        if (
+            skip
+            and _git(str(root), "reset", "-q", "--", *skip, index=str(mine)).returncode != 0
+            and _git(
+                str(root), "rm", "-r", "-q", "--cached", "--ignore-unmatch", "--", *skip, index=str(mine)
+            ).returncode
+            != 0
+        ):
+            return None  # (no commit yet: nothing to set back to, so they are left out)
+        tree = _git(str(root), "write-tree", index=str(mine))
+        return tree.stdout.strip() or None
+    finally:
+        mine.unlink(missing_ok=True)
+        Path(f"{mine}.lock").unlink(missing_ok=True)
 
 
 def _files(root: Path) -> list[str]:
