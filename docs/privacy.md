@@ -15,7 +15,7 @@ What a reading sends, to whom, and what is refused before it leaves the machine.
 
 ### What a reading sends
 
-Every reading also carries frame 0's requirements and the rules, in the guides' own words. Claude's declaration is cut and every id masked first.
+Every reading also carries frame 0's requirements and the rules, in the guides' own words. The requirements Claude says a change serves are removed and every id masked first.
 
 | Reading | Labels off | Labels on |
 | --- | --- | --- |

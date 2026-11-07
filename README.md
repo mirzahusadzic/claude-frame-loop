@@ -19,7 +19,7 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 - **Tested reader:** a separate model reads a change only on a signal, under Gadfly's trials, asked again with the requirement removed, with a harmless line removed instead, and with the requirement reversed. A fit that holds without your requirement is rejected.
 - **Fixed verdicts:** ✓ fits, ▲ needs you, ■ not read; decided by rules, not by a model.
 - **Code stays local:** the reader gets a Haiku label and file names, never the diff, unless GitHub confirms the repository public. Secrets are refused and private names masked; [privacy](docs/privacy.md) lists what leaves the machine.
-- **Authority:** pushes, releases, recursive deletes and changes to frame 0 or the loop itself come to you.
+- **Authority:** pushes, releases, recursive deletes and changes to frame 0 or the loop itself are reported to you; in enforce mode they wait for your OK.
 - **Live:** a band above the prompt shows the check, its progress and the time left.
 
 | If you know | frame-loop is |
@@ -44,8 +44,8 @@ A workflow linter for Claude Code: it checks the work you and Claude do together
 
 ### Cost and limits
 
-- **Latency:** a turn with no signal adds under a second; a read holds the next prompt for about one to two minutes.
-- **Calls:** a read takes tens of reader calls, which Gadfly makes in parallel, plus one Haiku call for the label.
+- **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt; in enforce mode the turn's end waits for it.
+- **Calls:** a read takes tens of reader calls, which Gadfly makes seven at a time, plus one Haiku call for the label; OpenRouter bills the reader's calls at the tier's price.
 - **Scope:** it tests whether a change rests on your requirements, not whether your requirements are right; work that touches the right files for the wrong reason is caught at completion, not per turn.
 - **Measured, not guaranteed:** the reader's calibration is summarised in [Rules](docs/rules.md#calibration).
 
@@ -77,10 +77,11 @@ gadfly --version
 
 #### Plugin
 
-At the prompt of a Claude Code session, then `y` to add the marketplace and a scope:
+At the prompt of a Claude Code session; the install asks for a scope, user for every project or project for this one:
 
 ```text
-/plugin install frame-loop --marketplace mirzahusadzic/claude-frame-loop
+/plugin marketplace add mirzahusadzic/claude-frame-loop
+/plugin install frame-loop@claude-frame-loop
 ```
 
 #### Allow the reader
@@ -99,6 +100,7 @@ State the work as usual; Claude restates it as requirements and saves them once 
 | see a check's details | press **details** in the band |
 | change what the work is for | say so in the chat; Claude proposes the change and saves it once you confirm |
 | add a rule | state the way of working in the chat; Claude offers the line for `AGENTS.md` |
+| check that the work is done | ask Claude; it names each requirement it finished, and the loop reads each against the changes that claim it |
 
 ---
 

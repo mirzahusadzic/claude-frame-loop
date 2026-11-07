@@ -56,7 +56,7 @@ The default reader trains on what it reads, so allow it per project: in the proj
 | `FRAME_LOOP_LABELS_OK=1` | off | sends labels, never code, to such a tier from a repository not confirmed public |
 | `FRAME_LOOP_MODE` | `shadow` | `shadow` reports; `enforce` also asks before acts and sends Claude back on a ▲ at a turn's end |
 | `FRAME_LOOP_EFFORT` | the tier's | the reader's effort floor, `low` to `max`; risky changes raise it, never below |
-| `FRAME_LOOP_PARALLEL` | `1` | the reader calls Gadfly makes at once |
+| `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once |
 | `FRAME_LOOP_OUTPUT_TOKENS` | `16000` | the cap on each reader answer |
 | `FRAME_LOOP_WRITER_MODEL` | `claude-haiku-5-5` | the model that writes labels |
 | `FRAME_LOOP_PRIVATE_NAMES` | `~/.config/frame-loop/private-names.txt` | names masked before a training tier; one per line, `#` for comments |

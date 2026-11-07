@@ -6,7 +6,7 @@ How finished work climbs the tree of [Crossings](crossings.md): a completion fil
 
 ### Holes and fits
 
-Every node is also a Gadfly frame for routing only, never asked: one span and one hole per requirement, the hole's kind `done-<ask>`. When Claude claims a requirement done, the loop reads a completion frame for it over the steps that claimed it, and that frame offers its hole. Gadfly's `walk` routes it.
+For routing, every node is also a Gadfly frame that is never asked. Per requirement it holds a span, the requirement's text, and a hole, a slot that finished work fills, of kind `done-<ask>`. When Claude claims a requirement done, the loop reads a completion frame for it over the steps that claimed it, and offers that frame to the tree; Gadfly's `walk` finds the hole it fits, a fit.
 
 | Walk result | The loop |
 | --- | --- |

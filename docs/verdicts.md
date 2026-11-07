@@ -52,4 +52,4 @@ Acts the loop always reports, after the outcome on the same line:
 | Claude touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 
-At the next prompt Claude receives the line, its reason and the acts, and explains a ▲.
+At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is reported after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.

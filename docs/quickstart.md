@@ -15,7 +15,7 @@ State the work in a git repository as usual. Before any code, Claude restates it
 2. Over the limit, the API returns HTTP 429 with a retry time.
 ```
 
-The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and an inversion per requirement, for the reader; every later change is read against it.
+The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and a reversed wording per requirement, which the reader is also asked; every later change is read against it.
 
 ---
 
@@ -24,12 +24,12 @@ The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves
 | Moment | The loop | Line |
 | --- | --- | --- |
 | A turn with no signal | free checks: files, size, what `CLAUDE.md` and `AGENTS.md` require | `frame-loop ✓ checked: nothing in this change needed a closer look` |
-| A turn with a signal | the reader, through Gadfly's trials; the band shows progress | `frame-loop ✓ checked: does what you asked, breaks none of your rules` |
+| A turn with a signal | the reader, asked with and without each requirement; the band shows progress | `frame-loop ✓ checked: does what you asked, breaks none of your rules` |
 | A change no requirement covers | the same read | `frame-loop ▲ needs you: this serves none of your requirements` |
 | A request outside frame 0 | Claude proposes a new requirement; frame 0 changes only on confirmation | none |
 | Claude calls the work done | a completion read, each requirement against the changes that claim it | `frame-loop ✓ every requirement is done` |
 
-A signal is a file no rule covers, an unmet requirement such as tests not run, a large change, a deleted file, or a changed dependency. While the reader works, the band above the prompt shows the step, the answers so far and the time left:
+A signal is a file no rule covers, a check you owe that is unmet, such as tests not run, a large change, a deleted file, or a changed dependency. While the reader works, the band above the prompt shows the step, the answers so far and the time left:
 
 ```text
 ⠹ frame-loop checking the change against your requirements, because it is a large change · 0:41

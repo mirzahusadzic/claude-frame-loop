@@ -180,9 +180,9 @@ flowchart LR
 | --- | --- | --- | --- |
 | Snapshot | each prompt | the working tree, tracked and untracked | a git tree, through the loop's own index; your index is never touched |
 | Free checks | each turn's end | the diff between the turn's first snapshot and now | files, size, the checks the rules require, and the signals |
-| Writer | on a signal, with labels on | the change, Claude's declaration cut, ids masked | a plain-words label, by Haiku through `claude -p` on your login |
+| Writer | on a signal, with labels on | the change, without the requirements Claude named, ids masked | a plain-words label, by Haiku through `claude -p` on your login |
 | Privacy gate | before any call | the label and file names | refuses secrets and lines read from outside the project; masks private names |
-| Reader | each read | frame 0, the rules, the label | answers to Gadfly's trials: baseline, repeat, the requirement cut, a harmless line cut, every requirement cut, the requirement inverted |
+| Reader | each read | frame 0, the rules, the label | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
 | Gate | after the reader | the answers | ✓, ▲ or ■, by fixed rules |
 | Guard | each tool call | the command or the file | an act that is yours, on the line |
 | Band | while a read runs | `~/.claude/frame-loop/live/<session>.json` | the step, the answers so far, the time left, then the outcome |
@@ -207,9 +207,9 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 | Question | Trials | Rule |
 | --- | --- | --- |
-| which requirement does the change fulfil? | baseline, repeat, the declared requirement cut, a harmless line cut, every requirement cut, the requirement inverted | ✓ only if it rests on the declared requirement: a fit that survives the cut, or names another requirement, is ▲ |
+| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed, every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲ |
 | does it break a rule? | baseline, repeat | ✓ if neither names a rule; ▲ naming the rule if both name it; ▲ if they disagree |
 | what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding |
-| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried and firm |
+| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it) |
 
 A refused or failed reading is "not read", never a fit. Effort rises for risky changes (a deletion, a dependency, the loop's settings, a large diff), never falls below the user's floor.
