@@ -173,6 +173,12 @@ def _read_only(command: str) -> bool:
         elif name == "git":
             if F._flags(args, F.GIT_VALUED)[:1] and F._flags(args, F.GIT_VALUED)[0] not in GIT_READS:
                 return False
+            if any(a.startswith("--output") for a in args):  # `git diff --output=FILE` writes it
+                return False
+        elif name == "sort" and any(a == "-o" or a.startswith(("-o", "--output")) for a in args):
+            return False  # writes its output file (the cold review, M6)
+        elif name == "uniq" and len([a for a in args if not a.startswith("-")]) >= 2:
+            return False  # `uniq IN OUT` writes OUT
         elif name == "find":
             if FIND_WRITES & set(args):
                 return False

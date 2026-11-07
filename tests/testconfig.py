@@ -111,3 +111,19 @@ class FieldReadTests(unittest.TestCase):
     def test_a_word_no_file_could_have_is_never_the_loops(self):
         self.assertFalse(config.touches_config("a/" * 3000))
         self.assertFalse(config.touches_config("x\ny/.claude/settings.json"))
+
+
+class ReviewWriteTests(unittest.TestCase):
+    """The cold review, M6: commands on the read-only list that write a file skipped the check."""
+
+    def test_read_commands_that_write_a_file_are_writes(self):
+        state.CWD = os.getcwd()
+        for write in (
+            "sort -o .frame-loop/switch notes.txt",
+            "sort --output=.frame-loop/switch notes.txt",
+            "uniq notes.txt .frame-loop/switch",
+            "git diff --output=.frame-loop/frame0.json",
+        ):
+            self.assertTrue(config.shell_touches_config(write), write)
+        for read in ("sort .frame-loop/steps.jsonl", "uniq -c .frame-loop/steps.jsonl", "git diff -- .frame-loop"):
+            self.assertFalse(config.shell_touches_config(read), read)
