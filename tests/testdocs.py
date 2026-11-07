@@ -74,10 +74,11 @@ class DocsTests(unittest.TestCase):
                 "Python 3.13",
                 "uv tool install 'midwife>=0.13'",
                 "OpenRouter API key",
-                "startup service",
             )
             if name == "README.md":  # the router's coupling to Codex, said up front as a feature
                 needs += ("serves both harnesses",)
+            else:  # what the router's installer changes is told in full in Setup, the README links it
+                needs += ("startup service",)
             for need in needs:
                 self.assertIn(need, text, f"{name}: {need}")
 
@@ -148,6 +149,17 @@ class DocsTests(unittest.TestCase):
         for page in PAGES:
             for block in re.findall(r"<p[^>]*>.*?</p>", page.read_text(encoding="utf-8"), re.S):
                 self.assertNotRegex(block, r"\]\([^)]+\)", page.name)
+
+    def test_sections_are_level_three_headings_under_a_rule(self):
+        """The guide's shape: GitHub underlines `#` and `##`, so a page's sections are `###` under `---`."""
+        wrong = []
+        for page in [*PAGES, ROOT / "AGENTS.md"]:
+            lines = outside_code(page.read_text(encoding="utf-8")).splitlines()
+            for n, line in enumerate(lines):
+                before = [x for x in lines[:n] if x.strip()][-1:]
+                if line.startswith("## ") or (line.startswith("### ") and before != ["---"]):
+                    wrong.append(f"{page.name}: {line}")
+        self.assertEqual(wrong, [])
 
 
 if __name__ == "__main__":

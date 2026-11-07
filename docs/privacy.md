@@ -13,6 +13,8 @@ What a reading sends, to whom, and what is refused before it leaves the machine.
 
 The plugin always labels: its hooks set the writer, so the reader never gets the diff. The "Labels off" column below applies only when the hooks run outside the plugin, without `FRAME_LOOP_WRITER`.
 
+**What runs:** each hook runs the plugin's `hooks/run.sh`, which runs its `frameloop/hook.py`, standard library only, on Gadfly's own Python. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. Nothing else is sent or fetched.
+
 ---
 
 ### What a reading sends

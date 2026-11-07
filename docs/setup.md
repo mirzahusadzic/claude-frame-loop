@@ -93,6 +93,15 @@ The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` (read turns at 
 
 ---
 
+### Cost and limits
+
+- **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt, and a newer turn's read takes over one still running, from where that one began; in enforce mode the turn's end waits for it.
+- **Calls and price:** a read takes tens of reader calls, which Gadfly makes seven at a time for each of the two questions it asks at once, so up to fourteen. Over the 23 reads recorded while frame-loop 0.1.0 checked its own release, on the `contributor` tier, a read took 6 to 54 calls (median 24), 2,600 to 30,000 input tokens and 4,500 to 183,000 output tokens (median 42,000), most of them the reader's reasoning. OpenRouter bills those tokens at the model's current rate, so your price depends on its rates; no dollar figures were recorded, and none for the `private` tier. The label is one Haiku call through `claude -p`, counted on your Claude login like any other.
+- **Scope:** it tests whether a change rests on your requirements, not whether your requirements are right; work that touches the right files for the wrong reason is caught at completion, not per turn.
+- **Measured, not guaranteed:** the reader's calibration is summarised in [Rules](rules.md#calibration).
+
+---
+
 ### Verify
 
 Start Claude Code in the project, confirm frame 0, then change a file no rule covers, so the turn is read. The band shows the read; in shadow mode, the default, send any prompt to see its outcome, which arrives with it; `frame-loop ■ not read` with a reason names what is missing, such as the router's token or a tier not allowed for the project.
