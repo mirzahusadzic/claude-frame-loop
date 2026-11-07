@@ -76,6 +76,122 @@ class ProgressTest(unittest.TestCase):
         self.assertGreaterEqual(len(heard), 3, heard)  # the first count, then heartbeats with no new answer
         self.assertEqual(set(heard), {0})
 
+    def test_an_unchanged_count_is_reported_once_until_the_heartbeat(self):
+        """A count sent every half second would rewrite the band's file twice a second for a whole reading."""
+        heard = []
+        watch = Path(tempfile.mkdtemp()) / "records.jsonl"
+        watch.write_text('{"a": 1}\n\n{"a": 2}\n', encoding="utf-8")
+        sleeper = ([sys.executable, "-c", "import time; time.sleep(1.4)"], None)
+        with (
+            mock.patch.object(reader, "launcher", return_value=sleeper),
+            mock.patch.object(reader, "on_progress", heard.append),
+        ):
+            reader._gadfly([], watch=watch)
+        self.assertEqual(heard, [2])
+
+    def test_a_live_view_that_fails_never_fails_the_reading(self):
+        """An error in the band's progress call would kill the watcher, or the reading with it."""
+        calls = []
+
+        def broken(n):
+            calls.append(n)
+            raise RuntimeError("the band is gone")
+
+        watch = Path(tempfile.mkdtemp())
+        (watch / "a.jsonl").write_text('{"a": 1}\n', encoding="utf-8")
+        (watch / "torn.jsonl").mkdir()  # a records path that cannot be read is passed over
+        script = ([sys.executable, "-c", "import time; time.sleep(0.8); print('{\"exit\": 0}')"], None)
+        with (
+            mock.patch.object(reader, "launcher", return_value=script),
+            mock.patch.object(reader, "on_progress", broken),
+        ):
+            done = reader._gadfly([], watch=watch)
+        self.assertEqual((done.returncode, done.stdout.strip()), (0, '{"exit": 0}'))
+        self.assertEqual(calls, [1])
+
+
+class PrivateNamesTest(unittest.TestCase):
+    """The user's private names reach Gadfly's withhold file, from the user record's home,
+    never from $HOME, and a reader called without the hook is held to them too."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.env = mock.patch.dict(os.environ, {"FRAME_LOOP_PRIVATE_NAMES": str(self.tmp / "names.txt")})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+        os.environ.pop("FRAME_LOOP_WITHHOLD", None)
+
+    def test_names_are_one_a_line_without_comments_or_blanks(self):
+        """A comment or a blank line would be withheld as a name, and every reading refused for it."""
+        (self.tmp / "names.txt").write_text("# mine\n\n  acme  \nzed\n", encoding="utf-8")
+        self.assertEqual(reader.private_names(), ["acme", "zed"])
+
+    def test_no_names_file_is_no_names(self):
+        """A missing names file would crash every reading of a user who never wrote one."""
+        self.assertEqual(reader.private_names(), [])
+
+    def test_the_home_falls_back_when_the_user_record_has_none(self):
+        """A user with no record (a container's uid) would crash the reader before any call."""
+        fake = mock.Mock(getpwuid=mock.Mock(side_effect=KeyError("uid")))
+        with (
+            mock.patch.dict(sys.modules, {"pwd": fake}),
+            mock.patch.object(reader.os, "getuid", create=True, return_value=4242),
+        ):
+            self.assertEqual(reader._home(), str(Path.home()))
+
+    def test_a_reader_called_alone_writes_its_own_withhold_file(self):
+        """A battery calling the reader directly would send private names and secrets unchecked."""
+        (self.tmp / "names.txt").write_text("acme\n", encoding="utf-8")
+        import json
+
+        import signals
+
+        held = json.loads(Path(reader._withhold(self.tmp)).read_text(encoding="utf-8"))
+        self.assertEqual(held["training"]["names"], ["acme"])
+        self.assertEqual(held["always"]["patterns"], [p for _, p in signals.SECRET_PATTERNS])
+
+    def test_the_hooks_withhold_file_is_used_as_it_is(self):
+        """A reader that wrote its own file would drop the session's held lines the hook put in it."""
+        given = self.tmp / "withhold-s1.json"
+        given.write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_WITHHOLD": str(given)}):
+            self.assertEqual(reader._withhold(self.tmp), str(given))
+            self.assertFalse((self.tmp / "withhold.json").exists())
+
+
+class GadflyOutputTest(unittest.TestCase):
+    """What Gadfly prints is read as it is: an error stays an error, never a verdict."""
+
+    def setUp(self):
+        self.env = mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": tempfile.mkdtemp()})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def test_a_walk_that_prints_no_json_is_an_error(self):
+        """A crashed walk would raise in the hook, or read as a climb with no fit."""
+        import subprocess
+
+        crashed = subprocess.CompletedProcess([], 1, "", "Traceback ...\nValueError: bad frame\n")
+        with mock.patch.object(reader, "_gadfly", return_value=crashed):
+            self.assertEqual(
+                reader.walk({"name": "c"}, [{"name": "n"}]), {"error": "Traceback ...\nValueError: bad frame"}
+            )
+        silent = subprocess.CompletedProcess([], 2, "", "")
+        with mock.patch.object(reader, "_gadfly", return_value=silent):
+            self.assertEqual(reader.walk({"name": "c"}, []), {"error": "exit 2"})
+
+    def test_a_failed_trial_run_returns_its_error_and_is_not_reported(self):
+        """A failed run would be reported over records that do not exist, and the error lost."""
+        import json
+        import subprocess
+
+        stopped = subprocess.CompletedProcess([], 3, json.dumps({"exit": 3, "stopped": "budget spent"}), "")
+        with mock.patch.object(reader, "_gadfly", return_value=stopped) as ran:
+            out = reader.run({"name": "f"}, only=("baseline", "repeat"))
+        self.assertEqual(out, {"exit": 3, "stopped": "budget spent"})
+        self.assertEqual(ran.call_count, 1)
+        self.assertTrue(gate._failed(out))
+
 
 if __name__ == "__main__":
     unittest.main()

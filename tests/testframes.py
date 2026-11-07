@@ -1,5 +1,9 @@
+import contextlib
+import io
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -223,6 +227,125 @@ class CompletionTests(unittest.TestCase):
     def test_an_ask_nothing_claims_is_not_read(self):
         with self.assertRaises(frames.FrameError):
             frames.completion(ASK0, "A2", [dict(s, claims=[]) for s in STEPS], "public", with_diffs=True)
+
+    def test_an_ask_not_in_frame0_is_never_read(self):
+        """A completion for an ask frame 0 lacks would be read against nothing and could pass."""
+        with self.assertRaisesRegex(frames.FrameError, "A9 is not an ask of frame 0"):
+            frames.completion(ASK0, "A9", STEPS, "public")
+
+    def test_an_ask_with_no_inversion_gets_no_inversion_trial(self):
+        """An empty inversion trial would send the ask as its own inversion and allow "no" for a true ask."""
+        bare = {**ASK0, "asks": [{"id": "A1", "text": "the CLI greets by a name it is given"}]}
+        frame = frames.completion(bare, "A1", STEPS, "public")
+        self.assertNotIn("inputInversion", frame["interventions"])
+        self.assertNotIn("inputInversion", frame["allowed"])
+
+
+class FrameFaultTests(unittest.TestCase):
+    """A frame 0 or a step that cannot make an honest frame is refused, never read."""
+
+    def test_a_span_without_an_id_or_a_text_is_refused(self):
+        """A span with no id could never be named by the reader; one with no text would be read as nothing."""
+        for broken in ({"text": "an ask"}, {"id": "A1"}, "A1"):
+            with self.assertRaisesRegex(frames.FrameError, "asks must each have an id and a text"):
+                frames.which_ask({**FRAME0, "asks": [broken]}, step("A1"), "anthropic")
+
+    def test_an_unknown_tier_is_refused(self):
+        """An unknown tier would send the frame to a reader nobody chose, maybe one that trains on it."""
+        with self.assertRaisesRegex(frames.FrameError, "not 'nowhere'"):
+            frames.which_ask(FRAME0, step(), "nowhere")
+        self.assertEqual(
+            frames.which_ask(FRAME0, step(), "public")["battery"]["model"], frames.READERS["contributor"]["model"]
+        )
+
+    def test_a_declaration_must_name_distinct_asks_of_frame0(self):
+        """A step declaring nothing, an ask twice, or an ask frame 0 lacks would be read against a made-up anchor."""
+        for serves in ([], ["A1", "A1"], ["A9"], "A9"):
+            with self.assertRaisesRegex(frames.FrameError, "distinct asks"):
+                frames.which_ask(FRAME0, step(serves), "anthropic")
+
+    def test_a_frame0_with_no_rule_cannot_be_read_for_breaks(self):
+        """A rules question over no rule would always read none and pass every step."""
+        bare = {**FRAME0, "principles": [], "triggers": []}
+        with self.assertRaisesRegex(frames.FrameError, "no principle or trigger"):
+            frames.violation(bare, step(), "anthropic")
+
+    def test_an_ask_without_an_inversion_is_a_fault_and_gets_no_inversion_trial(self):
+        """An ask with no inversion would be read without the trial that shows the fit rests on its words."""
+        bare = {**FRAME0, "asks": [{k: v for k, v in a.items() if k != "inversion"} for a in FRAME0["asks"]]}
+        self.assertIn("A5: no inversion", frames.frame0_faults(bare))
+        frame = frames.which_ask(bare, step(), "anthropic")
+        self.assertNotIn("inversion", frame["interventions"])
+        self.assertNotIn("inversion", frame["allowed"])
+
+    def test_a_malformed_obligation_is_a_fault_of_each_kind(self):
+        """An obligation with a bad id, scope or check would be owed and never checked."""
+        bad = {
+            **FRAME0,
+            "obligations": [
+                {"id": "X1", "scope": ["*.py"], "text": "t", "check": {"changed": ["a"]}},
+                {"id": "O2", "scope": "*.py", "text": "t", "check": {"changed": ["a"]}},
+                {"id": "O3", "scope": ["*.py"], "text": "t", "check": {"guessed": ["a"]}},
+                {"id": "R4", "scope": ["*.py"], "text": "t", "check": {"exists": "README.md"}},
+            ],
+        }
+        faults = frames.obligation_faults(bad)
+        self.assertEqual(len(faults), 3, faults)
+        self.assertTrue(faults[0].startswith("X1: an obligation's id is O"))
+        self.assertTrue(faults[1].startswith("O2: its scope is a list"))
+        self.assertTrue(faults[2].startswith("O3: its check is one of"))
+
+
+class MainTests(unittest.TestCase):
+    """frames.py as a script: it writes a step's two frames, or says why it cannot."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix="frame-loop-frames-"))
+        self.frame0 = self.tmp / "frame0.json"
+        self.frame0.write_text(json.dumps(FRAME0), encoding="utf-8")
+
+    def write_step(self, data):
+        path = self.tmp / "step.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        return path
+
+    def args(self, step_path):
+        return ["--frame0", str(self.frame0), "--step", str(step_path), "--tier", "private", "--out-dir"]
+
+    def test_the_script_writes_both_frames_of_a_step(self):
+        """The calibration runs build their frames with this script; without its files nothing is read."""
+        out = self.tmp / "out"
+        self.assertEqual(frames.main([*self.args(self.write_step(step())), str(out)]), 0)
+        written = sorted(p.name for p in out.iterdir())
+        self.assertEqual(written, ["t.violation.json", "t.which-ask.json"])
+        built = json.loads((out / "t.which-ask.json").read_text(encoding="utf-8"))
+        self.assertEqual(built["anchors"], ["A5"])
+
+    def test_a_step_that_cannot_make_a_frame_is_refused_with_its_reason(self):
+        """A broken step would raise a traceback, or write a frame built on a guess."""
+        out = self.tmp / "refused"
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = frames.main([*self.args(self.write_step({"id": "t", "summary": "s"})), str(out)])
+        self.assertEqual(code, 2)
+        self.assertIn("frame-loop: 'claim'", err.getvalue())
+        self.assertFalse(out.exists())
+        with contextlib.redirect_stderr(err):
+            code = frames.main([*self.args(self.write_step(step("A9"))), str(out)])
+        self.assertEqual(code, 2)
+        self.assertIn("distinct asks", err.getvalue())
+
+    def test_the_script_runs_on_its_own(self):
+        """Run as `python frameloop/frames.py`, it would find no readers module and fail."""
+        out = self.tmp / "run"
+        done = subprocess.run(
+            [sys.executable, "-I", str(ROOT / "frameloop/frames.py"), *self.args(self.write_step(step())), str(out)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue((out / "t.violation.json").is_file())
 
 
 if __name__ == "__main__":
