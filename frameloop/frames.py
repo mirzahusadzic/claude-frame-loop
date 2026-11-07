@@ -153,6 +153,12 @@ def frame0_faults(frame0: dict[str, Any]) -> list[str]:
                 f"{ask['id']}: the inversion restates {covered} of {len(text)} "
                 "characters; it must restate the whole ask"
             )
+        else:  # an inversion that says nothing, or the ask again, leaves the trial nothing to move
+            said = " ".join(str(next(iter(inversion.values())) or "").split())
+            if not said:
+                faults.append(f"{ask['id']}: the inversion is empty; it must reverse the ask")
+            elif said.casefold() == " ".join(text.split()).casefold():
+                faults.append(f"{ask['id']}: the inversion repeats the ask; it must reverse it")
     return faults + obligation_faults(frame0)
 
 

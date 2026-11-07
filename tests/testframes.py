@@ -72,6 +72,24 @@ class WhichAskTests(unittest.TestCase):
         del none["asks"][1]["inversion"]
         self.assertIn("A2", frames.frame0_faults(none)[0])
 
+    def test_an_inversion_that_is_empty_or_the_ask_again_is_a_fault(self):
+        """The claims ledger: the check took only the inversion's key, so an empty reversal,
+        or the ask itself again, passed, and the inversion trial could never move."""
+        whole = json.loads((ROOT / "tests/fixtures/frame0.json").read_text(encoding="utf-8"))
+        text = whole["asks"][0]["text"]
+        for said, why in (
+            ("", "is empty"),
+            ("   ", "is empty"),
+            (text, "repeats the ask"),
+            (f"  {text.upper()} ", "repeats the ask"),
+        ):
+            with self.subTest(said=said):
+                bad = json.loads(json.dumps(whole))
+                bad["asks"][0]["inversion"] = {text: said}
+                faults = frames.frame0_faults(bad)
+                self.assertEqual(len(faults), 1, faults)
+                self.assertIn(f"A1: the inversion {why}", faults[0])
+
     def test_a_half_inversion_in_every_ask_is_a_fault_each(self):
         half = {
             **FRAME0,
