@@ -1953,7 +1953,8 @@ class CoreTests(unittest.TestCase):
             {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
         )
         (REPO / "notes").mkdir(exist_ok=True)
-        (REPO / "notes" / f"{uid(self)}.py").write_text(f"print({id(self)})\n" * 400)
+        # a size that never depends on the platform's object ids: under the large-change signal
+        (REPO / "notes" / f"{uid(self)}.py").write_text("".join(f"print({k})\n" for k in range(400)))
         bash(": frame-loop-declare --serves A2")
         out = hook.answer(
             {
@@ -2504,8 +2505,9 @@ class CoreTests(unittest.TestCase):
             Path(os.environ.get("FRAME_LOOP_WORK", str(WORK))).glob(f"background-{self.session}-*.json")
         ):
             time.sleep(0.2)  # the newer read ends and removes its payload; nothing is left running
+        reaped = time.time() + 60  # a slow runner: the newer read still has its two seconds and more to go
         for r in queued:  # this test is their parent: reap them, as the system does for the hook's
-            while time.time() < deadline:
+            while time.time() < reaped:
                 try:
                     if os.waitpid(r["pid"], os.WNOHANG)[0]:
                         break
