@@ -44,7 +44,13 @@ class LauncherTests(unittest.TestCase):
             if name in os.environ:
                 env[name] = os.environ[name]
         done = subprocess.run(
-            [self.shell, str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env, timeout=30
+            [self.shell, str(RUN)],
+            input=json.dumps(event),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env=env,
+            timeout=30,
         )
         self.assertEqual((done.returncode, done.stderr), (0, ""), done.stdout)
         if not done.stdout.strip() and event.get("hook_event_name") != "PreToolUse":  # say why, from a trace
