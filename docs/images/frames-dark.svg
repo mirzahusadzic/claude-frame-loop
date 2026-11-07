@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
   <title id="t">The frames, filled in with one request</title>
-  <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude's turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude's turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour.</desc>
+  <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude, by rule, recompiles, and its turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude, by rule, recompiles, and its turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour, in the work as in the check.</desc>
   <style>
     text { font-family: "Latin Modern Roman", "CMU Serif", "Computer Modern", "Times New Roman", Georgia, serif; font-size: 19px; fill: #e6edf3; }
     .b { font-weight: 700; }
@@ -48,10 +48,10 @@
   <text x="188" y="386" class="a3">count resets after a minute</text>
   <text x="188" y="410" class="ar3">rule: with a test</text>
   <rect x="188" y="426" width="258" height="254" rx="12" class="box" style="fill: #262c33"/>
-  <text x="204" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
-  <text x="204" y="482" class="i a4">“adds a counter that</text>
-  <text x="204" y="506" class="i a4">resets each minute,</text>
-  <text x="204" y="530" class="i ar4">with its test”</text>
+  <text x="204" y="458"><tspan class="b">Workflow</tspan>: Claude, <tspan class="ar4">by rule,</tspan></text>
+  <text x="204" y="482">recompiles; its turn, labelled</text>
+  <text x="204" y="506" class="i a4">“adds a counter that resets</text>
+  <text x="204" y="530" class="i"><tspan class="a4">each minute, </tspan><tspan class="ar4">with its test”</tspan></text>
   <rect x="194" y="546" width="246" height="118" rx="10" class="box" style="fill: #30363d"/>
   <text x="210" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
   <text x="210" y="600" class="a5">with the requirement: fits</text>
@@ -64,10 +64,10 @@
   <text x="486" y="386" class="b3">seconds left in the window</text>
   <text x="486" y="410" class="br3">rule: with a test</text>
   <rect x="486" y="426" width="258" height="254" rx="12" class="box" style="fill: #262c33"/>
-  <text x="502" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
-  <text x="502" y="482" class="i b4">“sets Retry-After from</text>
-  <text x="502" y="506" class="i b4">the window,</text>
-  <text x="502" y="530" class="i br4">with its test”</text>
+  <text x="502" y="458"><tspan class="b">Workflow</tspan>: Claude, <tspan class="br4">by rule,</tspan></text>
+  <text x="502" y="482">recompiles; its turn, labelled</text>
+  <text x="502" y="506" class="i b4">“sets Retry-After from the</text>
+  <text x="502" y="530" class="i"><tspan class="b4">window, </tspan><tspan class="br4">with its test”</tspan></text>
   <rect x="492" y="546" width="246" height="118" rx="10" class="box" style="fill: #30363d"/>
   <text x="508" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
   <text x="508" y="600" class="b5">with the requirement: fits</text>

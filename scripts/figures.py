@@ -67,10 +67,10 @@ def svg(theme):
   <text x="{x + 16}" y="386" class="{k}3">{req[2]}</text>
   <text x="{x + 16}" y="410" class="{k}r3">rule: with a test</text>
   {box(x + 16, 426, 258, 254, f[3])}
-  <text x="{x + 32}" y="458"><tspan class="b">Workflow</tspan>: the turn, labelled</text>
-  <text x="{x + 32}" y="482" class="i {k}4">{label[0]}</text>
-  <text x="{x + 32}" y="506" class="i {k}4">{label[1]}</text>
-  <text x="{x + 32}" y="530" class="i {k}r4">with its test”</text>
+  <text x="{x + 32}" y="458"><tspan class="b">Workflow</tspan>: Claude, <tspan class="{k}r4">by rule,</tspan></text>
+  <text x="{x + 32}" y="482">recompiles; its turn, labelled</text>
+  <text x="{x + 32}" y="506" class="i {k}4">{label[0]}</text>
+  <text x="{x + 32}" y="530" class="i"><tspan class="{k}4">{label[1]} </tspan><tspan class="{k}r4">with its test”</tspan></text>
   {box(x + 22, 546, 246, 118, f[4], 10)}
   <text x="{x + 38}" y="576"><tspan class="b">Reader</tspan>, given that label:</text>
   <text x="{x + 38}" y="600" class="{k}5">with the requirement: fits</text>
@@ -79,7 +79,7 @@ def svg(theme):
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 812" width="960" height="812" role="img" aria-labelledby="t d">
   <title id="t">The frames, filled in with one request</title>
-  <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude's turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude's turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour.</desc>
+  <desc id="d">You: "Add rate limiting to the API. Over the limit, return HTTP 429." You confirm: each client is limited per minute, with a test; over the limit, HTTP 429 with a retry time, with a test. Method, frame-loop, breaks the requirements down by crossing. Requests counted per client, each count resets after a minute, with a test: Claude, by rule, recompiles, and its turn is labelled "adds a counter that resets each minute, with its test"; the reader, given that label, finds it fits with the requirement and not without it, and that it breaks no rule. The HTTP 429 carries Retry-After, the seconds left in the window, with a test: Claude, by rule, recompiles, and its turn is labelled "sets Retry-After from the window, with its test"; the reader finds the same. Each part of the request keeps its colour down the frames, a shade deeper at each rewording; its rule sits beside it in the complementary colour, in the work as in the check.</desc>
   <style>
     text {{ font-family: "Latin Modern Roman", "CMU Serif", "Computer Modern", "Times New Roman", Georgia, serif; font-size: 19px; fill: {t["ink"]}; }}
     .b {{ font-weight: 700; }}
@@ -100,8 +100,8 @@ def svg(theme):
   <line x1="682" y1="236" x2="682" y2="298" class="arrow"/>
   <path d="M676 244 L682 232 L688 244 Z" class="head"/>
   <path d="M676 290 L682 302 L688 290 Z" class="head"/>
-{column(172, "a", ["requests", "counted per client, each", "count resets after a minute"], ["“adds a counter that", "resets each minute,"])}
-{column(470, "b", ["the HTTP 429", "carries Retry-After, the", "seconds left in the window"], ["“sets Retry-After from", "the window,"])}
+{column(172, "a", ["requests", "counted per client, each", "count resets after a minute"], ["“adds a counter that resets", "each minute,"])}
+{column(470, "b", ["the HTTP 429", "carries Retry-After, the", "seconds left in the window"], ["“sets Retry-After from the", "window,"])}
 
   <line x1="101" y1="612" x2="101" y2="104" class="arrow"/>
   <path d="M95 112 L101 98 L107 112 Z" class="head"/>
