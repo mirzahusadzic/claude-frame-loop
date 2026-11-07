@@ -271,11 +271,16 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             if said:
                 merged["systemMessage"] = "\n".join(said)
             return merged
+        # A marker chained with other commands, before or after them, is not read, and
+        # the rest of the chain is checked as any command is.
+        mixed = len(parts) > 1 and any(x.startswith(": frame-loop-") for x in parts)
         stray = ("frame-loop: the marker was not read: a marker is a command of its own, never after "
-                 "`cd … &&` or in a chain; run it alone.") if MARKER_IN_CHAIN.search(command) else ""
-        if command.strip().startswith(": frame-loop-read"):
+                 "`cd … &&` or in a chain; run it alone.") if mixed or MARKER_IN_CHAIN.search(command) else ""
+        if stray:
+            pass
+        elif command.strip().startswith(": frame-loop-read"):
             return _read_on_demand(command)
-        if command.strip().startswith(": frame-loop-node"):
+        elif command.strip().startswith(": frame-loop-node"):
             wanted = (shlex.split(command.split("\n", 1)[0])[2:] or ["root"])[0]
             known = _tree_nodes(frame0) if os.environ.get("FRAME_LOOP_TREE") else {}
             if wanted not in known:
@@ -286,7 +291,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             asks = "; ".join(f"{a['id']}: {a['text']}" for a in load_frame0()["asks"])
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext":
                     f"frame-loop: engaged node {wanted}; its asks: {asks}"}}
-        if command.strip().startswith(": frame-loop-declare"):
+        elif command.strip().startswith(": frame-loop-declare"):
             lines = _declare_lines(command)
             _log({"event": "declare", "lines": lines})
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse",

@@ -1685,6 +1685,20 @@ class CoreTests(unittest.TestCase):
         self.assertIsNone(hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
                                        "cwd": str(REPO), "tool_input": {"command": "grep -n 'frame-loop-declare' x"}}))
 
+    def test_a_marker_leading_a_chain_is_not_read_and_the_rest_is_checked(self):
+        """Seen on the loop's release: `: frame-loop-declare --serves A2,A7; : frame-loop-node
+        docs; cd … && wc …` was read as one declaration whose values ran to the end of the
+        line, and the commands after the marker went unchecked: a push there went unseen."""
+        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
+                           "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1; git push origin main"}})
+        told = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("rises to the human", told)
+        self.assertIn("a command of its own", told)
+        out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Bash", "session_id": self.session,
+                           "cwd": str(REPO), "tool_input": {"command": ": frame-loop-declare --serves A1 && ls"}})
+        self.assertIn("not read", out["hookSpecificOutput"]["additionalContext"])
+        self.assertFalse([r for r in record._records_all() if r.get("event") == "declare" and r.get("session") == self.session])
+
     def test_the_writer_labels_the_whole_change_never_the_readers_cut(self):
         """Seen on the loop's own release: a big turn's diff was cut at the reader's cap
         before Haiku labelled it, so the label described 3 of its files. The writer reads
