@@ -80,5 +80,20 @@ class DocsTests(unittest.TestCase):
             self.assertIn("contributor", named, name)
 
 
+    def test_mode_means_shadow_or_enforce_only(self):
+        """"cooperative mode" read as a third mode beside shadow and enforce, and no doc
+        defined it."""
+        import subprocess
+        found = subprocess.run(["git", "grep", "-n", "-i", "-I", "cooperative mode", "--", ".", ":!tests/testdocs.py"],
+                               cwd=ROOT, capture_output=True, text=True).stdout
+        self.assertEqual(found, "")
+
+    def test_switching_to_enforce_is_shown(self):
+        """Mirza: is changing the mode covered? It was one inline mention."""
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn('"FRAME_LOOP_MODE": "enforce"', readme)
+        self.assertIn("switch to enforce mode", readme)
+        self.assertIn("enforce mode", (ROOT / "docs/quickstart.md").read_text())
+
 if __name__ == "__main__":
     unittest.main()

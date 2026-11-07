@@ -110,7 +110,7 @@ The default reader, the `contributor` tier, is Muse Spark 1.3 Contributor, which
 }
 ```
 
-For private code, use the `private` tier instead, Muse Spark 1.3 on an endpoint that keeps no data, at a higher price: put `"FRAME_LOOP_TIER": "private"` in the same `env` and leave both lines out. Every setting is in Setup, linked below.
+For private code, use the `private` tier instead, Muse Spark 1.3 on an endpoint that keeps no data, at a higher price: put `"FRAME_LOOP_TIER": "private"` in the same `env` and leave both lines out. Optionally, add `"FRAME_LOOP_MODE": "enforce"` to the same `env` to have acts wait for your OK; see Use, below. Every setting is in Setup, linked below.
 
 ---
 
@@ -126,6 +126,7 @@ State the work as usual; Claude restates it as requirements and saves them once 
 | add a rule | state the way of working in the chat; Claude offers the line for `AGENTS.md` |
 | check that the work is done | ask Claude, or let it present the work as done; it names each requirement it finished, and the loop reads each against the changes that claim it |
 | see a check's outcome in shadow mode | send any prompt: the line arrives with it |
+| switch to enforce mode | add `"FRAME_LOOP_MODE": "enforce"` to the `env` in the project's `.claude/settings.local.json`; remove it, or set `"shadow"`, to go back. Pushes, releases, deletes and changes to the loop's files then ask you first, and a turn whose check rises goes back to Claude. The hooks read the mode at every call, from the settings Claude Code gives them; start a new session after changing it to be sure it is picked up |
 | stop using it | `/frame-loop off` for a project, or `/plugin uninstall frame-loop@claude-frame-loop`; its files stay in `<project>/.frame-loop/` until you remove them |
 
 ---

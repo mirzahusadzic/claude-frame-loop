@@ -47,4 +47,4 @@ A signal is a file no rule covers, a check you owe that is unmet, such as tests 
   does it do what you asked, and does it break any of your rules? · 9 of about 12 answers · about 0:12 left
 ```
 
-In shadow mode, the default, a read runs in the background: send any prompt to see its outcome, which arrives with it, and Claude receives the finding then. The reader gets a label and file names, never the session or the code: [Privacy](privacy.md).
+Shadow mode is the default: it reports and blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: send any prompt to see its outcome, which arrives with it, and Claude receives the finding then. The reader gets a label and file names, never the session or the code: [Privacy](privacy.md).

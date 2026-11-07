@@ -901,7 +901,7 @@ class LineTests(unittest.TestCase):
 
 
 class CoopTests(unittest.TestCase):
-    """The cooperative mode (the author): plan mode stays Claude Code's own; frame-loop engages
+    """frame-loop's way of working (the author): plan mode stays Claude Code's own; frame-loop engages
     on four terms and is read on demand by read.py, whose settings come from the
     project's own hook command."""
 

@@ -1,4 +1,4 @@
-"""On-demand reading, for frame-loop's cooperative mode.
+"""On-demand reading, as frame-loop's way of working has Claude ask for one.
 
 The agent runs it when the author asks, on its own initiative (before it calls work
 done, or before an act that cannot be undone), in a discussion, or when it presents its

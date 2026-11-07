@@ -2,8 +2,9 @@
 
 Reads one hook event (JSON on stdin) and answers on stdout. Shadow mode is the
 default: every reading is recorded in the steps log and handed to Claude as context,
-and nothing is ever denied. Enforcing mode (FRAME_LOOP_MODE=enforce) denies a plan or
-asks the human about an act whose gate rises, with the reason.
+and nothing is ever denied. Enforce mode (FRAME_LOOP_MODE=enforce) asks the human
+about an act whose gate rises, with the reason, and sends Claude back on a rise at a
+turn's end; a plan's reading only informs, in either mode.
 
 Configuration, by environment (set by the human in the hook's command line):
 - FRAME_LOOP_FRAME0: the authored frame 0 (JSON);
@@ -353,7 +354,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def briefing(frame0: dict[str, Any], mode: str) -> str:
-    """What a new session is told: the cooperative mode, frame 0, the four terms of
+    """What a new session is told: frame-loop's way of working, frame 0, the four terms of
     engagement, crossings and authority, how to declare, and what rises."""
     tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
     reader = readers.READERS.get(tier, {}).get("model", f"unknown tier {tier!r}")
@@ -370,7 +371,7 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                        " This repository is not confirmed public, so frame-loop will not read here.")
     read = ": frame-loop-read --serves <ids>"
     lines = [
-        "This project runs frame-loop in its cooperative mode. The human authored frame 0 "
+        "This project runs frame-loop. Its way of working: the human authored frame 0 "
         f"once; an independent reader ({reader}, through Gadfly) reads your work against it, "
         f"and only a mismatch goes to the human.{trains}",
         "",
