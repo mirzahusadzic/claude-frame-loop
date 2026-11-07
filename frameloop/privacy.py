@@ -156,7 +156,19 @@ def _short_path(path: Path, room: int = 40) -> str:
     return text  # whole: a line the author reads is never elided (Asked for: "a ui/ux SIN")
 
 
-TRUSTED_PATH = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+def _trusted_dirs(windows: bool = os.name == "nt") -> list[str]:
+    """Where a system's installers put `gh`, folders an ordinary user cannot write: Homebrew,
+    Linuxbrew, snap and the system's own on macOS and Linux; Program Files on Windows."""
+    if windows:
+        return [
+            os.environ[name].rstrip("\\/") + "\\GitHub CLI"
+            for name in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432")
+            if os.environ.get(name)
+        ]
+    return ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/home/linuxbrew/.linuxbrew/bin", "/snap/bin"]
+
+
+TRUSTED_PATH = os.pathsep.join(_trusted_dirs())
 
 
 def _gh() -> str | None:

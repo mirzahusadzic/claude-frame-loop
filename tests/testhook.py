@@ -1514,6 +1514,15 @@ class VisibilityTests(unittest.TestCase):
         hook.answer(plan_event("Serves: A2\nAdd a test.", cwd=OUTSIDE))
         self.assertEqual(len(seen), 2)
 
+    def test_the_trusted_places_for_gh_are_this_systems_own(self):
+        """Sparky's second review: the trusted path was POSIX-only, so on Windows `gh` was never
+        found and every repository read as not confirmed public."""
+        dirs = privacy.TRUSTED_PATH.split(os.pathsep)
+        self.assertTrue(dirs)
+        self.assertTrue(all(Path(d).is_absolute() for d in dirs), dirs)
+        with unittest.mock.patch.dict(os.environ, {"ProgramFiles": "C:\\Program Files"}):
+            self.assertIn("C:\\Program Files\\GitHub CLI", privacy._trusted_dirs(windows=True))
+
     def test_gh_comes_from_a_trusted_place_not_the_callers_path(self):
         os.environ.pop("FRAME_LOOP_GH")
         os.environ["PATH"] = str(ROOT / "tests") + os.pathsep + os.environ.get("PATH", "")

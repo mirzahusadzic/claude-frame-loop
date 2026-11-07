@@ -89,6 +89,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_USER_GUIDE` | `~/.claude/CLAUDE.md` | the user's own guide; a turn that changes it is reported, as for `AGENTS.md` |
 | `FRAME_LOOP_FRAME0`, `FRAME_LOOP_LOG`, `FRAME_LOOP_WORK`, `FRAME_LOOP_RULES`, `FRAME_LOOP_TREE` | in `<project>/.frame-loop/` | frame 0, the record, the work folder, the rules and the tree, elsewhere |
 | `GADFLY_CHECKOUT` | none | a Gadfly checkout, run through uv in place of the `gadfly` command; without either, a checkout in `~/gadfly` |
+| `FRAME_LOOP_GH` | `gh` from the system's own folders | the `gh` that confirms a repository public, when it is installed elsewhere; never taken from the caller's `PATH` |
 | `CODEX_ROUTER_TOKEN` | from the router's `openrouter.env` | the router's token |
 
 The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` (read turns at their end), `FRAME_LOOP_BACKGROUND=1` (in shadow mode, read in the background) and `FRAME_LOOP_WRITER=writer:haiku` (labels on) itself, and `FRAME_LOOP_READER` defaults to `reader:run`, Gadfly through the router. The tests and the development tools also read `FRAME_LOOP_READER`, `FRAME_LOOP_ROUTER`, `FRAME_LOOP_BATTERY` and `FRAME_LOOP_GH`, to put stand-ins in place of the reader, the climb's router, Gadfly's battery and `gh`; the loop sets `FRAME_LOOP_WITHHOLD` for Gadfly on its own.
