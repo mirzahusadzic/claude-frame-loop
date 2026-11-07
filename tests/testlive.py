@@ -153,6 +153,14 @@ class LiveFileTests(unittest.TestCase):
                 live._ran({"made": 4})
             self.assertEqual(json.loads((work / "live-history.json").read_text(encoding="utf-8"))["fit"]["calls"], 4)
 
+    def test_a_live_file_that_cannot_be_replaced_leaves_no_temporary_file(self):
+        """A failed replace would leave a stray temporary file beside the live file at every write."""
+        self.path.mkdir()
+        live._live(state="reading")
+        self.assertEqual(sorted(p.name for p in self.tmp.glob("*.tmp")), [])
+        self.assertTrue(self.path.is_dir())
+        self.assertFalse(live._LIVE_LOCK.locked())
+
     def test_an_interrupted_read_is_closed_and_a_finished_one_left(self):
         """A read the user stopped would show as still checking in the band."""
         self.path.write_text(json.dumps({"state": "reading", "pid": None}), encoding="utf-8")

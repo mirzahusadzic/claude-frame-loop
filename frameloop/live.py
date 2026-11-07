@@ -87,6 +87,7 @@ def _live(**fields: Any) -> None:
     folder = os.environ.get("FRAME_LOOP_LIVE")
     if not folder or not state.SESSION:
         return
+    tmp = None
     try:
         _LIVE_LOCK.acquire()
         Path(folder).mkdir(parents=True, exist_ok=True)
@@ -101,7 +102,11 @@ def _live(**fields: Any) -> None:
         )
         _replace(tmp, path)
     except OSError:
-        pass
+        if tmp is not None:  # a write that never reached its place leaves nothing behind
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
     finally:
         if _LIVE_LOCK.locked():
             _LIVE_LOCK.release()
