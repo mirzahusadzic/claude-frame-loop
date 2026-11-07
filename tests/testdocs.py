@@ -100,6 +100,16 @@ class DocsTests(unittest.TestCase):
         crossings = (ROOT / "docs/crossings.md").read_text(encoding="utf-8")
         self.assertIn(f'| inversion | "{inverted.rstrip(".")}" |', crossings)
 
+    def test_the_paper_is_cited_by_one_doi_everywhere(self):
+        """Mirza: the paper first, then the release cites it. The citation file GitHub reads,
+        the README's badge and its Cite block name one concept DOI."""
+        cff = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+        doi = re.search(r'^  doi: "(10\.5281/zenodo\.\d+)"$', cff, re.M).group(1)
+        self.assertIn('repository-code: "https://github.com/mirzahusadzic/claude-frame-loop"', cff)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(f"(https://doi.org/{doi})", readme.split("\n\n", 2)[1])  # the badge row
+        self.assertIn(f"doi       = {{{doi}}}", readme.split("### Cite", 1)[1])
+
     def test_setup_lists_the_tiers_a_user_may_name_and_no_other(self):
         """Mirza: the other tiers are for calibration only; Setup's table is the user's list."""
         setup = (ROOT / "docs/setup.md").read_text(encoding="utf-8")

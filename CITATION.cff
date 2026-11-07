@@ -1,0 +1,23 @@
+cff-version: 1.2.0
+message: "If you use frame-loop, please cite the working paper."
+title: frame-loop
+type: software
+authors:
+  - family-names: Husadzic
+    given-names: Mirza
+    orcid: "https://orcid.org/0009-0004-8359-4090"
+repository-code: "https://github.com/mirzahusadzic/claude-frame-loop"
+license: Apache-2.0
+preferred-citation:
+  type: report
+  title: "Holding the Thread: An Open Frame for Checking an Agent's Work Against the Person's Own Words"
+  authors:
+    - family-names: Husadzic
+      given-names: Mirza
+      orcid: "https://orcid.org/0009-0004-8359-4090"
+  year: 2026
+  month: 11
+  publisher:
+    name: Zenodo
+  doi: "10.5281/zenodo.24044462"
+  url: "https://doi.org/10.5281/zenodo.24044462"

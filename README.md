@@ -6,6 +6,7 @@
 ![Python 3.13+](https://img.shields.io/badge/python-3.13%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 ![macOS · Linux · Windows](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)
 ![alpha 0.1.1](https://img.shields.io/badge/status-alpha%200.1.1-e5a50a)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.24044462.svg)](https://doi.org/10.5281/zenodo.24044462)
 
 Early alpha (0.1.1): used by its author so far; pin a version for stability. [Issues](https://github.com/mirzahusadzic/claude-frame-loop/issues).
 
@@ -100,6 +101,21 @@ sh scripts/coverage.sh
 ---
 
 ### Cite
+
+The working paper on Zenodo describes the design and this plugin as built. The paper is under CC BY 4.0 and the code under Apache-2.0; the paper's DOI always resolves to its latest version:
+
+```bibtex
+@misc{husadzic2026holdingthread,
+  author    = {Husadzic, Mirza},
+  title     = {Holding the Thread: An Open Frame for Checking
+               an Agent's Work Against the Person's Own Words},
+  year      = {2026},
+  publisher = {Zenodo},
+  note      = {Working paper},
+  doi       = {10.5281/zenodo.24044462},
+  url       = {https://doi.org/10.5281/zenodo.24044462}
+}
+```
 
 The method, Gadfly's paper:
 
