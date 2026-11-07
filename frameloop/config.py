@@ -87,6 +87,11 @@ GIT_READS = {
     "merge-base",
 }
 FIND_WRITES = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
+# A `python -c` one-liner reads unless its code holds a call that may write, run or remove.
+PYTHON_WRITES = re.compile(
+    r"open\([^)]*['\"][^'\"]*[wax+]|\.write|write_text|write_bytes|unlink|remove|rmdir|rmtree|rename|replace\(|"
+    r"dump\(|truncate|mkdir|chmod|chown|copy|move|symlink|subprocess|system\(|popen|exec|eval|__import__|setattr"
+)
 # Programs that keep a heredoc as data, never run it.
 DATA_SINKS = {"cat", "tee", "head", "tail", "wc", "grep", "sed", "sort"}
 
@@ -112,8 +117,13 @@ def touches_config(path: str) -> bool:
     """A path inside the loop's own configuration or record: frame 0, the log, the work
     folder, the rules and the tree (written or not), the loop's code, or a project's
     Claude Code settings and hooks."""
-    p = Path(os.path.expanduser(path))
-    p = (p if p.is_absolute() else Path(state.CWD or os.getcwd()) / p).resolve()
+    if "\n" in path or "\0" in path or len(path) > 1024:  # no file has such a name: not a path
+        return False
+    try:
+        p = Path(os.path.expanduser(path))
+        p = (p if p.is_absolute() else Path(state.CWD or os.getcwd()) / p).resolve()
+    except (OSError, ValueError):
+        return False
     if ".claude" in p.parts and (p.name.startswith("settings") or "hooks" in p.parts):
         return True
     return any(p == q or q in p.parents for q in _protected())
@@ -163,6 +173,9 @@ def _read_only(command: str) -> bool:
                 return False
         elif name == "find":
             if FIND_WRITES & set(args):
+                return False
+        elif re.fullmatch(r"python[\d.]*", name) and args[:1] == ["-c"] and len(args) >= 2:
+            if PYTHON_WRITES.search(args[1]):  # seen: a settings read through python rose as a write
                 return False
         elif name not in READ_ONLY:
             return False

@@ -37,7 +37,7 @@ class ShellTests(Isolated):
         """`LC_ALL=C grep …` would be taken for a program named LC_ALL=C that may write."""
         self.assertFalse(config.shell_touches_config("LC_ALL=C grep -n ask .frame-loop/frame0.json"))
         self.assertFalse(config.shell_touches_config("A=1; cat .frame-loop/steps.jsonl"))
-        self.assertTrue(config.shell_touches_config("LC_ALL=C python3 -c 1 .frame-loop/frame0.json"))
+        self.assertTrue(config.shell_touches_config("LC_ALL=C python3 tool.py .frame-loop/frame0.json"))
 
     def test_find_reads_unless_it_acts(self):
         """`find -delete` or `-exec` on the loop's folder would remove frame 0 without the author."""
@@ -89,3 +89,25 @@ class PluginTests(Isolated):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FieldReadTests(unittest.TestCase):
+    """Seen in Gadfly's session: reading the settings, by `cat` and by a `python3 -c` that only
+    loads them, rose as touching the loop's own files."""
+
+    def test_a_settings_read_through_python_is_a_read_and_a_write_is_not(self):
+        read = (
+            'cat .claude/settings.local.json; python3 -c "\nimport json,os\n'
+            "p=os.path.expanduser('~/.claude/settings.json')\nd=json.load(open(p))\nprint(list(d))\n\""
+        )
+        self.assertFalse(config.shell_touches_config(read))
+        for write in (
+            "python3 -c \"open('.claude/settings.json','w').write('{}')\"",
+            "python3 -c \"import os; os.remove('.claude/settings.json')\"",
+            "python3 -c \"import json; json.dump({}, open('.claude/settings.json', 'a'))\"",
+        ):
+            self.assertTrue(config.shell_touches_config(write), write)
+
+    def test_a_word_no_file_could_have_is_never_the_loops(self):
+        self.assertFalse(config.touches_config("a/" * 3000))
+        self.assertFalse(config.touches_config("x\ny/.claude/settings.json"))
