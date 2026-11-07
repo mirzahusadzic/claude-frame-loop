@@ -69,6 +69,8 @@ def _split(command: str) -> list[str]:
         elif c in "'\"":
             quote = c
             cur.append(c)
+        elif c in "&|" and ((i and command[i - 1] in "<>") or command.startswith("&>", i)):
+            cur.append(c)  # a redirect (`2>&1`, `&>`, `>|`), not a list
         elif c in ";|&\n()`" or command.startswith("$(", i):
             parts.append("".join(cur))
             cur = []
@@ -159,15 +161,29 @@ def _act(words: list[str], depth: int) -> str | None:
     return None
 
 
+def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
+    """The command without its heredocs' text, the line that opens each kept, and each
+    heredoc's text with the command that reads it."""
+    bodies, kept, at = [], [], 0
+    for heredoc in HEREDOC.finditer(command):
+        opening = heredoc.group(0).split("\n", 1)[0]
+        line = command[:heredoc.start()].rsplit("\n", 1)[-1]
+        parts = _split(line)
+        bodies.append((parts[-1] if parts else "", heredoc.group(3)))
+        kept.append(command[at:heredoc.start()] + re.sub(r"^<<-?\s*(['\"]?)\w+\1", " ", opening))
+        at = heredoc.end()
+    return "".join(kept) + command[at:], bodies
+
+
 def outward(command: str, depth: int = 0) -> str | None:
     """The outward or irreversible act a shell command runs, if any."""
     found = None
-    for heredoc in HEREDOC.finditer(command):  # a heredoc a shell reads runs as commands
-        line = command[:heredoc.start()].rsplit("\n", 1)[-1]
-        words = _words(_split(line)[-1]) if _split(line) else []
+    text, bodies = heredocs(command)
+    for reader, body in bodies:  # a heredoc a shell reads runs as commands
+        words = _words(reader)
         if words and Path(words[0]).name in SHELLS | {"eval"} and depth < 3:
-            found = found or outward(heredoc.group(3), depth + 1)
-    for part in _split(HEREDOC.sub("", command)):
+            found = found or outward(body, depth + 1)
+    for part in _split(text):
         found = found or _act(_words(part), depth)
     return found
 

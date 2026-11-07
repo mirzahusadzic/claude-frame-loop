@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import os
 import re
+import shlex
 from pathlib import Path
 from typing import Any
 
+import facts as F
 import state
 from privacy import real_home
 
@@ -28,6 +30,18 @@ SED_WRITES = re.compile(r"(^|\s)(-i\S*|--in-place\S*|-[a-zA-Z]*i)(\s|$)|(^|['\";
 
 
 CONFIG = re.compile(r"\.claude/(settings[^\s'\"]*|hooks\b)|FRAME_LOOP_")
+# git's subcommands that only read; any other may write.
+GIT_READS = {"log", "show", "diff", "status", "blame", "grep", "ls-files", "ls-tree", "rev-parse", "cat-file",
+             "rev-list", "describe", "shortlog", "reflog", "whatchanged", "check-ignore", "merge-base"}
+FIND_WRITES = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
+# Programs that keep a heredoc as data, never run it.
+DATA_SINKS = {"cat", "tee", "head", "tail", "wc", "grep", "sed", "sort"}
+
+
+def _home() -> Path:
+    """The project's own .frame-loop/: frame 0, the rules, the tree, the switch, the record."""
+    project = os.environ.get("CLAUDE_PROJECT_DIR") or state.CWD or os.getcwd()
+    return Path(project) / ".frame-loop"
 
 
 def _protected() -> list[Path]:
@@ -36,35 +50,90 @@ def _protected() -> list[Path]:
         if os.environ.get(name):
             paths.append(Path(os.environ[name]).resolve())
     paths.append(switch_path({"cwd": state.CWD}).resolve())  # the author's switch: Claude never flips it
+    if os.environ.get("FRAME_LOOP_PLUGIN") == "1":  # the whole folder, a file not written yet included
+        paths.append(_home().resolve())
     return paths
 
 
 def touches_config(path: str) -> bool:
     """A path inside the loop's own configuration or record: frame 0, the log, the work
-    folder, the loop's code, or a project's Claude Code settings and hooks."""
-    p = Path(path).resolve()
+    folder, the rules and the tree (written or not), the loop's code, or a project's
+    Claude Code settings and hooks."""
+    p = Path(os.path.expanduser(path))
+    p = (p if p.is_absolute() else Path(state.CWD or os.getcwd()) / p).resolve()
     if ".claude" in p.parts and (p.name.startswith("settings") or "hooks" in p.parts):
         return True
     return any(p == q or q in p.parents for q in _protected())
 
 
+def _tokens(part: str) -> list[str]:
+    """A command's words and its unquoted operators (`>`, `2>&1`); a word keeps its
+    quotes, so a quoted ">" is never a redirect."""
+    try:
+        lexer = shlex.shlex(part, posix=False, punctuation_chars=True)
+        lexer.whitespace_split = True
+        return list(lexer)
+    except ValueError:  # an unclosed quote: word by word
+        return part.split()
+
+
+def _unquoted(word: str) -> str:
+    return word[1:-1] if len(word) > 1 and word[0] == word[-1] and word[0] in "'\"" else word
+
+
 def _read_only(command: str) -> bool:
-    """Whether a shell call only reads: each part of its `&&`, `||`, `;` or `|` chain
-    starts with a read-only command, and nothing is written (no redirection into a file
-    but /dev/null, no tee, no command substitution)."""
-    quiet = re.sub(r"\d?>&\d|&?>\s*/dev/null", " ", command)
-    if any(mark in quiet for mark in (">", "tee", "`", "$(")):
-        return False
-    parts = [x.split() for x in re.split(r"&&|\|\||;|\|", quiet)]
-    if any(x and x[0] == "sed" and SED_WRITES.search(" ".join(x[1:])) for x in parts):
-        return False
-    return all(x and x[0] in READ_ONLY for x in parts)
+    """Whether a shell call only reads: each command it runs, outside quotes and heredoc
+    text, is a read-only one (git only with a subcommand that reads, find with no action,
+    sed with no write), and nothing is redirected into a file but /dev/null."""
+    text, bodies = F.heredocs(command)
+    if any(Path((F._words(reader) or [""])[0]).name not in DATA_SINKS for reader, _ in bodies):
+        return False  # a heredoc a program runs
+    for part in F._split(text):
+        tokens = _tokens(part)
+        for k, token in enumerate(tokens):
+            if set(token) <= set("<>&|") and ">" in token and not re.fullmatch(r"\d?>&\d?|>&", token):
+                target = tokens[k + 1] if k + 1 < len(tokens) else ""
+                if _unquoted(target) != "/dev/null":
+                    return False
+        words = [_unquoted(t) for t in tokens if not set(t) <= set("<>&|()")]
+        words = [w for w in words if not re.fullmatch(r"\d", w)]  # a redirect's descriptor
+        while words and re.fullmatch(r"\w+=.*", words[0]):
+            words = words[1:]
+        if not words:
+            continue
+        name, args = Path(words[0]).name, words[1:]
+        if name == "sed":
+            if SED_WRITES.search(" ".join(args)):
+                return False
+        elif name == "git":
+            if F._flags(args, F.GIT_VALUED)[:1] and F._flags(args, F.GIT_VALUED)[0] not in GIT_READS:
+                return False
+        elif name == "find":
+            if FIND_WRITES & set(args):
+                return False
+        elif name not in READ_ONLY:
+            return False
+    return True
 
 
 def shell_touches_config(command: str) -> bool:
-    named = CONFIG.search(command) or any(
-        str(q) in command or (q.is_file() and q.name in command) for q in _protected())
-    return bool(named) and not _read_only(command)
+    """Whether a shell call that may write names the loop's own files: a word that is such
+    a path (relative to the project, `~` and `$HOME` expanded), or such a path inside code
+    a program runs. A read never does, and neither does a path that only shares a prefix."""
+    if _read_only(command):
+        return False
+    text, bodies = F.heredocs(command)
+    code = "\n".join([text] + [body for reader, body in bodies
+                               if Path((F._words(reader) or [""])[0]).name not in DATA_SINKS])
+    if CONFIG.search(code) or re.search(r"(?<![\w-])\.frame-loop(/|\b)", code):
+        return True
+    home = os.path.expanduser("~")
+    for part in F._split(text):
+        for word in _tokens(part):
+            word = _unquoted(word).replace("$HOME", home).replace("${HOME}", home)
+            if ("/" in word or word.startswith("~")) and "://" not in word and touches_config(word):
+                return True
+    return any(re.search(re.escape(str(q)) + r"(?![\w.-])", code) for q in _protected())
 
 
 def plugin_defaults(event: dict[str, Any]) -> None:

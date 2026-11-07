@@ -2202,6 +2202,41 @@ class ReadOnlyTests(unittest.TestCase):
                       f"cd x && echo hi > {cfg}", f"cd x && mv {cfg} y"):
             self.assertTrue(config.shell_touches_config(write), write)
 
+    def test_reads_and_lookalike_paths_are_not_the_loops_files(self):
+        """The first live use: a `git log` of frame 0, a grep for ">" and a path sharing the
+        loop's prefix were told as touching the loop's own files."""
+        project = Path(make_repo(Path(tempfile.mkdtemp(prefix="frame-loop-lookalike-"))))  # outside the loop's code
+        frame0 = project / ".frame-loop" / "frame0.json"
+        with unittest.mock.patch.dict(os.environ, env(FRAME_LOOP_FRAME0=str(frame0), FRAME_LOOP_PLUGIN="1",
+                                                      CLAUDE_PROJECT_DIR=str(project))):
+            state.CWD = str(project)
+            for read in (f"git -C {project} log --oneline -- {frame0}", f'grep -n ">" {frame0}',
+                         f"cat {frame0} 2>&1 | head -5", f"cd {project} && git status && git diff -- .frame-loop",
+                         f"touch {project}-copy/notes.md", f"cp notes.md {project}/frame0.json.example",
+                         f"touch {ROOT}-copy/notes.md", f"cd {ROOT}-review && git commit -qm x",
+                         f"find {project}/.frame-loop -name '*.json'"):
+                self.assertFalse(config.shell_touches_config(read), read)
+            for write in (f"python3 -c \"open('{frame0}', 'w')\"", f"sed -i '' s/a/b/ {frame0}",
+                          "echo off > .frame-loop/switch", "cat > .frame-loop/rules.json <<'EOF'\n{}\nEOF",
+                          f"cat > {project}/.frame-loop/tree/docs.json <<'EOF'\n{{}}\nEOF",
+                          "python3 - <<'EOF'\nopen('.frame-loop/frame0.json', 'w')\nEOF",
+                          f"cd {project} && git checkout -- .frame-loop/frame0.json"):
+                self.assertTrue(config.shell_touches_config(write), write)
+
+    def test_a_first_write_of_the_rules_or_a_node_asks(self):
+        """The first review: rules.json and a tree file not written yet were not the loop's
+        files, so Claude could write them unasked."""
+        project = Path(make_repo(Path(tempfile.mkdtemp(prefix="frame-loop-fresh-"))))  # outside the loop's code
+        with unittest.mock.patch.dict(os.environ, env(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(project),
+                                                      FRAME_LOOP_MODE="enforce")):
+            for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
+                os.environ.pop(name, None)
+            for path in (project / ".frame-loop/rules.json", project / ".frame-loop/tree/docs.json"):
+                out = hook.answer({"hook_event_name": "PreToolUse", "tool_name": "Write", "cwd": str(project),
+                                   "session_id": f"fresh-{uid(self)}",
+                                   "tool_input": {"file_path": str(path), "content": "{}"}})
+                self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask", path)
+
 
 class RulesTests(unittest.TestCase):
     """rules belong to the project, ingested from AGENTS.md and curated from the
