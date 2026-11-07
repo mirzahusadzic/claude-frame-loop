@@ -451,6 +451,15 @@ class AttackTests(unittest.TestCase):
         waited = hook.briefing(framezero.load_frame0(), "enforce")
         self.assertIn("the turn's end then waits", waited)
 
+    def test_the_briefing_asks_for_an_inversion_no_stronger_than_its_claim(self):
+        """Mirza, on an outside review of the paper: an inversion that says more than the
+        sentence's reversal turns the reader too easily and weakens the trial."""
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(WORK / "frame0-unwritten.json")))
+        said = hook.briefing(unwritten, "shadow")
+        self.assertIn("the inversion its own claim reversed and no stronger", said)
+        self.assertIn('"Requests are not counted per client", not "Requests are not counted at all"', said)
+
     def test_the_briefing_says_frame0s_write_is_asked_only_in_enforce_mode(self):
         """The claims ledger: the briefing told Claude the author is asked before frame 0 is
         written, which holds in enforce mode only; in shadow mode the write is reported."""

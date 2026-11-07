@@ -26,7 +26,7 @@ State the work in a git repository as usual. Before any code, Claude restates it
 2. Over the limit, the API returns HTTP 429 with a retry time.
 ```
 
-The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and an inversion per requirement, the requirement reversed, which the reader is also asked; every later change is checked against it, and read by the reader on a signal.
+The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and an inversion per requirement, the requirement's own claim reversed and no stronger, which the reader is also asked; every later change is checked against it, and read by the reader on a signal.
 
 ---
 

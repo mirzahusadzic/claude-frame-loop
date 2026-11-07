@@ -503,7 +503,9 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "write frame 0 yourself as JSON to "
                 f"{os.environ.get('FRAME_LOOP_FRAME0')}: each ask as "
                 '{"id": "A1", "text": "<the author\'s words>", "inversion": '
-                '{"<that whole text>": "<the whole text, inverted>"}}, and principles and triggers as '
+                '{"<that whole text>": "<the whole text, inverted>"}}, the inversion its own claim '
+                'reversed and no stronger ("Requests are not counted per client", not "Requests are '
+                'not counted at all"), and principles and triggers as '
                 '{"id": "P1", "text": "..."}; '
                 + (
                     "frame-loop asks the author before that write lands."
