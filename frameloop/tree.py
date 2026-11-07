@@ -33,7 +33,8 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
     if folder and Path(folder).is_dir():
         for path in sorted(Path(folder).glob("*.json")):
             raw = json.loads(path.read_text(encoding="utf-8"))
-            nodes[raw.get("id", path.stem)] = raw
+            nid = raw.get("id", path.stem)
+            nodes[nid] = {**raw, "id": nid}  # a file with no id is its file name's node, everywhere
     for nid in list(nodes):  # a node whose parents run in a circle never reaches the root
         if _circle(nid, nodes):
             nodes[nid] = {**nodes[nid], "circle": True}

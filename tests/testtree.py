@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -190,6 +191,50 @@ class ClimbTests(unittest.TestCase):
         self.assertTrue(state["greeter"]["complete"])
         self.assertTrue(state["root"]["filled"]["A1"] and state["root"]["filled"]["A2"])
         self.assertTrue(state["root"]["complete"])
+
+
+class LoadTests(unittest.TestCase):
+    """The tree folder as the hook reads it."""
+
+    def test_without_a_tree_folder_frame0_is_the_only_node(self):
+        """An unset or missing tree folder would crash every hook, or invent nodes."""
+        missing = Path(tempfile.mkdtemp()) / "no-tree"
+        for folder in (None, str(missing)):
+            nodes = tree.load(folder, FRAME0)
+            self.assertEqual(list(nodes), ["root"])
+            self.assertEqual(nodes["root"]["id"], "root")
+
+    def test_a_node_file_without_an_id_is_its_file_names_node_everywhere(self):
+        """Found here: a node file with no id loaded by its name, then crashed the climb and every engaged hook."""
+        folder = Path(tempfile.mkdtemp())
+        raw = {k: v for k, v in node().items() if k != "id"}
+        (folder / "greeter.json").write_text(json.dumps(raw), encoding="utf-8")
+        nodes = tree.load(str(folder), FRAME0)
+        self.assertEqual(nodes["greeter"]["id"], "greeter")
+        self.assertEqual(tree.frame0_for(nodes["greeter"], FRAME0, nodes)["node"], "greeter")
+        self.assertEqual(tree.node_frame(nodes["greeter"], {})["name"], "node-greeter")
+        self.assertTrue(tree.climb(nodes, {("greeter", "N1")})["greeter"]["complete"])
+
+
+class MoreNodeFaultTests(unittest.TestCase):
+    def test_two_asks_with_the_same_words_are_a_fault(self):
+        """Two asks sharing their words would split one completion between them, or fill both by one step."""
+        twin = {**node()["asks"][0], "id": "N2"}
+        faults = tree.node_faults(node(asks=[node()["asks"][0], twin]), FRAME0, {"root": FRAME0})
+        self.assertIn("two asks share their words: asks are disjoint", faults)
+
+    def test_a_node_that_would_close_a_circle_is_a_fault(self):
+        """A node whose parent descends from it would make a tree with no path to frame 0."""
+        parent = node(id="greeter", parent="name-flag")
+        child = node(id="name-flag", parent="greeter", asks=[{**node()["asks"][0], "id": "M1", "quotes": "N1"}])
+        child["predictions"] = M1_PREDICTED
+        nodes = {"root": FRAME0, "greeter": parent, "name-flag": child}
+        self.assertIn("its parents run in a circle: no path leads to frame 0", tree.node_faults(child, parent, nodes))
+
+    def test_a_rule_above_repeated_word_for_word_is_no_fault(self):
+        """A child restating a rule it inherits would be refused as loosening it."""
+        child = node(principles=list(FRAME0["principles"]), triggers=list(FRAME0["triggers"]))
+        self.assertEqual(tree.node_faults(child, FRAME0, {"root": FRAME0}), [])
 
 
 if __name__ == "__main__":
