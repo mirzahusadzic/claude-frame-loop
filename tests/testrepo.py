@@ -138,3 +138,14 @@ class DeadlineTests(unittest.TestCase):
             started = time.monotonic()
             self.assertIsNone(repo.snapshot(str(project)))
             self.assertLess(time.monotonic() - started, 10)
+
+
+class SnapshotCallsTests(unittest.TestCase):
+    def test_a_snapshot_names_its_root_and_indexes_in_one_call(self):
+        """Sparky's second review: three rev-parse calls a snapshot, where one names all three."""
+        project = Path(make_repo(WORK / f"calls-{uid(self)}"))
+        (project / "notes.txt").write_text("a line\n", encoding="utf-8")
+        state.SESSION = f"calls-{uid(self)}"
+        with mock.patch.object(repo, "_git", wraps=repo._git) as calls:
+            self.assertTrue(repo.snapshot(str(project)))
+        self.assertLessEqual(calls.call_count, 4, [c.args[1:3] for c in calls.call_args_list])

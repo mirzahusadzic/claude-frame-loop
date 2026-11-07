@@ -56,16 +56,15 @@ def snapshot(cwd: str) -> str | None:
     The loop's own files are left out: the log, the work folder, the switch, and frame
     0, the rules and the tree, which are the author's alone (a change to them reaches the
     author as an act). None outside a git repository."""
-    top = _git(cwd, "rev-parse", "--show-toplevel")
-    if top.returncode != 0:
-        return None
-    root = Path(top.stdout.strip())
     # An index of this call's own, removed after: two snapshots at once never share one (the cold
-    # review, L2), and none is left behind in .git.
+    # review, L2), and none is left behind in .git. One rev-parse names the root and both indexes.
     name = f"frame-loop-index-{state.SESSION or 'none'}-{os.getpid()}-{threading.get_ident()}-{time.time_ns()}"
-    mine = Path(_git(cwd, "rev-parse", "--git-path", name).stdout.strip())
+    found = _git(cwd, "rev-parse", "--show-toplevel", "--git-path", name, "--git-path", "index")
+    said = found.stdout.splitlines()
+    if found.returncode != 0 or len(said) != 3:
+        return None
+    root, mine, real = Path(said[0]), Path(said[1]), Path(said[2])
     mine = mine if mine.is_absolute() else Path(cwd) / mine
-    real = Path(_git(cwd, "rev-parse", "--git-path", "index").stdout.strip())
     real = real if real.is_absolute() else Path(cwd) / real
     try:
         # The copy keeps the index's own time: a newer one hides git's racy-clean check, and a
