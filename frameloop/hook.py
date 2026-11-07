@@ -554,6 +554,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "When the author states or corrects a way of working, offer the line for the guide "
         "in chat: the author's words, in the guide's style, and the section it goes under "
         "(AGENTS.md for the project, ~/.claude/CLAUDE.md for the author's own across projects). "
+        "A rule is a line some change could keep or break: offer each with its kind, a code "
+        "check, a principle, a trigger or a scoped rule. A line no change could keep or break "
+        "(how to talk with the author, how to work in a chat) is a way of working: offer it "
+        "for the guide as one, never as a rule; when in doubt, offer it as a rule and ask. "
+        "Asked to compile rules from what exists, read what is already in rule shape first "
+        "(spec tables of invariants and boundaries, the guides), and past corrections last. "
         "The author's OK is the acceptance; then write it, through the repository's own "
         "session where it has one, and re-index its rules.",
         *_rules_notes(frame0),

@@ -456,6 +456,17 @@ class AttackTests(unittest.TestCase):
         waited = hook.briefing(framezero.load_frame0(), "enforce")
         self.assertIn("the turn's end then waits", waited)
 
+    def test_the_briefing_says_what_makes_a_line_a_rule(self):
+        """An agent's report: asked to compile a project's rules, it offered the author's
+        corrections of its conduct, lines no change can keep or break, and sorted none
+        into a kind; the briefing never said what makes a line a rule."""
+        os.environ.update(env())
+        said = hook.briefing(framezero.load_frame0(), "shadow")
+        self.assertIn("A rule is a line some change could keep or break", said)
+        self.assertIn("a code check, a principle, a trigger or a scoped rule", said)
+        self.assertIn("is a way of working: offer it for the guide as one, never as a rule", said)
+        self.assertIn("read what is already in rule shape first", said)
+
     def test_the_briefing_asks_for_an_inversion_no_stronger_than_its_claim(self):
         """Mirza, on an outside review of the paper: an inversion that says more than the
         sentence's reversal turns the reader too easily and weakens the trial."""

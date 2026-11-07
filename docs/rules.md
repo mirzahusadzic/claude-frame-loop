@@ -11,10 +11,12 @@ State a way of working in the chat. Claude offers the line for the guide, in its
 ```text
 > From now on, every change to the client comes with a test that fails before it.
 
-For AGENTS.md, under "Tests":
+For AGENTS.md, under "Tests", a code check:
 - Every change to the client comes with a test that fails before the change.
 OK to add it?
 ```
+
+A rule is a line some change could keep or break, offered with its kind from the table below. A line no change could keep or break, such as how Claude talks with you, is a way of working: it can go in the guide, offered as one, but is never indexed or read. Asked to compile rules from what exists, Claude reads what is already in rule shape first, such as spec tables of invariants and boundaries, and past corrections last.
 
 The confirmed line is indexed as a rule that quotes it, so the rule is always read by the guide's words. A guide line is checked only once it is indexed: when a guide gains lines, the briefing tells Claude to offer them to you as rules. A line in `~/.claude/CLAUDE.md` holds for every project; one in the project's guides, for that project.
 
