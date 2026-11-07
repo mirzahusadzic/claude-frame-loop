@@ -1644,6 +1644,41 @@ class ChannelTests(unittest.TestCase):
             self.assertIn("outside the project", out["systemMessage"], command)
             self.assertEqual(seen, [], command)
 
+    def test_every_way_a_shell_command_reads_from_outside_is_held(self):
+        """Sparky's second review: after `cd ..` a relative read is outside; a quoted client
+        is still a client; a file the command removes is gone when the hook looks; and a
+        command that fails still prints what it read, in Claude Code's failure event."""
+        gone = Path(OUTSIDE) / f"frame-loop-gone-{uid(self)}.txt"
+        cases = [
+            ("PostToolUse", f"cd .. && cat {self.outside.name}"),
+            ("PostToolUse", '"curl" -s example.invalid/private'),
+            ("PostToolUse", f"cat {gone}; rm {gone}"),
+            ("PostToolUseFailure", f"cat {self.outside}; exit 1"),
+        ]
+        for n, (event, command) in enumerate(cases):
+            with self.subTest(command):
+                self.check_held(event, command, f"ways-{n}-{uid(self)}")
+
+    def check_held(self, event, command, session):
+        hook.answer(
+            {
+                "hook_event_name": event,
+                "tool_name": "Bash",
+                "session_id": session,
+                "cwd": str(REPO),
+                "tool_input": {"command": command},
+                **(
+                    {"tool_response": {"stdout": self.SECRET_LINE + "\n", "stderr": ""}}
+                    if event == "PostToolUse"
+                    else {"error": f"Exit code 1\n{self.SECRET_LINE}"}
+                ),
+            }
+        )
+        seen = loaded_seen()
+        out = self.read_turn(self.SECRET_LINE, session=session)
+        self.assertIn("outside the project", out["systemMessage"], command)
+        self.assertEqual(seen, [], command)
+
     def test_a_shell_command_inside_the_project_is_not_held(self):
         self.post("Bash", {"command": "cat README.md"}, {"stdout": self.SECRET_LINE, "stderr": ""}, session="sh-in")
         seen = loaded_seen()

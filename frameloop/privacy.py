@@ -200,8 +200,11 @@ def _training_on() -> bool:
 # The channel seal: what the session read from outside the project, kept as line hashes.
 NETWORK = re.compile(
     r"(^|[\s;|&(])(gh|curl|wget|scp|ssh|rsync|ftp|nc|http|https)\b|"
-    r"\bgit\s+(clone|fetch|pull|archive|ls-remote|remote\s+add)\b"
+    r"\bgit\s+(clone|fetch|pull|archive|ls-remote|remote\s+add)\b|"
+    r"\b(https?|ftp|ssh)://"
 )
+# Programs that bring content in over the network, by name however they are spelled or quoted.
+CLIENTS = {"gh", "curl", "wget", "scp", "sftp", "ssh", "rsync", "ftp", "nc", "http", "https"}
 
 
 SECRETS = [(name, re.compile(pattern)) for name, pattern in S.SECRET_PATTERNS]
@@ -275,7 +278,9 @@ def _outside_path(token: str) -> bool:
     try:
         expanded = token.replace("~", real_home(), 1) if token.startswith("~") else token
         candidate = Path(expanded) if Path(expanded).is_absolute() else Path(state.CWD or os.getcwd()) / expanded
-        if not candidate.exists():
+        # a file gone by the time the hook looks (`cat X; rm X`) is judged by its path alone,
+        # when the path itself says where it is: absolute, from the home, or climbing with `..`
+        if not candidate.exists() and not (Path(expanded).is_absolute() or ".." in Path(expanded).parts):
             return False
         root = project_root(state.CWD)
         resolved = candidate.resolve()
@@ -304,6 +309,27 @@ def _path_words(command: str) -> list[str]:
     )
 
 
+def _simple_commands(command: str) -> list[list[str]]:
+    """Each simple command of a shell line, from its program on."""
+    return [w for w in (F.command_words(F._words(part)) for part in F._split(command)) if w]
+
+
+def _moved_outside(command: str) -> str | None:
+    """A `cd` or `pushd` out of the project (`cd ..; cat notes`): every relative path after
+    it names a file outside. With no folder named, `cd` goes to the home."""
+    for words in _simple_commands(command):
+        if F.program(words[0]) in ("cd", "pushd"):
+            target = next((w for w in words[1:] if not w.startswith("-")), "~")
+            if _outside_path(target):
+                return target
+    return None
+
+
+def _client(command: str) -> bool:
+    """A network client by its program, quoted or by its path: `"curl" host/x`."""
+    return any(F.program(words[0]) in CLIENTS for words in _simple_commands(command))
+
+
 def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
     """After a tool ran: hold what it brought in from outside the project."""
     if tool in ("Read", "NotebookRead", "Grep"):
@@ -312,8 +338,8 @@ def capture(tool: str, tool_input: dict[str, Any], response: Any) -> None:
             hold(response, path)
     elif tool == "Bash":
         command = tool_input.get("command", "")
-        outside = next((t for t in _path_words(command) if _outside_path(t)), None)
-        if outside or NETWORK.search(command):
+        outside = next((t for t in _path_words(command) if _outside_path(t)), None) or _moved_outside(command)
+        if outside or NETWORK.search(command) or _client(command):
             hold(response, outside or command.split()[0])
     elif tool.startswith("mcp__"):
         hold(response, tool)

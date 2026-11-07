@@ -279,11 +279,12 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         ran(event, frame0, ok=name == "PostToolUse")
         if name == "PostToolUse" and F.outward(tool_input.get("command", "")):  # the act ran, as asked
             _log({"event": "act-ran", "command": tool_input.get("command", "")})
-    if name == "PostToolUse":
-        if _training_on():
-            capture(tool or "", tool_input, event.get("tool_response"))
-        return None
-    if name == "PostToolUseFailure":
+    if name in ("PostToolUse", "PostToolUseFailure"):
+        if _training_on():  # a command that failed may still have printed what it read
+            brought = event.get("tool_response")
+            if name == "PostToolUseFailure":
+                brought = {"tool_response": brought, "error": event.get("error")}
+            capture(tool or "", tool_input, brought)
         return None
     if name == "Stop":
         turn = _read_turn(event, frame0, mode)

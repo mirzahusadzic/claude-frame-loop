@@ -147,13 +147,20 @@ PUBLISH = {
 }
 
 
-def _act(words: list[str], depth: int) -> str | None:
+def command_words(words: list[str]) -> list[str]:
+    """A simple command's words from its program on: past variable assignments, shell
+    keywords and wrappers such as `sudo` or `env`, with their options."""
     while words and (re.fullmatch(r"\w+=.*", words[0]) or words[0] in KEYWORDS):
         words = words[1:]
     while words and words[0] in WRAPPERS:
         words = _flags(words[1:], WRAPPERS[words[0]])
         while words and re.fullmatch(r"\w+=.*", words[0]):
             words = words[1:]
+    return words
+
+
+def _act(words: list[str], depth: int) -> str | None:
+    words = command_words(words)
     if not words:
         return None
     name, args = program(words[0]), words[1:]
