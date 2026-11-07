@@ -257,3 +257,44 @@ class ReviewCompletionLabelTests(unittest.TestCase):
                 self.assertGreater(len(given[0]), 4000)
             else:
                 self.assertIn("[diff cut at 4000 characters]", given[0])
+
+
+class CompletionOnceTests(unittest.TestCase):
+    """Sparky's second review: completion checked and labelled every step once per ask, so 4
+    asks over 6 steps made 24 outgoing checks where 6 say the same."""
+
+    def test_each_step_is_checked_once_whatever_asks_claim_it(self):
+        from unittest import mock
+
+        self.addCleanup(setattr, state, "SESSION", state.SESSION)
+        state.SESSION = f"once-{uid(self)}"
+        self.enterContext(mock.patch.dict(os.environ, FRAME_LOOP_WORK=str(WORK / f"once-{uid(self)}")))
+        frame0 = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
+        asks = [a["id"] for a in frame0["asks"]]
+        steps = []
+        for n in range(6):
+            path = record.step_diff(f"S{n}")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"+line {n}\n", encoding="utf-8")
+            steps.append({"id": f"S{n}", "text": "a step", "claims": asks})
+        calls = []
+
+        def outgoing(text, kind, tier, frame):
+            calls.append(text)
+            return "a label", None
+
+        def reader(frame, only=()):
+            return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+        for writer in (lambda text: {}, None):
+            calls.clear()
+            with (
+                self.subTest(writer=writer is not None),
+                mock.patch.object(reading, "_records", return_value=steps),
+                mock.patch.object(reading, "_reader", return_value=reader),
+                mock.patch.object(reading, "_writer", return_value=writer),
+                mock.patch.object(reading, "outgoing", outgoing),
+                mock.patch.object(reading, "tier_for", return_value=("private", "")),
+            ):
+                reading.complete(frame0)
+                self.assertEqual(len(calls), len(steps))

@@ -296,6 +296,7 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
     started = time.time()
     tier, tier_note = tier_for(said)
     parts, used = [], {}
+    checked: dict[str, tuple[str | None, str | None]] = {}
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
     for n, ask in enumerate(frame0["asks"], 1):
@@ -314,10 +315,12 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
             # With a writer every step goes as its label (the free label names paths);
             # without one, the claimed steps' diffs go, each checked.
             write = _writer() is not None
-            sent = {
-                s["id"]: outgoing(s["diff"] if write else _cut(s["diff"], 4000), "the turn's change", tier, frame0)
-                for s in (steps if write else claimed)
-            }
+            for s in steps if write else claimed:  # each step's label or diff once, whatever asks claim it
+                if s["id"] not in checked:
+                    checked[s["id"]] = outgoing(
+                        s["diff"] if write else _cut(s["diff"], 4000), "the turn's change", tier, frame0
+                    )
+            sent = {s["id"]: checked[s["id"]] for s in (steps if write else claimed)}
             refusal = next((why for _, why in sent.values() if why), None)
             frame_steps = (
                 [{**s, "label": sent[s["id"]][0], "diff": ""} for s in steps]
