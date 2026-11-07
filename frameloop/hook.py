@@ -11,7 +11,7 @@ Configuration, by environment (set by the human in the hook's command line):
 - FRAME_LOOP_MODE: shadow (default) or enforce;
 - FRAME_LOOP_READER: a callable "module:function" that runs a frame and returns
   Gadfly's JSON (tests use a fake one; the live one runs the gadfly CLI);
-- FRAME_LOOP_TIER: the reader tier (default public);
+- FRAME_LOOP_TIER: the reader tier (default contributor; public is its old name);
 - FRAME_LOOP_TRAINING_OK=1: the human's allowance for a tier that trains on its
   inputs. Without it such a tier is never read;
 - FRAME_LOOP_GH: the gh binary for the visibility check (default: gh from a trusted
@@ -355,7 +355,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 def briefing(frame0: dict[str, Any], mode: str) -> str:
     """What a new session is told: the cooperative mode, frame 0, the four terms of
     engagement, crossings and authority, how to declare, and what rises."""
-    tier = os.environ.get("FRAME_LOOP_TIER", "public")
+    tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
     reader = readers.READERS.get(tier, {}).get("model", f"unknown tier {tier!r}")
     trains = " It trains on its inputs; the human allowed that for this project." if (
         tier in readers.READERS and _trains(tier)) else ""

@@ -23,6 +23,7 @@ import live as live_module  # noqa: E402
 import obligations  # noqa: E402
 import privacy  # noqa: E402
 import reader  # noqa: E402
+import readers  # noqa: E402
 import record  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
@@ -473,6 +474,21 @@ class AttackTests(unittest.TestCase):
                     "public", time.time())
         self.assertIn("outside what you authorized (README.md) · not checked", state.LIVE["shorts"][-1])
         state.LIVE.clear()
+
+    def test_the_training_tier_is_contributor_and_public_still_names_it(self):
+        """The cold read: a tier named `public` read as the safe one for public code, when it
+        is the one that trains. It is `contributor` now; `public` stays as its old name."""
+        self.assertIn("contributor", readers.READERS)
+        self.assertTrue(readers.READERS["contributor"].get("trainsOnInputs"))
+        for name in ("contributor", "public", None):
+            with unittest.mock.patch.dict(os.environ, {"FRAME_LOOP_TRAINING_OK": "1"}):
+                if name:
+                    os.environ["FRAME_LOOP_TIER"] = name
+                else:
+                    os.environ.pop("FRAME_LOOP_TIER", None)
+                self.assertEqual(privacy.tier_for("")[0], "contributor", name)
+        os.environ["FRAME_LOOP_TIER"] = "public"
+        self.assertEqual(privacy.tier_for("Reader: private")[0], "private")  # a plan may still tighten it
 
 
 class SessionStartTests(unittest.TestCase):

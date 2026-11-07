@@ -113,7 +113,7 @@ def mask_private(text: str) -> str:
 
 
 def _trains(tier: str) -> bool:
-    return bool(readers.READERS[tier].get("trainsOnInputs"))
+    return bool(readers.READERS[readers.tier(tier)].get("trainsOnInputs"))
 
 
 def real_home() -> str:
@@ -163,7 +163,7 @@ def not_public(cwd: str | None) -> Path | None:
 
 
 def _training_on() -> bool:
-    tier = os.environ.get("FRAME_LOOP_TIER", "public")
+    tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
     return tier in readers.READERS and _trains(tier)
 
 
@@ -309,10 +309,11 @@ def tier_for(plan: str) -> tuple[str | None, str]:
     """The reader tier for this plan and a note. A plan may tighten the configured tier
     (a training tier to one that does not train) and never loosen or move it sideways.
     A training tier is read only with the human's allowance."""
-    tier = os.environ.get("FRAME_LOOP_TIER", "public")
+    tier = readers.tier(os.environ.get("FRAME_LOOP_TIER"))
     if tier not in readers.READERS:
         return None, f"unknown reader tier {tier!r}"
     note, requested = "", _value(plan, "reader")
+    requested = readers.tier(requested) if requested else requested
     if requested:
         if requested in readers.READERS and _trains(tier) and not _trains(requested):
             tier, note = requested, f"tightened to {requested}"

@@ -28,6 +28,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # run as a script, even under -I
 from readers import READERS, FrameError, load  # noqa: E402  (the same readers and tiers)
+from readers import tier as readers_tier  # noqa: E402
 
 NAMED = {"ask": "{id}: {text}", "principle": "{id}: {text}", "trigger": "{id}: {text}"}
 
@@ -73,6 +74,7 @@ MOST = {"step": 2, "completion": 3}
 
 def _frame(name, relation, purpose, promise, body, anchors, step, labels, instruction,
            interventions, allowed, tier, most=MOST["step"]) -> dict[str, Any]:
+    tier = readers_tier(tier)
     if tier not in READERS:
         raise FrameError(f"tier is one of {', '.join(READERS)}, not {tier!r}")
     return {

@@ -242,7 +242,7 @@ class LiveReaderTests(unittest.TestCase):
         self.assertIn("mods/[private]-live/", masked)
         self.assertIn("secret-projects.md", masked)  # never inside a longer word, as Gadfly reads it
         frame = {**frames.which_ask(FRAME0, {**STEP, "summary": masked}, "public"),
-                 "battery": {**frames.READERS["public"], "kind": "fake-ideal"}}
+                 "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"}}
         self.assertNotIn("withheld", json.dumps(reader.run(frame)))
 
     def test_a_training_reader_never_gets_a_private_name(self):
@@ -254,7 +254,7 @@ class LiveReaderTests(unittest.TestCase):
         os.environ["FRAME_LOOP_PRIVATE_NAMES"] = str(names)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
         frame = {**frames.which_ask(FRAME0, {**STEP, "summary": "touches Secret-Project code"}, "public"),
-                 "battery": {**frames.READERS["public"], "kind": "fake-ideal"}}
+                 "battery": {**frames.READERS["contributor"], "kind": "fake-ideal"}}
         result = reader.run(frame)
         self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.BLOCK, result)
         self.assertIn("withheld", json.dumps(result))  # Gadfly refuses it (29fe18c), before any call
@@ -338,7 +338,7 @@ class WalkContractTests(unittest.TestCase):
         import reading
         import tree
         nodes = {"root": {**self.FRAME0, "id": "root"}, "greeter": self.GREETER, "name-flag": self.NAME_FLAG}
-        battery = {**readers.READERS["public"], "reasoning": "low", "output": {"label": "/label"}}
+        battery = {**readers.READERS["contributor"], "reasoning": "low", "output": {"label": "/label"}}
         frames = [tree.node_frame(n, battery) for n in nodes.values()]
         for nid, ask, hole in (("name-flag", "M1", "done-M1"), ("greeter", "N2", "done-N2")):
             frame0 = tree.frame0_for(nodes[nid], self.FRAME0, nodes)

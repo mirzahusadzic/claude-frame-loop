@@ -24,13 +24,24 @@ READERS: dict[str, dict[str, Any]] = {
         "reasoning": "high",
         "fallback": "none",
     },
-    "public": {
+    "contributor": {
         "kind": "unified",
         "model": "openrouter/meta/muse-spark-1.3-contributor",
         "reasoning": "high",
         "trainsOnInputs": ["openrouter/meta/muse-spark-1.3-contributor"],
     },
 }
+# Earlier names, still accepted: "public" was the contributor tier's name until it read as
+# the safe one for public repositories, when it is the one that trains.
+ALIASES = {"public": "contributor"}
+DEFAULT = "contributor"
+
+
+def tier(name: str | None = None) -> str:
+    """A tier's own name, from a setting or a plan: an alias gives its tier, anything
+    else is passed on as it is, to be refused as unknown."""
+    name = (name or DEFAULT).strip()
+    return ALIASES.get(name, name)
 
 
 class FrameError(ValueError):
