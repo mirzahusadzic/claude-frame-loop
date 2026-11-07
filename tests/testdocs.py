@@ -176,6 +176,14 @@ class DocsTests(unittest.TestCase):
             self.assertIn("paths: the node's `scope`", row.group(0))
             self.assertIn("commands and spend: designed, not built", row.group(0))
 
+    def test_privacy_says_which_ids_are_masked(self):
+        """Privacy said every id is masked, while the reader gets frame 0's ids beside the
+        requirements and rules it answers by; only the ids in the change are masked."""
+        privacy = (ROOT / "docs/privacy.md").read_text(encoding="utf-8")
+        self.assertNotIn("every id is masked", privacy)
+        self.assertIn("frame 0's ids in the change are masked", privacy)
+        self.assertIn("go with their ids, which the reader answers with", privacy)
+
     def test_no_markdown_link_inside_html(self):
         """A Markdown link inside an HTML block, such as the figure's caption, shows as raw text."""
         for page in PAGES:
