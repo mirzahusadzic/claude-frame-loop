@@ -31,7 +31,9 @@ CATEGORIES: list[tuple[str, re.Pattern[str]]] = [
 # or backticks, or the argument of `bash -c`, `sh -c` or `eval`; never words inside
 # quotes, nor a heredoc's text unless a shell reads it (Claude's own code that names
 # `git push`). Aliases and functions are not followed: the docs list them as not checked.
-HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n(.*?)^\s*\2\s*$", re.S | re.M)
+# Group 1 is how the delimiter is quoted: '', "", or a backslash (`<<\EOF`); empty when it is not,
+# and then the shell expands `$(…)` in the text. Group 2 is the delimiter, group 3 the text.
+HEREDOC = re.compile(r"<<-?\s*(\\|'|\"|)(\w+)['\"]?[^\n]*\n(.*?)^\s*\2\s*$", re.S | re.M)
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 # Wrappers that run the command after them, and their options that take a value.
 WRAPPERS = {
@@ -180,6 +182,8 @@ def _act(words: list[str], depth: int) -> str | None:
         return "twine upload"
     if name in PUBLISH and _flags(args, NPM_VALUED)[:1] == [PUBLISH[name]]:
         return f"{name} {PUBLISH[name]}"
+    if name == "yarn" and _flags(args, NPM_VALUED)[:2] == ["npm", "publish"]:  # Yarn Berry's form
+        return "yarn publish"
     if name == "find":
         if "-delete" in args:
             return "find -delete"
@@ -212,7 +216,7 @@ def heredocs(command: str) -> tuple[str, list[tuple[str, str]]]:
         line = command[: heredoc.start()].rsplit("\n", 1)[-1]
         parts = _split(line)
         bodies.append((parts[-1] if parts else "", heredoc.group(3)))
-        kept.append(command[at : heredoc.start()] + re.sub(r"^<<-?\s*(['\"]?)\w+\1", " ", opening))
+        kept.append(command[at : heredoc.start()] + re.sub(r"^<<-?\s*(?:\\|['\"]?)\w+['\"]?", " ", opening))
         at = heredoc.end()
     return "".join(kept) + command[at:], bodies
 

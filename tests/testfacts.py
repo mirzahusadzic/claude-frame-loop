@@ -147,3 +147,17 @@ class ReviewActTests(unittest.TestCase):
             self.assertEqual(facts.outward(command), act, command)
         for command in ("echo 'hello' | bash", "grep -n publish notes.md", "cargo build", "uv run pytest"):
             self.assertIsNone(facts.outward(command), command)
+
+
+class ReviewFollowUpTests(unittest.TestCase):
+    """Tendy's review of the cold-review fixes."""
+
+    def test_a_backslash_quoted_heredoc_is_data(self):
+        """`<<\\EOF` quotes its delimiter as `<<'EOF'` does: its text runs nowhere, so a push named
+        there is no act; an unquoted heredoc still runs what `$(…)` holds."""
+        self.assertIsNone(facts.outward("cat <<\\EOF > notes.md\ngit push origin main\nEOF"))
+        self.assertEqual(facts.outward("cat <<EOF\n$(git push origin main)\nEOF"), "git push")
+        self.assertEqual(facts.outward("bash <<\\EOF\ngit push\nEOF"), "git push")  # a shell reads it as code
+
+    def test_yarn_berry_publishes_too(self):
+        self.assertEqual(facts.outward("yarn npm publish"), "yarn publish")

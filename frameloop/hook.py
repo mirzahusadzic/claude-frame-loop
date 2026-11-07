@@ -120,7 +120,7 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
     return notes
 
 
-HEREDOC = re.compile(r"<<(-?)\s*(['\"]?)(\w+)\2")
+HEREDOC = re.compile(r"<<(-?)\s*(\\|['\"]?)(\w+)['\"]?")
 
 
 def _read_on_demand(command: str) -> dict[str, Any]:
@@ -171,7 +171,8 @@ def _marker_only(command: str) -> bool:
     text = command.strip()
     body = F.HEREDOC.search(text)
     if body:
-        if text[body.end() :].strip() or not re.fullmatch(r"<<-?\s*(['\"])\w+\1\s*", body.group(0).split("\n", 1)[0]):
+        opening = body.group(0).split("\n", 1)[0]  # a quoted delimiter: '…', "…" or a backslash
+        if text[body.end() :].strip() or not re.fullmatch(r"<<-?\s*(?:(['\"])\w+\1|\\\w+)\s*", opening):
             return False
         text = text[: body.start()]
     if "\n" in text.strip() or len(F._split(text)) != 1:
