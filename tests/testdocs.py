@@ -2,8 +2,12 @@
 the install steps carry what a first check needs, and the tiers they name exist."""
 
 import json
+import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -234,3 +238,36 @@ class DocsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(shutil.which("jq") and shutil.which("sh") and shutil.which("git"), "needs sh, git and jq")
+class StatusLineTests(unittest.TestCase):
+    """Setup's status line script, run as Claude Code runs it: it says what the switch says,
+    and nothing while the plugin is not enabled."""
+
+    def setUp(self):
+        setup = (ROOT / "docs/setup.md").read_text(encoding="utf-8")
+        section = setup.split("### Status line", 1)[1]
+        self.script = re.search(r"```sh\n(.*?)```", section, re.S).group(1)
+        self.settings = json.loads(re.search(r"```json\n(.*?)```", section, re.S).group(1))
+        self.home = Path(tempfile.mkdtemp(prefix="frame-loop-statusline-"))
+        (self.home / ".claude").mkdir()
+        self.repo = self.home / "project"
+        (self.repo / ".frame-loop").mkdir(parents=True)
+        subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
+
+    def line(self, enabled):
+        user = {"enabledPlugins": {"frame-loop@claude-frame-loop": enabled}}
+        (self.home / ".claude" / "settings.json").write_text(json.dumps(user), encoding="utf-8")
+        event = json.dumps({"workspace": {"current_dir": str(self.repo)}})
+        env = {**os.environ, "HOME": str(self.home)}
+        done = subprocess.run(["sh", "-c", self.script], input=event, capture_output=True, text=True, env=env)
+        self.assertEqual(done.stderr, "")
+        return done.stdout
+
+    def test_the_line_says_what_the_switch_says(self):
+        self.assertTrue(self.line(True).endswith(" · frame-loop on"))
+        (self.repo / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
+        self.assertTrue(self.line(True).endswith(" · frame-loop off"))
+        self.assertNotIn("frame-loop", self.line(False).split("/")[-1])
+        self.assertEqual(self.settings["statusLine"]["refreshInterval"], 5)

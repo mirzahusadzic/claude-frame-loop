@@ -96,6 +96,45 @@ The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` (read turns at 
 
 ---
 
+### Status line
+
+Claude Code's status line can show whether frame-loop is on for the repository of the folder shown: on while the plugin is enabled and the switch that `/frame-loop` writes does not say off. Save this script as `~/.claude/statusline.sh`, with `jq` installed:
+
+```sh
+#!/bin/sh
+input=$(cat)
+dir=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
+[ -z "$dir" ] && dir=$(pwd)
+repo=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+[ -z "$repo" ] && repo=$dir
+enabled=""
+for f in "$HOME/.claude/settings.json" "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; do
+  [ -f "$f" ] || continue
+  said=$(jq -r '.enabledPlugins["frame-loop@claude-frame-loop"] // empty' "$f" 2>/dev/null)
+  [ -n "$said" ] && enabled=$said
+done
+loop=""
+if [ "$enabled" = "true" ]; then
+  switch=$(cat "$repo/.frame-loop/switch" 2>/dev/null | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  if [ "$switch" = "off" ]; then loop=" · frame-loop off"; else loop=" · frame-loop on"; fi
+fi
+printf '%s%s' "$(printf '%s' "$dir" | sed "s#^$HOME#~#")" "$loop"
+```
+
+Then point the status line at it in `~/.claude/settings.json`; `refreshInterval` reruns it every five seconds, so an idle session shows a switch flipped elsewhere:
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh",
+    "refreshInterval": 5
+  }
+}
+```
+
+---
+
 ### Cost and limits
 
 - **Latency:** a turn with no signal adds under a second. A read takes one to two minutes: in shadow mode, the default, it runs in the background and its line arrives with the next prompt, and a newer turn's read takes over one still running, from where that one began; in enforce mode the turn's end waits for it.
