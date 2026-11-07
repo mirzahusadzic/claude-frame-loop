@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Every action is pinned to the commit of its release, not a moving tag.
+jobs:
+  test:
+    name: Python ${{ matrix.python }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.13", "3.14", "3.15"]  # Gadfly's own set: the hooks run on its Python
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Git identity for the tests' own repositories
+        run: git config --global user.email ci@example.invalid && git config --global user.name ci
+      - name: Lint
+        run: uvx ruff@0.17.4 check .
+      - name: Test, without Gadfly
+        run: uv run --no-project --python ${{ matrix.python }} python -m unittest discover -s tests
+
+  with-gadfly:
+    name: With Gadfly
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: mirzahusadzic/gadfly
+          ref: aaae1bbf501071f10de63569b8886ac8fbc04518  # v0.13.0, for the contract tests
+          path: gadfly
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          python-version: "3.13"
+      - name: Git identity for the tests' own repositories
+        run: git config --global user.email ci@example.invalid && git config --global user.name ci
+      - name: Install Gadfly
+        run: uv tool install 'midwife>=0.13' && gadfly --version
+      - name: Test, with Gadfly; no network call and no key
+        env:
+          GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly
+        run: uv run --no-project --python 3.13 python -m unittest discover -s tests
+
+  plugin:
+    name: Plugin
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version: 24
+      - name: Install Claude Code, the version the docs are tested with
+        run: npm install -g @anthropic-ai/claude-code@2.1.319
+      - name: Validate, as the plugin directory does
+        run: claude plugin validate . --strict
+      - name: The band's tests
+        run: claude plugin test .

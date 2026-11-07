@@ -1,5 +1,6 @@
 # <img src="assets/icon.svg" width="36" height="36" alt="" align="top"> frame-loop
 
+[![CI](https://github.com/mirzahusadzic/claude-frame-loop/actions/workflows/ci.yml/badge.svg)](https://github.com/mirzahusadzic/claude-frame-loop/actions/workflows/ci.yml)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.13+](https://img.shields.io/badge/python-3.13%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 ![alpha 0.1.0](https://img.shields.io/badge/status-alpha%200.1.0-e5a50a)
