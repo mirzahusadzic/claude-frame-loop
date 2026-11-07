@@ -47,6 +47,19 @@ class LauncherTest(unittest.TestCase):
         ):
             self.assertEqual(reader.launcher()[1], self.tmp)
 
+    def test_gadfly_beside_the_hooks_interpreter_is_found_off_the_path(self):
+        """An agent's report: "Gadfly is not installed" where uv's tool folder held it, since
+        its `gadfly` was not on the PATH the hooks got; run.sh had picked its interpreter."""
+        tool = Path(tempfile.mkdtemp(prefix="frame-loop-tool-")) / "bin"
+        tool.mkdir()
+        (tool / "gadfly").write_text("#!/bin/sh\n", encoding="utf-8")
+        with (
+            self.nowhere(),
+            mock.patch.object(reader.shutil, "which", return_value=None),
+            mock.patch.object(sys, "executable", str(tool / "python")),
+        ):
+            self.assertEqual(reader.launcher(), ([str(tool / "gadfly")], None))
+
     def test_not_installed_is_never_a_pass(self):
         with (
             self.nowhere(),
@@ -57,7 +70,7 @@ class LauncherTest(unittest.TestCase):
         ran.assert_not_called()
         result = __import__("json").loads(done.stdout)
         self.assertTrue(gate._failed(result))
-        self.assertIn("pip install midwife", gate._failure(result))
+        self.assertIn("uv tool install 'midwife>=0.13.1'", gate._failure(result))
 
 
 class ProgressTest(unittest.TestCase):

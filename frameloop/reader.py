@@ -9,6 +9,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -20,7 +21,7 @@ from procs import TIMED_OUT, bounded
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
 GADFLY_FLOOR = (0, 13, 1)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
 # 0.13.1: UTF-8 output on Windows, which the hooks read as UTF-8
-MISSING = "Gadfly is not installed: pip install midwife (Python 3.13 or later)"
+MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.13.1', or set GADFLY_CHECKOUT to a checkout"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 
 
@@ -43,13 +44,19 @@ def _answers(where: Path) -> int:
 
 def launcher() -> tuple[list[str], Path | None] | None:
     """How Gadfly starts, and in which folder: a checkout named by GADFLY_CHECKOUT, through
-    uv; else the `gadfly` command on PATH (`pip install midwife`); else a checkout in
-    ~/gadfly, through uv. None when there is none of these."""
+    uv; else the `gadfly` command on PATH, or beside the interpreter the hook runs on; else a
+    checkout in ~/gadfly, through uv. None when there is none of these."""
     if os.environ.get("GADFLY_CHECKOUT"):
         return ["uv", "run", "--project", str(GADFLY), "gadfly"], GADFLY
     found = shutil.which("gadfly")
     if found:
         return [found], None
+    # beside the interpreter this hook runs on: hooks/run.sh picks Gadfly's own, which uv's tool
+    # folder holds even when its `gadfly` is not on the PATH Claude Code gives the hooks
+    for name in ("gadfly", "gadfly.exe"):
+        beside = Path(sys.executable).parent / name
+        if beside.is_file():
+            return [str(beside)], None
     if (GADFLY / "pyproject.toml").is_file():
         return ["uv", "run", "--project", str(GADFLY), "gadfly"], GADFLY
     return None
