@@ -33,5 +33,27 @@ class FactsTests(unittest.TestCase):
             self.assertIsNone(facts.outward(command), command)
 
 
+    def test_every_spelling_of_an_act_counts(self):
+        """The first review: these ran an act and the guard missed them."""
+        runs = {"rm -R build": "rm -r", "rm --recursive build": "rm -r", "rm -fR build": "rm -r",
+                "git -c user.name=x push": "git push", "sudo -u me git push": "git push",
+                "git --git-dir=.git --work-tree . push": "git push", "gh --repo me/x release create v1": "gh release",
+                "npm --prefix pkg publish": "npm publish", "sleep 1 & git push": "git push",
+                "git clean -fdx": "git clean", "find . -name '*.pyc' -delete": "find -delete",
+                "find . -type d -exec rm -rf {} +": "rm -r", "bash -c 'git push origin main'": "git push",
+                "sh -ec \"rm -rf build\"": "rm -r", "eval git push": "git push", "xargs -n 1 rm -r < dirs": "rm -r",
+                "bash <<'EOF'\ngit push\nEOF": "git push", "/usr/bin/git push": "git push",
+                "echo \"$(git push)\"": "git push"}
+        for command, act in runs.items():
+            self.assertEqual(facts.outward(command), act, command)
+
+    def test_an_act_named_in_quotes_is_not_run(self):
+        """Seen in the first live use: a grep for `rm -r` was told as a deleted folder."""
+        never = ['grep -rn "rm -r" frameloop', "grep -n 'git push\\|rm -rf' notes.md", 'echo "git push later"',
+                 "git log --grep=push", 'git commit -m "rm -rf the old cache"', "git clean -n",
+                 "find . -name '*.py'", "rm build.log", "sed -n '/git push/p' notes.md"]
+        for command in never:
+            self.assertIsNone(facts.outward(command), command)
+
 if __name__ == "__main__":
     unittest.main()

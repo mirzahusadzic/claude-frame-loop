@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
 import config  # noqa: E402
 import declare  # noqa: E402
+import facts  # noqa: E402
 import frames  # noqa: E402
 import framezero  # noqa: E402
 import hook  # noqa: E402
@@ -232,6 +233,24 @@ class HookTests(unittest.TestCase):
         self.assertNotIn("permissionDecision", hook.answer(push)["hookSpecificOutput"])
         quiet = {**push, "tool_input": {"command": "git status"}}
         self.assertIsNone(hook.answer(quiet))
+
+    def test_every_spelling_of_a_delete_asks_and_a_grep_for_one_does_not(self):
+        """The first review and the first live use: `rm -R` and `git clean -f` passed, and a
+        grep for `rm -r` was told as a deleted folder."""
+        os.environ.update(env(FRAME_LOOP_MODE="enforce"))
+
+        def bash(command):
+            event = {"hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": {"command": command}}
+            return hook.answer(event)
+
+        for command in ("rm -R build", "git clean -fdx", "bash -c 'rm -rf build'"):
+            out = bash(command)
+            self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask", command)
+            found = facts.triggers([], command=command)
+            told = lines.act_words({"event": "outward", "command": command, "triggers": found})
+            self.assertIn("deleted", told[0], command)
+            self.assertTrue(told[1], command)  # it needs the author
+        self.assertIsNone(bash('grep -rn "rm -r\\|git push" frameloop'))
 
 
 

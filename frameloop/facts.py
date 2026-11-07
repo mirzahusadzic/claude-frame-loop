@@ -10,6 +10,7 @@ Standard library only.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -25,19 +26,150 @@ CATEGORIES: list[tuple[str, re.Pattern[str]]] = [
     ("code", re.compile(r".")),
 ]
 
-# Outward or irreversible commands: these always rise (frame 0's trigger on public acts).
-OUTWARD = re.compile(r"\bgit\s+push\b|\bgh\s+release\b|\bnpm\s+publish\b|\btwine\s+upload\b|\brm\s+-[a-z]*r")
-# An outward act counts only as a command that runs: at the start of a line or of a chain
-# part, never inside a heredoc's text (Claude's own code that names `git push`).
+# Outward or irreversible acts: these always rise (frame 0's trigger on public acts). An
+# act counts only as a command that runs: a command of a chain, a pipeline, a `&`, a `$(…)`
+# or backticks, or the argument of `bash -c`, `sh -c` or `eval`; never words inside
+# quotes, nor a heredoc's text unless a shell reads it (Claude's own code that names
+# `git push`). Aliases and functions are not followed: the docs list them as not checked.
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n(.*?)^\s*\2\s*$", re.S | re.M)
-RUNS = re.compile(r"(?:^|&&|\|\||;|\||\n|\$\(|`)\s*(?:(?:\w+=\S*|sudo|env|command|exec|time)\s+)*"
-                  r"(git\s+(?:-C\s+\S+\s+)?push\b|gh\s+release\b|npm\s+publish\b|twine\s+upload\b|rm\s+-[a-z]*r)")
+SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
+# Wrappers that run the command after them, and their options that take a value.
+WRAPPERS = {"sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"}, "env": {"-u", "-C", "-S"},
+            "command": set(), "exec": {"-a"}, "time": set(), "nice": {"-n"}, "nohup": set(),
+            "xargs": {"-n", "-I", "-P", "-L", "-s", "-d", "-E", "-a"}, "timeout": {"-s", "-k"}}
+GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix",
+              "--config-env"}
+GH_VALUED = {"-R", "--repo", "--hostname"}
+NPM_VALUED = {"--prefix", "-C", "--workspace", "-w", "--registry", "--userconfig", "--tag", "--otp"}
 
 
-def outward(command: str) -> str | None:
+def _split(command: str) -> list[str]:
+    """The simple commands a shell line runs, outside quotes: split at `;`, `&&`, `||`,
+    `|`, `&`, new lines and parentheses, with each `$(…)` and backtick span a command of
+    its own."""
+    parts, cur, i, quote = [], [], 0, ""
+    while i < len(command):
+        c = command[i]
+        if quote:
+            if c == quote:
+                quote = ""
+            elif c == "\\" and quote == '"' and i + 1 < len(command):
+                cur.append(c)
+                i += 1
+                c = command[i]
+            elif quote == '"' and (command.startswith("$(", i) or c == "`"):
+                end = _closing(command, i)  # a substitution runs even inside double quotes
+                parts += _split(command[i + (2 if c == "$" else 1):end])
+                i = end + 1
+                continue
+            cur.append(c)
+        elif c == "\\" and i + 1 < len(command):
+            cur.append(command[i:i + 2])
+            i += 1
+        elif c in "'\"":
+            quote = c
+            cur.append(c)
+        elif c in ";|&\n()`" or command.startswith("$(", i):
+            parts.append("".join(cur))
+            cur = []
+            if command.startswith("$(", i):
+                i += 1
+        else:
+            cur.append(c)
+        i += 1
+    parts.append("".join(cur))
+    return [x.strip() for x in parts if x.strip()]
+
+
+def _closing(command: str, i: int) -> int:
+    """Where the `$(…)` or backtick span starting at `i` ends (its last character)."""
+    if command[i] == "`":
+        end = command.find("`", i + 1)
+        return end if end >= 0 else len(command)
+    depth, j = 0, i + 1
+    while j < len(command):
+        if command[j] == "(":
+            depth += 1
+        elif command[j] == ")":
+            depth -= 1
+            if depth == 0:
+                return j
+        j += 1
+    return len(command)
+
+
+def _words(part: str) -> list[str]:
+    try:
+        return shlex.split(part, comments=True)
+    except ValueError:  # an unclosed quote: read it word by word
+        return part.split()
+
+
+def _flags(words: list[str], valued: set[str]) -> list[str]:
+    """The words after the leading options, skipping an option's value."""
+    i = 0
+    while i < len(words) and words[i].startswith("-"):
+        i += 2 if words[i] in valued else 1
+    return words[i:]
+
+
+def _act(words: list[str], depth: int) -> str | None:
+    while words and re.fullmatch(r"\w+=.*", words[0]):
+        words = words[1:]
+    while words and words[0] in WRAPPERS:
+        words = _flags(words[1:], WRAPPERS[words[0]])
+        while words and re.fullmatch(r"\w+=.*", words[0]):
+            words = words[1:]
+    if not words:
+        return None
+    name, args = Path(words[0]).name, words[1:]
+    short = "".join(a[1:] for a in args if re.fullmatch(r"-[A-Za-z]+", a))
+    if name == "rm" and ("r" in short or "R" in short or "--recursive" in args):
+        return "rm -r"
+    if name == "git":
+        rest = _flags(args, GIT_VALUED)
+        if rest[:1] == ["push"]:
+            return "git push"
+        if rest[:1] == ["clean"] and ("f" in "".join(a[1:] for a in rest if re.fullmatch(r"-[A-Za-z]+", a))
+                                      or "--force" in rest):
+            return "git clean"
+    if name == "gh" and _flags(args, GH_VALUED)[:1] == ["release"]:
+        return "gh release"
+    if name == "npm" and _flags(args, NPM_VALUED)[:1] == ["publish"]:
+        return "npm publish"
+    if name == "twine" and _flags(args, set())[:1] == ["upload"]:
+        return "twine upload"
+    if name == "find":
+        if "-delete" in args:
+            return "find -delete"
+        for flag in ("-exec", "-execdir", "-ok", "-okdir"):
+            if flag in args:
+                inner = args[args.index(flag) + 1:]
+                inner = inner[:next((k for k, w in enumerate(inner) if w in (";", "+")), len(inner))]
+                found = _act(inner, depth)
+                if found:
+                    return found
+    if depth < 3 and name in SHELLS:
+        opts = [a for a in args if re.fullmatch(r"-[A-Za-z]+", a)]
+        if any("c" in a for a in opts):
+            after = args[args.index(next(a for a in opts if "c" in a)) + 1:]
+            return outward(after[0], depth + 1) if after else None
+    if depth < 3 and name == "eval":
+        return outward(" ".join(args), depth + 1)
+    return None
+
+
+def outward(command: str, depth: int = 0) -> str | None:
     """The outward or irreversible act a shell command runs, if any."""
-    found = RUNS.search(HEREDOC.sub("", command))
-    return " ".join(found.group(1).split()) if found else None
+    found = None
+    for heredoc in HEREDOC.finditer(command):  # a heredoc a shell reads runs as commands
+        line = command[:heredoc.start()].rsplit("\n", 1)[-1]
+        words = _words(_split(line)[-1]) if _split(line) else []
+        if words and Path(words[0]).name in SHELLS | {"eval"} and depth < 3:
+            found = found or outward(heredoc.group(3), depth + 1)
+    for part in _split(HEREDOC.sub("", command)):
+        found = found or _act(_words(part), depth)
+    return found
 
 
 def category(path: str) -> str:

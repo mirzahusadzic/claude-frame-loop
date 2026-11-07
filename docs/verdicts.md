@@ -47,9 +47,11 @@ Acts the loop always reports, after the outcome on the same line:
 | Claude changed something people see | no |
 | Claude changed the loop's own files · ran a command on the loop's own files · tried, and it did not go through | no |
 | AGENTS.md: 5 lines added, 2 lines removed; your rules all still hold | no |
-| Claude deleted a folder | yes |
+| Claude deleted a folder · deleted untracked files · deleted files | yes |
 | spending passed what you approved | yes |
 | Claude touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
+
+An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes or a heredoc's text count only when a shell runs them. Shell aliases, functions and scripts are not followed.
 
 At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is reported after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.

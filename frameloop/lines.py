@@ -22,6 +22,8 @@ ACT_WORDS = (
     ("npm publish", "Claude published a package", False),
     ("twine upload", "Claude published a package", False),
     ("rm -", "Claude deleted a folder", True),
+    ("git clean", "Claude deleted untracked files", True),
+    ("find -delete", "Claude deleted files", True),
     ("T1:", "spending passed what you approved", True),
     ("T2:", "Claude changed something people see", False),
     ("T4:", "Claude touched a personal file", True),
