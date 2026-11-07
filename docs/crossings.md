@@ -19,7 +19,7 @@ The counting node, which Claude saves to `.frame-loop/tree/counting.json` on con
 | scope | `api/limits.py`, `tests/test_limits.py` |
 | grant | those paths; the command `python3 -m unittest`; no spend beyond the loop's reads |
 | requirement | "Requests are counted per client", quoting "Each client is limited per minute"; owned by its children, so filled when the reset window is |
-| inversion | "Requests are not counted at all" |
+| inversion | "Requests are not counted per client" |
 | promise, latency | counting adds under a millisecond to a request |
 | prediction | carried and firm within 3 runs |
 

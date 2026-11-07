@@ -89,6 +89,17 @@ class DocsTests(unittest.TestCase):
                 self.assertIn(readers.tier(tier), readers.READERS, f"{name}: {tier}")
             self.assertIn("contributor", named, name)
 
+    def test_the_crossings_example_is_the_fixtures_node(self):
+        """An outside review of the paper: the example's inversion said "not counted at all",
+        more than the sentence's reversal, which an over-strong inversion lets turn too easily.
+        The page shows the fixture's node, word for word."""
+        node = json.loads((ROOT / "tests/fixtures/ratelimit/tree/counting.json").read_text(encoding="utf-8"))
+        (ask,) = [a for a in node["asks"] if a["text"] == "Requests are counted per client."]
+        inverted = ask["inversion"][ask["text"]]
+        self.assertEqual(inverted, "Requests are not counted per client.")
+        crossings = (ROOT / "docs/crossings.md").read_text(encoding="utf-8")
+        self.assertIn(f'| inversion | "{inverted.rstrip(".")}" |', crossings)
+
     def test_setup_lists_the_tiers_a_user_may_name_and_no_other(self):
         """Mirza: the other tiers are for calibration only; Setup's table is the user's list."""
         setup = (ROOT / "docs/setup.md").read_text(encoding="utf-8")

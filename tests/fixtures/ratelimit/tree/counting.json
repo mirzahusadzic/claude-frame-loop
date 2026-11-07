@@ -22,7 +22,7 @@
    "owner": "children",
    "text": "Requests are counted per client.",
    "inversion": {
-    "Requests are counted per client.": "Requests are not counted at all."
+    "Requests are counted per client.": "Requests are not counted per client."
    }
   }
  ],
