@@ -91,7 +91,15 @@ from privacy import _short_path, _trains, _writer, real_home  # noqa: E402
 from reading import _proposal, _read, complete  # noqa: E402
 from record import _log, _records, _records_all  # noqa: E402
 from repo import _git, project_root  # noqa: E402
-from turn import _background, _last_reading, _read_turn, _turn_start, _turn_summary, turn_so_far  # noqa: E402
+from turn import (  # noqa: E402
+    _background,
+    _last_reading,
+    _read_turn,
+    _turn_start,
+    _turn_summary,
+    completion_owed,
+    turn_so_far,
+)
 
 EDITS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
@@ -382,6 +390,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
             _log({"event": "briefed", "version": _version()})
             told = "\n\n".join(x for x in (briefing(frame0, mode), told) if x)
+        told = "\n".join(x for x in (told, completion_owed(frame0)) if x)
         _turn_start(event)
         return (
             {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None

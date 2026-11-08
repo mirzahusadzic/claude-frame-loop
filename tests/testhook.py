@@ -4639,6 +4639,103 @@ class OneLineTests(unittest.TestCase):
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
 
 
+class CompletionReminderTests(unittest.TestCase):
+    """Seen in real sessions: most skipped the end-of-work check. The prompt after a turn of
+    work reminds Claude, once, if the check has not run on that work."""
+
+    tearDown = CoreTests.tearDown
+    turn = CoreTests.turn
+
+    def setUp(self):
+        CoreTests.setUp(self)
+        # Briefed, as a real session is: the briefing names the marker too.
+        hook.answer({"hook_event_name": "SessionStart", "session_id": self.session, "cwd": str(REPO)})
+
+    def prompt(self):
+        out = hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "next"}
+        )
+        self.assertNotIn("systemMessage", out or {})  # for Claude alone
+        return ((out or {}).get("hookSpecificOutput") or {}).get("additionalContext", "")
+
+    def work(self):
+        return {f"notes/w-{uid(self)}.py": f"print('{time.time_ns()}')\n"}
+
+    def stop(self):
+        return hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "Serves: A1",
+                "stop_hook_active": False,
+            }
+        )
+
+    def complete(self):
+        return hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": ": frame-loop-read --complete"},
+            }
+        )
+
+    def test_the_prompt_after_work_reminds_claude_once(self):
+        self.turn(self.work(), "Serves: A1")
+        self.assertIn(": frame-loop-read --complete", self.prompt())
+        self.assertNotIn("--complete", self.prompt())
+
+    def test_new_work_after_a_reminder_is_reminded_again(self):
+        self.turn(self.work(), "Serves: A1")
+        self.turn(self.work(), "Serves: A1")  # its own prompt carried the first reminder
+        self.assertIn("--complete", self.prompt())
+
+    def test_no_reminder_once_the_check_has_run(self):
+        self.turn(self.work(), "Serves: A1")
+        self.complete()
+        self.assertNotIn("--complete", self.prompt())
+
+    def test_no_reminder_when_the_check_ran_in_the_turn_of_the_work(self):
+        """The step is recorded at the turn's end, after a check that already read it."""
+        self.prompt()
+        (REPO / "notes").mkdir(exist_ok=True)
+        (REPO / f"notes/w-{uid(self)}.py").write_text(f"print('{time.time_ns()}')\n", encoding="utf-8")
+        self.complete()
+        self.stop()
+        git("add", "-A")
+        git("commit", "-q", "-m", "turn")
+        self.assertNotIn("--complete", self.prompt())
+
+    def test_new_work_after_the_check_is_reminded(self):
+        self.turn(self.work(), "Serves: A1")
+        self.prompt()
+        self.complete()
+        self.stop()
+        self.turn(self.work(), "Serves: A1")
+        self.assertIn("--complete", self.prompt())
+
+    def test_no_reminder_after_a_turn_with_no_work(self):
+        self.prompt()
+        self.stop()
+        self.assertNotIn("--complete", self.prompt())
+
+    def test_no_reminder_before_frame_0_is_written(self):
+        """With no requirement to read, the check has nothing to read the work against."""
+        os.environ["FRAME_LOOP_FRAME0"] = str(WORK / f"none-{uid(self)}.json")
+        self.turn(self.work(), "done")
+        self.assertNotIn("--complete", self.prompt())
+
+    def test_the_reminder_rides_with_what_a_reading_told_claude(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:drifting"
+        self.turn(self.work(), "Serves: A1")
+        told = self.prompt()
+        self.assertIn("a turn's reading", told)
+        self.assertIn("--complete", told)
+
+
 def counted_tokens(frame, only=()):
     """A passing reader that reports what it spent, as Gadfly does."""
     return {**passing(frame, only), "made": 2, "usage": {"total_tokens": 41000}}

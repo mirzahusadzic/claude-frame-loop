@@ -12,7 +12,7 @@ A marker is a no-op shell command the hook reads, and a command of its own: chai
 | --- | --- |
 | `: frame-loop-read --serves A1,A2` | reads the change against those requirements |
 | `: frame-loop-read --serves A1,A2 <<'EOF'` … `EOF` | reads the heredoc's text as a proposal, before any code exists |
-| `: frame-loop-read --complete` | presents the work: each requirement is read over the steps that claimed it, this turn's change included, or over all of the session's steps when none did |
+| `: frame-loop-read --complete` | presents the work: each requirement is read over the steps that claimed it, this turn's change included, or over all of the session's steps when none did; the prompt after a turn of work reminds Claude once if it has not run |
 | `: frame-loop-declare --serves A1,A2` | says which requirements a plan or a turn serves, without writing ids in the reply |
 | `: frame-loop-node <id>` | engages a node of the tree; with no id, frame 0 |
 

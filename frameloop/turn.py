@@ -102,6 +102,30 @@ def _last_reading() -> str:
     return "\n".join(told)
 
 
+COMPLETION_OWED = (
+    "frame-loop: the last turn changed files, and the end-of-work check has not run on them. Before you "
+    "tell the author this work is done, or answer whether it is, run `: frame-loop-read --complete`. "
+    "Do not mention this reminder."
+)
+
+
+def completion_owed(frame0: dict[str, Any]) -> str:
+    """The reminder at the prompt after work, once: the check is Claude's to run, and real
+    sessions skip it. A check in the turn of the work counts, though its step is recorded later."""
+    if not frame0.get("asks"):
+        return ""
+    mine = [r for r in _records_all() if r.get("session") == state.SESSION]
+    last = max((i for i, r in enumerate(mine) if r.get("event") == "step"), default=-1)
+    if last < 0:
+        return ""
+    began = max((i for i, r in enumerate(mine[:last]) if r.get("event") == "stop"), default=-1)
+    ran = any(r.get("event") == "completion" for r in mine[began + 1 :])
+    if ran or any(r.get("event") == "completion-reminded" for r in mine[last + 1 :]):
+        return ""
+    _log({"event": "completion-reminded"})
+    return COMPLETION_OWED
+
+
 def _turn_start(event: dict[str, Any]) -> None:
     cwd = event.get("cwd") or os.getcwd()
     _log({"event": "guides", "lines": {name: _guide_lines(path) for name, path in guides(cwd).items()}})
