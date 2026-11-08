@@ -202,6 +202,9 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
         state.LIVE["decision"] = gate.PASS
         state.LIVE["shorts"] = ["frame-loop ✓ checked: nothing in this change needed a closer look"]
         return {"systemMessage": f"frame-loop · turn · {step['id']} · {step['text']}" + "\n  not read (no signal)"}
+    unframed = _unframed(cwd, frame0, step, records)
+    if unframed:
+        return unframed
     state.LIVE["why"] = signal_words(step["signals"])
     if mode != "enforce" and os.environ.get("FRAME_LOOP_BACKGROUND") == "1":
         return _read_in_background(event, cwd, before, after, said)
@@ -213,6 +216,29 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     if result["decision"] != gate.PASS and mode == "enforce" and not event.get("stop_hook_active"):
         return {"decision": "block", "reason": f"frame-loop: {result['reason']}", "systemMessage": tell}
     return {"systemMessage": tell}
+
+
+def _unframed(
+    cwd: str, frame0: dict[str, Any], step: dict[str, Any], records: list[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """With frame 0 not written, what a turn's change gets instead of a reading that can only
+    rise (an agent's report: the same rise on every turn, a guide's edit included): a change
+    to the guides alone is the rules' channel, never work without a frame; other work rises
+    once a session, and after that is noted until frame 0 is written."""
+    if frame0.get("asks"):
+        return None
+    root = project_root(cwd)
+    kept = {Path(x).resolve() for x in guides(cwd).values()}
+    if step.get("paths") and all((root / x).resolve() in kept for x in step["paths"]):
+        state.LIVE["decision"] = gate.PASS
+        state.LIVE["shorts"] = ["frame-loop · a guide changed: its new lines are offered as rules"]
+        return {"systemMessage": f"frame-loop · turn · {step['id']} · {step['text']}\n  not read (a guide's change)"}
+    if any(r.get("event") == "unframed-told" for r in records):
+        state.LIVE["decision"] = "noted"
+        state.LIVE["shorts"] = ["frame-loop · not read: what this work is for is not written yet"]
+        return {"systemMessage": f"frame-loop · turn · {step['id']} · {step['text']}\n  not read (frame 0 not written)"}
+    _log({"event": "unframed-told"})
+    return None
 
 
 def _carried() -> dict[str, Any]:

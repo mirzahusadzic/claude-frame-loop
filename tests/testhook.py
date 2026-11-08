@@ -2236,6 +2236,21 @@ class CoreTests(unittest.TestCase):
         git("commit", "-q", "--allow-empty", "-m", "turn")
         return out["systemMessage"] if out else ""
 
+    def test_unframed_work_rises_once_and_a_guides_edit_never(self):
+        """An agent's report: with frame 0 not written, every turn rose "what this work is for
+        isn't written yet", a turn that only appended a rule to AGENTS.md too."""
+        os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_FRAME0=str(WORK / f"none-{uid(self)}.json"))
+        first = self.turn({"notes/a.txt": f"a note {uid(self)}\n"}, "done")
+        self.assertIn("frame 0 is not ready", first)
+        second = self.turn({"notes/b.txt": f"another {uid(self)}\n"}, "done")
+        self.assertNotIn("frame 0 is not ready", second)
+        self.assertIn("frame 0 not written", second)
+        guide = (REPO / "AGENTS.md").read_text(encoding="utf-8")
+        self.addCleanup(lambda: (REPO / "AGENTS.md").write_text(guide, encoding="utf-8"))
+        ruled = self.turn({"AGENTS.md": guide + f"- a new rule {uid(self)}\n"}, "done")
+        self.assertIn("a guide's change", ruled)
+        self.assertNotIn("frame 0", ruled)
+
     def test_a_torn_record_line_never_breaks_a_hook(self):
         """The first review: a record line cut short mid-write made every later hook fail."""
         os.environ.update(FRAME_LOOP_READER="testhook:passing")
