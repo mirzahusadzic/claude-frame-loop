@@ -35,10 +35,34 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
             raw = json.loads(path.read_text(encoding="utf-8"))
             nid = raw.get("id", path.stem)
             nodes[nid] = {**raw, "id": nid}  # a file with no id is its file name's node, everywhere
-    for nid in list(nodes):  # a node whose parents run in a circle never reaches the root
-        if _circle(nid, nodes):
-            nodes[nid] = {**nodes[nid], "circle": True}
+    for nid in _circling(nodes):  # a node whose parents run in a circle never reaches the root
+        nodes[nid] = {**nodes[nid], "circle": True}
     return nodes
+
+
+def _circling(nodes: dict[str, dict[str, Any]]) -> list[str]:
+    """The nodes whose parents run in a circle, or lead into one, in one walk up the tree:
+    each node's way to the root is followed once and remembered (Sparky's third review: one
+    walk per node made a deep tree quadratic). A parent that is no node is no circle."""
+    ends: dict[str, str] = {"root": "root"}
+    for start in nodes:
+        path, on_path, at = [], set(), start
+        while at not in ends:
+            if at in on_path:
+                end = "circle"
+                break
+            path.append(at)
+            on_path.add(at)
+            parent = nodes[at].get("parent")
+            if not isinstance(parent, str) or parent not in nodes:
+                end = "dangling"
+                break
+            at = parent
+        else:
+            end = ends[at]
+        for nid in path:
+            ends[nid] = end
+    return [nid for nid, end in ends.items() if end == "circle" and nid != "root"]
 
 
 def _ancestors(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:

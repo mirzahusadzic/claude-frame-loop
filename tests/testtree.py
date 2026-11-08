@@ -3,6 +3,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
@@ -252,3 +253,39 @@ class MoreNodeFaultTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LoadCostTests(unittest.TestCase):
+    """Sparky's third review: loading a tree walked every node's ancestors, quadratic in its
+    depth."""
+
+    def test_a_deep_chain_loads_in_work_linear_in_its_nodes(self):
+        import tree as T
+
+        def chain(n):
+            folder = Path(tempfile.mkdtemp(prefix="frame-loop-deep-"))
+            for k in range(n):
+                parent = "root" if k == 0 else f"n{k - 1}"
+                (folder / f"n{k}.json").write_text(json.dumps({"id": f"n{k}", "parent": parent}), encoding="utf-8")
+            return folder
+
+        walked = {}
+        for n in (200, 400):
+            steps = []
+            real = T._ancestors
+
+            def counting(node, nodes, real=real, steps=steps):
+                found = real(node, nodes)
+                steps.append(len(found))  # each parent the walk stepped through
+                return found
+
+            with mock.patch.object(T, "_ancestors", counting):
+                nodes = T.load(str(chain(n)), {"asks": []})
+            self.assertFalse(any(x.get("circle") for x in nodes.values()))
+            walked[n] = sum(steps)
+        self.assertLessEqual(walked[400], 2.5 * walked[200] + 5, walked)  # linear, not 4x
+        looped = Path(tempfile.mkdtemp(prefix="frame-loop-loop-"))
+        for nid, parent in (("a", "b"), ("b", "a"), ("c", "a"), ("d", "root"), ("e", "gone")):
+            (looped / f"{nid}.json").write_text(json.dumps({"id": nid, "parent": parent}), encoding="utf-8")
+        nodes = T.load(str(looped), {"asks": []})
+        self.assertEqual(sorted(n for n, x in nodes.items() if x.get("circle")), ["a", "b", "c"])
