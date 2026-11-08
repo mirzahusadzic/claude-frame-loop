@@ -56,6 +56,19 @@ test('well past the usual count, the band says still asking and guesses no time 
   await ui.unmount()
 })
 
+// Once a reading has ended, only what needs the author stays, until the next prompt.
+for (const decision of ['pass', 'quiet', 'noted', 'unsettled', 'interrupted', 'something new']) {
+  test(`once a reading has ended, "${decision}" shows nothing`, async ($, on) => {
+    seed(on, { session: 's', at: 50, state: 'done', decision, started: 10, tokens: 84000,
+               lines: ['frame-loop · a line'], detail: ['a detail'] })
+    on('clock.now', () => ({ value: 60000 }))
+    on('ui.render', ($: any, e: any) => { const { Text } = $.ui.resolve(e); return <Text>engine</Text> })
+    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text' }))?.text).toBe('engine')
+    await ui.unmount()
+  })
+}
+
 test('a reading that rose says it needs the author, until the next prompt', async ($, on) => {
   seed(on, { session: 's', at: 50, state: 'done', decision: 'rise', started: 10, lines: [] })
   on('clock.now', () => ({ value: 60000 }))
@@ -160,19 +173,14 @@ test('past the usual count, the band claims no disagreement and never almost don
   await ui.unmount()
 })
 
-// An act reported, an interrupted check or an outcome the band does not know is never a check mark.
-for (const [decision, line] of [['noted', 'frame-loop · Claude pushed to GitHub'],
-                                ['interrupted', 'frame-loop · the last check was interrupted'],
-                                ['something new', '']] as const) {
-  test(`the outcome "${decision}" is never a check mark`, async ($, on) => {
-    seed(on, { session: 's', at: 50, state: 'done', decision, started: 10, lines: line ? [line] : [] })
-    on('clock.now', () => ({ value: 60000 }))
-    const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-    expect(await ui.find({ type: 'Text', text: /✓/ })).toBeFalsy()
-    expect((await ui.find({ type: 'Text', text: /^· $/ }))?.text).toBe('· ')
-    await ui.unmount()
-  })
-}
+test('a reading that could not be done says so, until the next prompt', async ($, on) => {
+  seed(on, { session: 's', at: 50, state: 'done', decision: 'block', started: 10,
+             lines: ['frame-loop ■ not read: it looks like it holds a secret'] })
+  on('clock.now', () => ({ value: 60000 }))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /not read/ }))?.text).toBe('not read: it looks like it holds a secret')
+  await ui.unmount()
+})
 
 test('the band reads the live folder the settings name', async ($, on) => {
   seed(on, null)

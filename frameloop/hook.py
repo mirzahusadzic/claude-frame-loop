@@ -334,7 +334,24 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
                 else:
                     out.pop("systemMessage")
                     out = out or None
+        elif os.environ.get("FRAME_LOOP_LINES") != "full":
+            out = _one_line(event, out, frame0)
     return out
+
+
+def _one_line(event: dict[str, Any], out: dict[str, Any], frame0: dict[str, Any] | None) -> dict[str, Any] | None:
+    """What the author reads where no reading has ended: a queued read's turn says only what
+    needs the author, since the band shows the read; a tool call's note goes to Claude, and its
+    act is on the turn's line. A question the author must answer stays."""
+    answers = (out.get("hookSpecificOutput") or {}).get("permissionDecision")
+    if state.LIVE.get("queued"):
+        state.LIVE["shorts"] = []
+        short = _short_lines(frame0)
+        if "needs you" in short:
+            return {**out, "systemMessage": short}
+    elif answers or event.get("hook_event_name") not in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
+        return out
+    return {k: v for k, v in out.items() if k != "systemMessage"} or None
 
 
 def _answer(event: dict[str, Any]) -> dict[str, Any] | None:

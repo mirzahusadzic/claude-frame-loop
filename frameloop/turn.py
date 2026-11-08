@@ -83,15 +83,23 @@ def _last_reading() -> str:
     said = [f"a turn's reading: {r.get('decision')}: {r.get('reason')}" for r in rose]
     if rose:
         _log({"event": "told", "readings": len(rose)})
-    if acts:
-        said.append("the acts it told the author of: " + "; ".join(f"{w} ({e})" for w, _, e in acts))
-    if not said:
-        return ""
-    return (
-        "frame-loop, shown to the author under your reply: "
-        + " · ".join(said)
-        + ". Tell the author in plain words what it means and what you will do about it, never in ids."
-    )
+    needing = [a for a in acts if a[1]]
+    if needing:
+        said.append("the acts it told the author of: " + "; ".join(f"{w} ({e})" for w, _, e in needing))
+    told = []
+    if said:
+        told.append(
+            "frame-loop, shown to the author under your reply: "
+            + " · ".join(said)
+            + ". Tell the author in plain words what it means and what you will do about it, never in ids."
+        )
+    if len(needing) < len(acts):
+        told.append(
+            "frame-loop, not shown to the author: "
+            + "; ".join(f"{w} ({e})" for w, n, e in acts if not n)
+            + ". Say so only if the author would not expect it, in plain words, never in ids."
+        )
+    return "\n".join(told)
 
 
 def _turn_start(event: dict[str, Any]) -> None:
@@ -213,7 +221,7 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
         if not any(r.get("event") == "unreadable-project" for r in records):  # once a session, under the reply
             _log({"event": "unreadable-project", "cwd": cwd})
             state.LIVE.setdefault("shorts", []).append(
-                "frame-loop · changes are not read here: this project is not a git repository"
+                "frame-loop ■ changes are not read here: this project is not a git repository"
             )
         return {"systemMessage": "frame-loop · turn not read: no snapshot (not a git repository?)"}
     if before == after:

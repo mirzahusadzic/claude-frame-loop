@@ -16,6 +16,35 @@ import signals  # noqa: E402
 import state  # noqa: E402
 
 
+class AfterwardsTests(unittest.TestCase):
+    """Once a reading has ended, only what needs the author is shown."""
+
+    def shown(self, **live):
+        state.LIVE.clear()
+        self.addCleanup(state.LIVE.clear)
+        state.LIVE.update(live)
+        return lines._short_lines(None)
+
+    def test_what_needs_nothing_prints_nothing(self):
+        for live in (
+            {"shorts": ["frame-loop ✓ checked: does what you asked, breaks none of your rules"]},
+            {"shorts": ["frame-loop · a guide changed: its new lines are offered as rules"]},
+            {"acts": [("Claude pushed", False, "git push origin main")]},
+            {"guides": ["AGENTS.md +1 line"], "lost": []},
+        ):
+            self.assertEqual(self.shown(**live), "", live)
+
+    def test_what_needs_the_author_still_prints(self):
+        rise = "frame-loop ▲ needs you: this serves none of your requirements"
+        self.assertEqual(self.shown(shorts=[rise]), rise)
+        self.assertEqual(self.shown(shorts=[rise], acts=[("Claude pushed", False, "git push")]), rise)
+        unread = "frame-loop ■ not read: it looks like it holds a secret"
+        self.assertEqual(self.shown(shorts=[unread]), unread)
+        deleted = self.shown(acts=[("Claude deleted a folder", True, "rm")])
+        self.assertIn("▲ needs you: Claude deleted a folder", deleted)
+        self.assertIn("lost their wording", self.shown(guides=["AGENTS.md +1 line"], lost=["R1"]))
+
+
 class PlainTests(unittest.TestCase):
     def plain(self, reason, decision="rise"):
         return lines._plain({"decision": decision, "reason": reason}, None)

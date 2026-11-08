@@ -2256,8 +2256,7 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(done["state"], "done")
         self.assertIn(done["decision"], ("pass", "rise"))
         self.assertEqual(done["detail"], out.split("\n"))  # the details, for the band's fold
-        self.assertEqual(done["lines"], ["frame-loop ✓ checked: does what you asked, breaks none of your rules"])
-        self.assertNotRegex(json.dumps(done["lines"]), r"\bA\d\b")  # the author's words, never ids
+        self.assertEqual(done["lines"], [])  # a fit ends with the reading: nothing stays
 
     def test_the_live_view_is_off_unless_asked(self):
         live = WORK / f"live-off-{uid(self)}"
@@ -2384,8 +2383,8 @@ class CoreTests(unittest.TestCase):
             lost=["R1"],
             acts=[],
         )
-        shown = lines._short_lines(None).split("\n")
-        self.assertEqual(shown[1], "  ▲ needs you: AGENTS.md: 1 line added; 1 of your rules lost their wording")
+        shown = lines._short_lines(None)
+        self.assertEqual(shown, "frame-loop ▲ needs you: AGENTS.md: 1 line added; 1 of your rules lost their wording")
         self.assertEqual(state.LIVE["decision"], "rise")
 
     def test_a_command_on_the_loops_files_is_not_called_a_change(self):
@@ -2599,6 +2598,24 @@ class CoreTests(unittest.TestCase):
             state.LIVE.clear()
         self.assertEqual(broken, [])
         self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))), 40)
+
+    def test_an_act_the_author_was_not_shown_is_never_told_to_claude_as_shown(self):
+        """The prompt said "shown to the author under your reply" of a line no one was shown,
+        and asked Claude to explain it: a reply about nothing, on every turn."""
+        tool = {
+            "session_id": self.session,
+            "cwd": str(REPO),
+            "tool_name": "Bash",
+            "tool_input": {"command": "git push origin main"},
+        }
+        prompt = {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        hook.answer(prompt)
+        with unittest.mock.patch.dict(os.environ, {"FRAME_LOOP_MODE": "shadow"}):
+            hook.answer({"hook_event_name": "PreToolUse", **tool})
+            hook.answer({"hook_event_name": "PostToolUse", **tool})
+        told = hook.answer(prompt)["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("not shown to the author: Claude pushed", told)
+        self.assertNotIn("shown to the author under your reply", told)
 
     def test_an_act_reported_is_never_shown_as_checked(self):
         """The first live use: a push in a turn with nothing to read showed a green check
@@ -4494,6 +4511,121 @@ class RulesTests(unittest.TestCase):
         self.assertNotIn("show it there", text)
         self.assertIn("in the author's words, as plain sentences", text)
         self.assertIn("Never show the author JSON, ids or inversions", text)
+
+
+class OneLineTests(unittest.TestCase):
+    """Asked for: nothing but the one short line reaches the author. The details go to the
+    band's fold and to Claude, on every path: a turn read in the background too."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+    turn = CoreTests.turn
+    shell_call = CoreTests.shell_call
+    backstop = CoreTests.backstop
+
+    def in_the_background(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:passing",
+            FRAME_LOOP_BACKGROUND="1",
+            PYTHONPATH=os.pathsep.join([str(ROOT / "tests"), str(ROOT / "frameloop")]),
+        )
+        self.addCleanup(self.landed, Path(os.environ["FRAME_LOOP_WORK"]))
+
+    def landed(self, work):
+        """No write after this test: the background process removes its payload as it exits."""
+        deadline = time.time() + 20
+        while any(work.glob("background-*.json")) and time.time() < deadline:
+            time.sleep(0.2)
+
+    def test_a_turn_read_in_the_background_prints_nothing_under_the_reply(self):
+        """Seen: "frame-loop · turn · checking in the background", "frame-loop · this turn" and
+        each act and guide line printed whole: the short line was skipped for a queued read."""
+        self.in_the_background()
+        guide = WORK / f"guide-{uid(self)}.md"
+        os.environ["FRAME_LOOP_USER_GUIDE"] = str(guide)
+        line = self.turn(
+            {f"notes/bg-{uid(self)}.py": f"print('{uid(self)}')\n", str(guide): "- a line\n"}, "Serves: A1"
+        )
+        self.assertEqual(line, "")
+
+    def test_an_act_that_needs_the_author_is_all_that_a_queued_turn_prints(self):
+        self.in_the_background()
+        command = "rm -rf notes/gone"
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        tool = {"session_id": self.session, "cwd": str(REPO), "tool_name": "Bash", "tool_input": {"command": command}}
+        hook.answer({"hook_event_name": "PreToolUse", **tool})
+        hook.answer({"hook_event_name": "PostToolUse", **tool})
+        (REPO / "notes").mkdir(exist_ok=True)
+        (REPO / f"notes/bg-{uid(self)}.py").write_text(f"print('{uid(self)}')\n", encoding="utf-8")
+        out = hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "Serves: A1",
+                "stop_hook_active": False,
+            }
+        )
+        self.assertEqual(out["systemMessage"].count("\n"), 0, out["systemMessage"])
+        self.assertIn("▲ needs you: Claude deleted a folder", out["systemMessage"])
+        self.assertNotIn("this turn", out["systemMessage"])
+        self.assertNotIn("in the background", out["systemMessage"])
+        git("add", "-A")
+        git("commit", "-q", "-m", "turn")
+
+    def test_an_edit_of_the_loops_files_reaches_claude_and_waits_for_the_turns_line(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        path = str(REPO / ".frame-loop" / "frame0.json")
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_name": "Write",
+                "tool_input": {"file_path": path, "content": "{}"},
+            }
+        )
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("rises to the human", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(record._records_all()[-1]["event"], "config")
+
+    def test_a_command_the_loop_watches_reaches_claude_and_waits_for_the_turns_line(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git push origin main"},
+            }
+        )
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("rises to the human", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_command_that_changed_the_loops_files_reaches_claude_alone(self):
+        frame0, _ = self.backstop()
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        out = self.shell_call("sh s.sh", lambda: frame0.write_text('{"asks": [1]}', encoding="utf-8"), "c1")
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("changed the loop's own files", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_enforce_mode_still_asks_the_author(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        os.environ["FRAME_LOOP_MODE"] = "enforce"
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_name": "Bash",
+                "tool_input": {"command": "git push origin main"},
+            }
+        )
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
 
 
 def counted_tokens(frame, only=()):

@@ -340,24 +340,26 @@ def _wrap(line: str, width: int = 100) -> str:
 
 
 def _short_lines(frame0: dict[str, Any] | None) -> str:
-    """What the author reads under the reply: one line, two at most, never cut. A quiet
-    turn says nothing; flagged acts and changed guides ride on the line."""
-    shorts = state.LIVE.get("shorts") or []
+    """What the author reads once a reading has ended: only what needs them, a ▲ or a ■, one
+    line, two at most, never cut (Asked for: "it only shows them while active/running --
+    nothing afterwards"). The record keeps the rest, and Claude hears of the acts."""
+    shorts = [x for x in state.LIVE.get("shorts") or [] if "▲" in x or "■" in x]
     acts = state.LIVE.get("acts") or []
+    guides = state.LIVE.get("guides") or []
+    lost = state.LIVE.get("lost") or []
     counted: dict[str, int] = {}
-    for words, _, _ in acts:
-        counted[words] = counted.get(words, 0) + 1
+    for words, needs, _ in acts:
+        if needs:
+            counted[words] = counted.get(words, 0) + 1
     facts = [w + (f" ({n} times)" if n > 1 else "") for w, n in counted.items()]
-    facts += [_guide_words(x, state.LIVE.get("lost") or []) for x in state.LIVE.get("guides") or []]
-    needs = any(n for _, n, _ in acts) or bool(state.LIVE.get("lost"))
-    if needs:
+    facts += [_guide_words(x, lost) for x in guides] if lost else []
+    if facts:
         state.LIVE["decision"] = gate.RISE  # an act that needs the author, or rules that lost their words
-    elif facts and state.LIVE.get("decision", "quiet") == "quiet":
-        state.LIVE["decision"] = "noted"  # an act reported, nothing checked: never a check mark
+    elif (acts or guides) and state.LIVE.get("decision", "quiet") == "quiet":
+        state.LIVE["decision"] = "noted"  # an act recorded, nothing checked: never a check mark
     if not shorts and not facts:
         return ""
     if not shorts:
-        mark = "▲ needs you:" if state.LIVE.get("decision") == gate.RISE else "·"
-        return for_user(f"frame-loop {mark} " + " · ".join(facts), frame0)
-    lines = shorts[-1:] + (["  " + ("▲ needs you: " if needs else "") + " · ".join(facts)] if facts else [])
+        return for_user("frame-loop ▲ needs you: " + " · ".join(facts), frame0)
+    lines = shorts[-1:] + (["  ▲ needs you: " + " · ".join(facts)] if facts else [])
     return for_user("\n".join(lines), frame0)

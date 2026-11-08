@@ -31,20 +31,14 @@ const spentTokens = (tokens: number | undefined) =>
 // and never dimColor, whose contrast the terminal decides. Words are the theme's text.
 export const COLOURS = { text: ['success', 'error', 'inactive'], mark: ['success', 'error', 'inactive', 'permission'] }
 
-// A check mark only for what was checked: an act reported, an interrupted check or an
-// outcome this band does not know is never shown as fine.
+// Once a reading has ended, only what needs the author is drawn, until the next prompt:
+// a ▲ or a ■. Anything else ended with the reading, as Claude Code's own lines do.
 const outcome = (decision: string | undefined) =>
-  decision === 'pass'
-    ? { mark: '✓', color: 'success', word: 'fits what you asked', wordColor: 'success' }
-    : decision === 'quiet'
-      ? { mark: '✓', color: 'success', word: 'checked: nothing needed a closer look', wordColor: 'success' }
-      : decision === 'rise'
-        ? { mark: '▲', color: 'permission', word: 'needs you', wordColor: undefined }
-        : decision === 'block'
-          ? { mark: '■', color: 'error', word: 'not read', wordColor: 'error' }
-          : decision === 'noted'
-            ? { mark: '·', color: 'inactive', word: 'noted', wordColor: undefined }
-            : { mark: '·', color: 'inactive', word: 'not checked', wordColor: 'inactive' }
+  decision === 'rise'
+    ? { mark: '▲', color: 'permission', word: 'needs you', wordColor: undefined }
+    : decision === 'block'
+      ? { mark: '■', color: 'error', word: 'not read', wordColor: 'error' }
+      : null
 
 let switchPath = ''
 let liveFolder = ''
@@ -173,10 +167,11 @@ export const register: Register = on => {
       )
     }
 
-    if (now.at < (await read($, dismissedAt))) {
+    const shown = outcome(now.decision)
+    if (shown === null || now.at < (await read($, dismissedAt))) {
       return next(e)
     }
-    const { mark, color, word, wordColor } = outcome(now.decision)
+    const { mark, color, word, wordColor } = shown
     const spent = now.started ? ` · ${clock(now.at - now.started)}` : ''
     // The hook's own line, after its mark: "needs you: <why>", in the author's words.
     // A rise shows the line that needs the author, which may follow a check mark.

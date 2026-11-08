@@ -1,6 +1,6 @@
 # Verdicts
 
-Every line frame-loop prints, what it means, and what to do. The lines appear under Claude's reply and in the band above the prompt; the band's **details** unfolds the rest.
+Every line frame-loop prints, what it means, and what to do. While a read runs, the band above the prompt shows it. Once it ends, only what needs you stays, under Claude's reply and in the band until the next prompt; the band's **details** unfolds the rest.
 
 ---
 
@@ -16,13 +16,10 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Outcomes
 
+A read that fits or finds nothing to read shows nothing once it ends; the record keeps it. These lines stay:
+
 | Line | Means | Do |
 | --- | --- | --- |
-| ✓ checked: does what you asked, breaks none of your rules | read; the fit rests on the declared requirement; neither of two readings named a rule | nothing |
-| ✓ checked: nothing in this change needed a closer look | free checks only, all met | nothing |
-| ✓ every requirement is done | completion: each requirement read as done over its changes | nothing |
-| · Claude pushed | an act reported in a turn with nothing to read | nothing, unless you did not expect it |
-| · the last check was interrupted | the check stopped before its outcome | ask for a reading again |
 | ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: this serves none of your requirements | padding: a change that serves no purpose at all | ask why the change is there |
@@ -41,7 +38,7 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Acts
 
-Acts the loop always reports, after the outcome on the same line. In shadow mode, the default, a "no" act is reported with a · and blocks nothing; in enforce mode the ones a command or an edit makes, pushes, releases, publishing, deletes and changes to the loop's own files, ask you before they run.
+Acts the loop records. In shadow mode, the default, an act with no ▲ prints nothing and blocks nothing: the record keeps it and Claude is told; in enforce mode the ones a command or an edit makes, pushes, releases, publishing, deletes and changes to the loop's own files, ask you before they run.
 
 | Act | ▲ in shadow mode |
 | --- | --- |
@@ -56,4 +53,4 @@ Acts the loop always reports, after the outcome on the same line. In shadow mode
 
 An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act, even beside other commands in one call. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled. In shadow mode that comparison is the report, so a script that only reads stays quiet; only a command naming the record, the work folder or the loop's code, which the hashes do not settle, is reported from its text. Enforce mode has to ask before the call, so it goes by the command's text and may ask about a script that only reads.
 
-At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is reported after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.
+At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is recorded after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.
