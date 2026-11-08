@@ -13,6 +13,9 @@ from typing import Any
 import state
 from record import _records_all
 
+# The flags a `: frame-loop-declare` marker takes, each named in the session's briefing.
+DECLARE_FLAGS = {"--serves": "Serves", "--done": "Done", "--effort": "Effort", "--reader": "Reader"}
+
 
 def _claimed(said: str) -> list[str]:
     return [x.strip(" .*") for x in _value(said, "done").split(",") if x.strip(" .*")]
@@ -47,7 +50,7 @@ def _declare_lines(command: str) -> list[str]:
         words = shlex.split(command.split("\n", 1)[0])[2:]
     except ValueError:
         return []
-    keys = {"--serves": "Serves", "--done": "Done", "--effort": "Effort", "--reader": "Reader"}
+    keys = DECLARE_FLAGS
     values: dict[str, list[str]] = {}
     key = None
     for word in words:  # a key takes every word up to the next key: `--serves A1 A2`, `A1, A2`

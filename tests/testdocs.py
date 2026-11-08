@@ -104,6 +104,14 @@ class DocsTests(unittest.TestCase):
         crossings = (ROOT / "docs/crossings.md").read_text(encoding="utf-8")
         self.assertIn(f'| inversion | "{inverted.rstrip(".")}" |', crossings)
 
+    def test_the_quickstart_names_both_ways_frame0_is_set_up(self):
+        """Mirza: frame 0 is set up from the user's words or from what the project has, and
+        either way should be plain from the docs a user reads first."""
+        quickstart = (ROOT / "docs/quickstart.md").read_text(encoding="utf-8")
+        self.assertIn("Before any code, Claude restates it as one sentence per requirement", quickstart)
+        self.assertIn("ask Claude to compose it from a spec or an earlier plan", quickstart)
+        self.assertIn("with where it came from", quickstart)
+
     def test_the_paper_is_cited_by_one_doi_everywhere(self):
         """Mirza: the paper first, then the release cites it. The citation file GitHub reads,
         the README's badge and its Cite block name one concept DOI."""

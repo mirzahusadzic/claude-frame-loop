@@ -557,9 +557,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "the author states it for this work: the guides' indexed rules are read in every "
                 "reading already, so never copy them in. Principles and triggers take no inversion. "
                 "Frame 0 covers this piece of work, not the whole project; an ask too coarse to "
-                "check in one step is split later, at a crossing, into nodes. An earlier frame kept "
-                "in another form (a FRAME-0.md, a spec) is material: reflect its lines to the "
-                "author and write only what they confirm. frame-loop's own docs are installed with "
+                "check in one step is split later, at a crossing, into nodes. Frame 0 is set up one "
+                "of two ways, and the author confirms either: from the author's words, when they "
+                "give a task; or from material that already exists (a spec, an earlier frame such "
+                "as a FRAME-0.md, the project's docs), which you compose into requirements and "
+                "reflect saying where each line came from. Only confirmed lines are written. "
+                "frame-loop's own docs are installed with "
                 f"it: {_docs('quickstart.md')}, {_docs('rules.md')} and {_docs('crossings.md')}."
             ]
             if frame0.get("unwritten")
@@ -604,7 +607,9 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         f"your work, present it with its reading. A reading: run `{read}` (a no-op the hook "
         "reads; add `--effort high` for a harder reading, never an easier one). For a proposal "
         "at a crossing, before any code exists, pass its text: `: frame-loop-read --serves <ids> "
-        "<<'EOF'` … `EOF`. The human sees its one line; the details reach you.",
+        "<<'EOF'` … `EOF`, with `--touches <paths>` for the files it will change, so the checks "
+        "it owes are named. `--base <revision>` reads the change since that revision instead of "
+        "since the last commit. The human sees its one line; the details reach you.",
         "Work in crossings: where framing is set, talk with the human and settle the "
         "siblings, the predictions and what you may resolve alone. Between crossings, work "
         "inside the agreed frame; anything your contract does not authorize rises to the "
@@ -646,6 +651,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
             if _writer()
             else []
         ),
+        "Frame 0 changes only with the author: when they ask for something it does not hold, "
+        "propose the requirement in plain words, and on their OK add it with its inversion. The "
+        "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",
+        "When you present finished work, run `: frame-loop-read --complete`: each ask is read "
+        "over the steps that claimed it, and an ask no step claimed is unfulfilled. A change that "
+        "meets a check the rules require names it in its declaration, `--done <ids>`.",
         *(
             [
                 "The work is a tree of nodes, frame 0 its root: "
@@ -655,10 +666,18 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "above it holds. Engage the node you work in with `: frame-loop-node <id>`, a "
                 "no-op the hook reads; then readings use its asks, completion reads its asks over "
                 "its own steps, and a change outside its scope is not authorized. A completed "
-                "node climbs to its parent by itself."
+                "node climbs to its parent by itself. Nodes nest to any depth: a node's ask is owned "
+                "by its own steps or by its children, never both, and one its children own is done "
+                "when every child quoting it is. Each node is one JSON file in "
+                f"{os.environ.get('FRAME_LOOP_TREE')}, its fields in {_docs('crossings.md')}."
             ]
             if os.environ.get("FRAME_LOOP_TREE")
-            else []
+            else [
+                "Large work can nest: at a crossing, with the author, split an ask too coarse for "
+                "one step into nodes, each a JSON file in the project's .frame-loop/tree/ folder, "
+                f"its fields in {_docs('crossings.md')}; nodes nest to any depth, and each node file "
+                "is the author's to confirm before it is written."
+            ]
         ),
         "Pushes, releases, recursive deletes and any change to the loop's own configuration "
         "or record also rise to the human.",

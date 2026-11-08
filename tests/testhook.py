@@ -470,6 +470,45 @@ class AttackTests(unittest.TestCase):
         with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
             self.assertNotIn("systemMessage", hook.answer(start) or {})
 
+    def test_the_briefing_covers_every_feature_an_agent_meets(self):
+        """Mirza: cover the agent's complete posture, depth and nested frames included. The
+        briefing named neither the two ways frame 0 is set up, how it changes, the completion
+        reading, `--done`, how nesting starts, nor whose the switch is; and every flag a marker
+        takes, read from the code, is named, so a new one cannot go untold."""
+        import declare
+        import ondemand
+
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(WORK / "frame0-unwritten.json")))
+        os.environ.pop("FRAME_LOOP_TREE", None)
+        flat = hook.briefing(unwritten, "shadow")
+        for part in (
+            "Frame 0 is set up one of two ways",
+            "from the author's words",
+            "from material that already exists",
+            "saying where each line came from",
+            "Frame 0 changes only with the author",
+            "is the author's alone: never write it",
+            ": frame-loop-read --complete",
+            "an ask no step claimed is unfulfilled",
+            "Large work can nest",
+            "nodes nest to any depth",
+        ):
+            self.assertIn(part, flat)
+        tree = WORK / f"tree-{uid(self)}"
+        tree.mkdir()
+        os.environ["FRAME_LOOP_TREE"] = str(tree)
+        nested = hook.briefing(unwritten, "shadow")
+        self.assertIn("Nodes nest to any depth", nested)
+        self.assertIn(f"one JSON file in {tree}", nested)
+        flags = [a for action in ondemand.parser()._actions for a in action.option_strings if a.startswith("--")]
+        flags += list(declare.DECLARE_FLAGS)
+        for flag in {f for f in flags if f != "--help"}:
+            with self.subTest(flag):
+                self.assertIn(flag, nested)
+        for marker in (": frame-loop-read", ": frame-loop-declare", ": frame-loop-node", "/frame-loop"):
+            self.assertIn(marker, nested)
+
     def test_the_briefing_says_how_to_compile_frame0(self):
         """An agent's report: a user's agent could not tell from the briefing which kind a line
         is, whether to keep the author's words or derive requirements, how coarse an ask may
@@ -484,7 +523,7 @@ class AttackTests(unittest.TestCase):
             "never copy them in",
             "Principles and triggers take no inversion",
             "Frame 0 covers this piece of work, not the whole project",
-            "write only what they confirm",
+            "Only confirmed lines are written",
         ):
             self.assertIn(part, said)
         for page in ("quickstart.md", "rules.md", "crossings.md"):
