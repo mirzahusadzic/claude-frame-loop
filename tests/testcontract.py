@@ -281,6 +281,15 @@ class LiveReaderTests(unittest.TestCase):
         os.environ.clear()
         os.environ.update(self.saved)
 
+    def test_reader_tells_how_the_answers_split(self):
+        import reader
+
+        os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
+        frame = {**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-ideal"}}
+        self.assertEqual(set(reader.run(frame)["split"]), {"A5"})
+        rules = {**frames.violation(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-ideal"}}
+        self.assertTrue(reader.run(rules, only=("baseline", "repeat"))["split"])
+
     def test_reader_runs_which_ask_to_a_firm_verdict(self):
         import reader
 

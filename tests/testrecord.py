@@ -107,3 +107,46 @@ class ToldTests(unittest.TestCase):
             told = turn._last_reading()
             self.assertIn("rise: which-ask: not firm", told)
             self.assertEqual(turn._last_reading(), "")  # told once
+
+    def _told_of_unsettled(self, session, reason):
+        import state
+        import turn
+
+        log = Path(tempfile.mkdtemp()) / "steps.jsonl"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_LOG": str(log)}), mock.patch.object(state, "SESSION", session):
+            paths = ["a.py", "b.py", "c.py"]
+            record._log({"event": "turn", "decision": "unsettled", "reason": reason, "paths": paths})
+            return turn._last_reading()
+
+    def test_a_reading_that_did_not_settle_sends_claude_to_look(self):
+        """Told to go on, Claude never looks at what the reader could not settle."""
+        told = self._told_of_unsettled(
+            "nudge", "violation: not settled (baseline none, repeat P1; answers none 4, P1 2)"
+        )
+        self.assertIn("answers none 4, P1 2", told)
+        self.assertIn("Look at what it names in the change yourself", told)
+        self.assertIn("tell the author in plain words", told)
+        self.assertIn("don't call the work checked", told)
+        self.assertIn("don't ask for another reading", told)
+        self.assertNotIn("don't raise it", told)
+
+    def test_a_late_reading_names_the_change_it_read(self):
+        """It lands at the next prompt, on a turn that may be about something else."""
+        self.assertIn("a.py, b.py +1 more", self._told_of_unsettled("named", "which-ask: not firm (category carried)"))
+
+    def test_a_split_between_declared_requirements_is_one_short_line(self):
+        import gate
+
+        told = self._told_of_unsettled("short", f"which-ask: not firm ({gate.DECLARED_SPLIT}: A1 4, A2 2)")
+        self.assertIn("confirm they all apply", told)
+        self.assertIn("don't call the work checked", told)
+        self.assertNotIn("Look at what it names", told)
+
+    def test_a_split_on_the_rules_beside_it_keeps_the_full_look(self):
+        import gate
+
+        reason = (
+            f"which-ask: not firm ({gate.DECLARED_SPLIT}: A1 4, A2 2) · "
+            "violation: not settled (baseline none, repeat P1)"
+        )
+        self.assertIn("Look at what it names", self._told_of_unsettled("both", reason))

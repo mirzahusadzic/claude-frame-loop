@@ -25,7 +25,7 @@ from config import plugin_defaults, switch_path
 from declare import _declared
 from effort import _effort_rules, _rule_hits
 from framezero import load_frame0, rules_lost
-from lines import UNSETTLED_NOTE, _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words
+from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words, unsettled_note
 from live import _alive, _live, detached, stop
 from obligations import obligations_line, outside_scope
 from privacy import _hash
@@ -70,6 +70,10 @@ def guide_changes(before: dict[str, list[str]], cwd: str) -> list[str]:
     return out
 
 
+def _where(paths: list[str]) -> str:
+    return ", ".join(paths[:2]) + (f" +{len(paths) - 2} more" if len(paths) > 2 else "")
+
+
 def _last_reading() -> str:
     """What the last turn's reading decided, if not a pass, for the agent: the Stop lines
     reach only the human, so the agent hears of them at the next prompt, once."""
@@ -83,7 +87,7 @@ def _last_reading() -> str:
     said = [
         f"a turn's reading: {r.get('decision')}: {r.get('reason')}" for r in rose if r["decision"] != gate.UNSETTLED
     ]
-    alone = [str(r.get("reason")) for r in rose if r["decision"] == gate.UNSETTLED]
+    alone = [r for r in rose if r["decision"] == gate.UNSETTLED]
     if rose:
         _log({"event": "told", "readings": len(rose)})
     needing = [a for a in acts if a[1]]
@@ -103,7 +107,12 @@ def _last_reading() -> str:
             + ". Say so only if the author would not expect it, in plain words, never in ids."
         )
     if alone:
-        told.append(f"frame-loop, a turn's reading ({' · '.join(alone)}): {UNSETTLED_NOTE}.")
+        # It can land a turn late: the files say which change it is about.
+        read = [f"{_where(r.get('paths') or []) or 'the change'}: {r.get('reason')}" for r in alone]
+        told.append(
+            f"frame-loop, a turn's reading ({' · '.join(read)}): "
+            f"{unsettled_note([str(r.get('reason')) for r in alone])}."
+        )
     return "\n".join(told)
 
 
@@ -197,7 +206,7 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     if any(x.returncode != 0 for x in runs):  # never the free check mark on a diff not read
         found.append("the change's diff could not be read")
     sid = f"S{len(_records('step')) + 1}"
-    where = ", ".join(paths[:2]) + (f" +{len(paths) - 2} more" if len(paths) > 2 else "")
+    where = _where(paths)
     text = (
         f"{where} +{added}/-{removed}"
         + (f" · claims {', '.join(claims)}" if claims else "")

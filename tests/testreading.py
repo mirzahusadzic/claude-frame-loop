@@ -41,6 +41,17 @@ def unsettled(frame, only=()):
     return {"exit": 0, "firm": False, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
 
 
+def both_split(frame, only=()):
+    """A reader that settles neither which requirement nor whether a rule is broken."""
+    if only:
+        return {
+            "exit": 0,
+            "findings": [{"levels": {"baseline": "none", "repeat": "P1"}}],
+            "split": {"none": 2, "P1": 1},
+        }
+    return {"exit": 0, "firm": False, "category": "carried", "findings": [{"levels": {"baseline": "A1"}}]}
+
+
 def walk(start, frames):
     import testreading as loaded
 
@@ -93,6 +104,14 @@ class ReadStepTests(Isolated):
         self.assertEqual(out["decision"], "pass", out)
         self.assertEqual({f["battery"]["reasoning"] for f in loaded.SEEN}, {"high"})
         self.assertFalse(hasattr(loaded, "on_progress"))
+
+    def test_a_split_on_the_rules_is_not_lost_beside_an_unsettled_fit(self):
+        """Only the first reason went on, so Claude never heard the rules question split."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:both_split"
+        out = reading.read_step(FRAME0, self.step(), ["A1"], "private")
+        self.assertEqual(out["decision"], "unsettled", out)
+        self.assertIn("which-ask: not firm", out["reason"])
+        self.assertIn("violation: not settled (baseline none, repeat P1; answers none 2, P1 1)", out["reason"])
 
     def test_a_frame0_of_asks_only_rises_on_its_fit_alone(self):
         """A fit that fails with no rules to read would pass on the rules question that was never asked."""

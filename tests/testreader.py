@@ -79,6 +79,42 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("uv tool install 'midwife>=0.13.1'", gate._failure(result))
 
 
+class SplitTest(unittest.TestCase):
+    """How the answers split, from Gadfly's kept records: its result gives only the top answer."""
+
+    @staticmethod
+    def _lines(*rows):
+        return "".join(json.dumps({"trial": t, "observation": o}) + "\n" for t, o in rows) + "not json\n"
+
+    def test_baseline_and_repeat_of_the_latest_run_are_counted(self):
+        import reader
+
+        runs = Path(tempfile.mkdtemp())
+        (runs / "2.jsonl").write_text(self._lines(("baseline", "A1")), encoding="utf-8")
+        (runs / "10.jsonl").write_text(
+            self._lines(
+                ("baseline", "A1"), ("repeat", "A2"), ("repeat", "A1"), ("inversion", "A9"), ("baseline", None)
+            ),
+            encoding="utf-8",
+        )
+        self.assertEqual(reader._split(runs), {"A1": 2, "A2": 1})
+
+    def test_a_single_file_is_counted(self):
+        import reader
+
+        out = Path(tempfile.mkdtemp()) / "records.jsonl"
+        out.write_text(self._lines(("baseline", "none"), ("repeat", "P1")), encoding="utf-8")
+        self.assertEqual(reader._split(out), {"none": 1, "P1": 1})
+
+    def test_no_records_is_no_split_and_no_failure(self):
+        """A live detail never fails a reading."""
+        import reader
+
+        where = Path(tempfile.mkdtemp())
+        self.assertEqual(reader._split(where), {})
+        self.assertEqual(reader._split(where / "missing.jsonl"), {})
+
+
 class ProgressTest(unittest.TestCase):
     """A reading's progress reaches the band with each answer and, between answers, as a
     heartbeat, so the band never takes a long question for an interrupted one."""

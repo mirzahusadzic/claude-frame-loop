@@ -44,6 +44,27 @@ def _answers(where: Path) -> int:
     return total
 
 
+def _split(where: Path) -> dict[str, int]:
+    """How the latest run's baseline and repeat answers split, from Gadfly's records: its
+    result names only each trial's top answer. Nothing kept is no split, never a failure."""
+    files = [where] if where.suffix == ".jsonl" else list(where.glob("*.jsonl"))
+    latest = max(files, key=lambda f: int(f.stem) if f.stem.isdigit() else 0, default=None)
+    try:
+        lines = latest.read_text(encoding="utf-8").splitlines() if latest else []
+    except OSError:
+        return {}
+    counts: dict[str, int] = {}
+    for line in lines:
+        try:
+            record = json.loads(line)
+        except ValueError:
+            continue
+        answer = record.get("observation") if isinstance(record, dict) else None
+        if isinstance(answer, str) and record.get("trial") in ("baseline", "repeat"):
+            counts[answer] = counts.get(answer, 0) + 1
+    return counts
+
+
 def _tokens(where: Path) -> int:
     """What the answers so far spent, from Gadfly's records; a line still being written counts
     for nothing."""
@@ -242,7 +263,12 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             return json.loads(ran.stdout or ran.stderr)
         made = json.loads(ran.stdout)
         read = _gadfly(["report", str(path), str(out), "--json"])
-        return {**json.loads(read.stdout or read.stderr), "made": made.get("made"), "usage": made.get("usage") or {}}
+        return {
+            **json.loads(read.stdout or read.stderr),
+            "made": made.get("made"),
+            "usage": made.get("usage") or {},
+            "split": _split(out),
+        }
     parallel = int(os.environ.get("FRAME_LOOP_PARALLEL", "1"))  # the frame names its most runs
     ran = _gadfly(
         [
@@ -262,4 +288,4 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
         ],
         watch=work / "runs",
     )
-    return {**json.loads(ran.stdout or ran.stderr), "reader": {"parallel": parallel}}
+    return {**json.loads(ran.stdout or ran.stderr), "reader": {"parallel": parallel}, "split": _split(work / "runs")}

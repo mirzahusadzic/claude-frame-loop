@@ -27,6 +27,41 @@ class WhichAskTests(unittest.TestCase):
         self.assertEqual(decision, gate.UNSETTLED)
         self.assertEqual(reason, "not firm (category carried)")
 
+    def test_a_reading_that_is_not_firm_says_how_the_answers_split(self):
+        """With only "not firm", Claude has nothing to look at."""
+        split = {"A2": 2, "other": 1, "A1": 4}
+        reading = result("A1", firm=False, category="unresolved", split=split)
+        self.assertEqual(
+            gate.which_ask(reading, ["A1"]),
+            (gate.UNSETTLED, "not firm (category unresolved; answers A1 4, A2 2, other 1)"),
+        )
+
+    def test_a_reading_that_is_not_firm_says_what_moved_it(self):
+        """Baseline and repeat can agree while a variation moves the answer: the evidence is the lead."""
+        reading = result("A1", firm=False, category="unresolved", split={"A1": 6})
+        reading["findings"][0]["evidence"] = ["inversion moved it A1 -> A2", "A1 carries it"]
+        self.assertEqual(
+            gate.which_ask(reading, ["A1"])[1],
+            "not firm (category unresolved; answers A1 6; inversion moved it A1 -> A2)",
+        )
+
+    def test_a_split_between_declared_asks_says_so(self):
+        """Two right answers need one line from Claude, not a look for a mismatch."""
+        reading = result("A1", firm=False, category="unresolved", split={"A1": 4, "A2": 2})
+        self.assertEqual(
+            gate.which_ask(reading, ["A1", "A2"]), (gate.UNSETTLED, f"not firm ({gate.DECLARED_SPLIT}: A1 4, A2 2)")
+        )
+        outside = result("A1", firm=False, category="unresolved", split={"A1": 4, "A3": 2})
+        self.assertNotIn(gate.DECLARED_SPLIT, gate.which_ask(outside, ["A1", "A2"])[1])
+        reading["findings"][0]["evidence"] = ["inversion moved it A1 -> A2"]
+        self.assertIn("A1 4, A2 2; inversion moved it A1 -> A2", gate.which_ask(reading, ["A1", "A2"])[1])
+
+    def test_a_split_on_the_rules_says_how_the_answers_split(self):
+        self.assertEqual(
+            gate.violation_stage_one(result("none", "P1", split={"none": 4, "P1": 2})),
+            (gate.UNSETTLED, "not settled (baseline none, repeat P1; answers none 4, P1 2)"),
+        )
+
     def test_a_reading_that_does_not_rest_on_its_ask_rises(self):
         """A fit read the same with its ask cut would pass, though it rests on nothing the author wrote."""
         decision, reason = gate.which_ask(result("A1", firm=True, category="cooled"), ["A1"])

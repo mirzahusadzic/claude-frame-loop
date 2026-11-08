@@ -123,6 +123,8 @@ def read_step(
         rules, why = gate.violation_stage_one(broke)
         if rules in (gate.RISE, gate.BLOCK):
             return {"decision": rules, "reason": f"violation: {why}", "usage": _spent(asked, broke)}
+        if rules == gate.UNSETTLED:  # Claude hears of both
+            reason = f"{reason} · violation: {why}"
     if decision != gate.PASS:
         return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke)}
     fit = reason
@@ -248,6 +250,7 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
             "tier_note": tier_note,
             "from": before,
             "to": after,
+            "paths": facts["paths"],
             "obligations": faults,
             **result,
         }

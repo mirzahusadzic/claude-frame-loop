@@ -23,6 +23,17 @@ UNSETTLED_NOTE = (
     "words and fix it or ask; if not, go on. Either way don't call the work checked, and don't ask for "
     "another reading of it"
 )
+# Requirements Claude named itself: there is no mismatch to look for, only whether they all apply.
+SPLIT_NOTE = (
+    "the reader split between requirements you named; confirm they all apply and go on, "
+    "don't ask for another reading of it, and don't call the work checked"
+)
+
+
+def unsettled_note(reasons: list[str]) -> str:
+    """The short note only when nothing but a split between declared requirements is open."""
+    only_named = all(gate.DECLARED_SPLIT in r and "violation: " not in r for r in reasons)
+    return SPLIT_NOTE if reasons and only_named else UNSETTLED_NOTE
 
 
 def _unsettled_words(reason: str) -> str:
@@ -265,7 +276,7 @@ def _tell(
         state.LIVE["tokens"] = result["usage"]["total_tokens"]
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
     if alone:
-        first += f" · {UNSETTLED_NOTE}"
+        first += f" · {unsettled_note([result.get('reason') or ''])}"
     notes = []
     for note in result.get("effort_notes") or []:
         notes.append(
