@@ -510,9 +510,13 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             }
         found = F.triggers([], command=command)
         # Enforce mode must ask before the call, so it goes by the command's text. Shadow mode
-        # reports after it: the hashes kept around the call settle what changed.
-        if (shell_touches_config if mode == "enforce" else shell_touches_unhashed)(command):
-            found.append("L1: the loop's own configuration or record is touched")
+        # reports after it: the hashes kept around the call settle what changed, and a command
+        # that only names the record stays in the record, for no one to read as an act.
+        if mode == "enforce":
+            if shell_touches_config(command):
+                found.append("L1: the loop's own configuration or record is touched")
+        elif shell_touches_unhashed(command):
+            _log({"event": "loop-file-named", "command": command})
         if not found:
             return (
                 {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": stray}} if stray else None

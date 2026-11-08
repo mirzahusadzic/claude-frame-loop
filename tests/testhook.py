@@ -2599,6 +2599,16 @@ class CoreTests(unittest.TestCase):
         self.assertEqual(broken, [])
         self.assertEqual(len(json.loads(path.read_text(encoding="utf-8"))), 40)
 
+    def test_a_command_that_only_names_the_loops_files_is_no_act_in_shadow_mode(self):
+        """Seen: "Claude ran a command on the switch and the record" for a loop that only read them."""
+        command = "for f in a b; do tail -n 5 .frame-loop/steps.jsonl; done"
+        tool = {"session_id": self.session, "cwd": str(REPO), "tool_name": "Bash", "tool_input": {"command": command}}
+        with unittest.mock.patch.dict(os.environ, {"FRAME_LOOP_MODE": "shadow"}):
+            out = hook.answer({"hook_event_name": "PreToolUse", **tool}) or {}
+        self.assertNotIn("the loop's own", json.dumps(out))
+        mine = [r for r in record._records_all() if r.get("session") == self.session and r.get("command") == command]
+        self.assertEqual([r["event"] for r in mine], ["loop-file-named"])
+
     def test_an_act_the_author_was_not_shown_is_never_told_to_claude_as_shown(self):
         """The prompt said "shown to the author under your reply" of a line no one was shown,
         and asked Claude to explain it: a reply about nothing, on every turn."""
@@ -4259,14 +4269,15 @@ class RulesTests(unittest.TestCase):
             {"hook_event_name": "PreToolUse", "tool_name": "Edit", "cwd": str(REPO), "tool_input": {"file_path": name}}
         )
         self.assertIn("configuration or record is touched", out["systemMessage"])
-        out = hook.answer(
-            {
-                "hook_event_name": "PreToolUse",
-                "tool_name": "Bash",
-                "cwd": str(REPO),
-                "tool_input": {"command": f"sed -i '' s/false/true/ {name}"},
-            }
-        )
+        with unittest.mock.patch.dict(os.environ, {"FRAME_LOOP_MODE": "enforce"}):  # shadow's hashes report it after
+            out = hook.answer(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                    "cwd": str(REPO),
+                    "tool_input": {"command": f"sed -i '' s/false/true/ {name}"},
+                }
+            )
         self.assertIn("configuration or record is touched", out["systemMessage"])
         Path(name).unlink()
 
