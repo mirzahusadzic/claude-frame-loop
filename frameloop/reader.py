@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -60,6 +61,23 @@ def launcher() -> tuple[list[str], Path | None] | None:
     if (GADFLY / "pyproject.toml").is_file():
         return ["uv", "run", "--project", str(GADFLY), "gadfly"], GADFLY
     return None
+
+
+def too_old() -> str | None:
+    """With an installed `gadfly` (not a checkout), the upgrade line when its version is below
+    the floor frame-loop needs; None when it is new enough or cannot be told."""
+    how = launcher()
+    if how is None or how[1] is not None:  # none, or a checkout: the developer's own
+        return None
+    said = bounded([*how[0], "--version"], 15, what="gadfly --version").stdout
+    found = re.search(r"(\d+)\.(\d+)\.(\d+)", said)
+    if not found:
+        return None
+    version = tuple(map(int, found.groups()))
+    if version >= GADFLY_FLOOR:
+        return None
+    need = ".".join(map(str, GADFLY_FLOOR))
+    return f"Gadfly {'.'.join(map(str, version))} is older than frame-loop needs ({need}): uv tool upgrade midwife"
 
 
 def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedProcess:

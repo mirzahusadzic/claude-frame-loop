@@ -41,6 +41,8 @@ cd unified-model-router && node install.mjs && node install.mjs --verify && cd .
 uv tool install 'midwife>=0.13.1'
 ```
 
+A session's start says when the installed Gadfly is missing or older than frame-loop needs, with the line to run; `uv tool upgrade midwife` upgrades it.
+
 Then install the plugin at the prompt of a Claude Code session, for every project (user) or this one (project):
 
 ```text

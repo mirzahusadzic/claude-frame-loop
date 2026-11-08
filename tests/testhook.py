@@ -531,6 +531,26 @@ class AttackTests(unittest.TestCase):
             self.assertIn(shown, said)
             self.assertTrue(Path(shown).is_file(), shown)
 
+    def test_a_session_with_an_old_gadfly_is_told_to_upgrade_it(self):
+        """Mirza: bump midwife when needed. An installed Gadfly older than frame-loop's floor
+        is said at the session's start, with the upgrade line; one at the floor says nothing."""
+        import reader
+
+        os.environ.update(env(FRAME_LOOP_READER="reader:run"))
+        start = {"hook_event_name": "SessionStart", "source": "startup", "session_id": "g", "cwd": str(REPO)}
+        floor = ".".join(map(str, reader.GADFLY_FLOOR))
+        for printed, told in (("gadfly 0.12.4", True), (f"gadfly {floor}", False), ("no version here", False)):
+            fake = [sys.executable, "-c", f"print({printed!r})"]
+            with self.subTest(printed), unittest.mock.patch.object(reader, "launcher", return_value=(fake, None)):
+                out = hook.answer(start) or {}
+                said = " ".join(out.get("systemMessage", "").split())
+                if told:
+                    self.assertIn(
+                        f"Gadfly 0.12.4 is older than frame-loop needs ({floor}): uv tool upgrade midwife", said
+                    )
+                else:
+                    self.assertNotIn("systemMessage", out)
+
     def test_the_briefing_says_what_makes_a_line_a_rule(self):
         """An agent's report: asked to compile a project's rules, it offered the author's
         corrections of its conduct, lines no change can keep or break, and sorted none

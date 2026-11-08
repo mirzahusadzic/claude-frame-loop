@@ -454,12 +454,13 @@ def _docs(name: str) -> str:
 
 
 def _gadfly_missing() -> str | None:
-    """With the live reader (reader:run), the install line when Gadfly cannot be started."""
+    """With the live reader (reader:run), the install line when Gadfly cannot be started, or
+    the upgrade line when the installed one is older than frame-loop needs."""
     if (os.environ.get("FRAME_LOOP_READER") or "").split(":")[0] != "reader":
         return None
     import reader
 
-    return reader.MISSING if reader.launcher() is None else None
+    return reader.MISSING if reader.launcher() is None else reader.too_old()
 
 
 def _written_node_faults(path: str, frame0: dict[str, Any]) -> list[str]:
