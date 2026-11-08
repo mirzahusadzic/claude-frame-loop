@@ -37,7 +37,7 @@ The confirmed line is indexed as a rule that quotes it, so the rule is always re
 
 | Event | The loop |
 | --- | --- |
-| a turn changes a guide | adds it to the line: "AGENTS.md: 3 lines added; your rules all still hold" |
+| a turn changes a guide | adds it to the line: "AGENTS.md: 3 lines added; the new lines are not rules yet: Claude offers them; your rules all still hold" |
 | a rule's quoted lines leave the guide | ▲ "some of your rules lost their wording" |
 | a session starts after a guide changed, a rule lost its lines, or a rule's files are gone | tells Claude, which offers the update; the index changes only on confirmation |
 | a line is removed on purpose | the rule is retired when its update is confirmed |

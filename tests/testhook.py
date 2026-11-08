@@ -4062,6 +4062,29 @@ class RulesTests(unittest.TestCase):
         out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
         self.assertIn("offer the line for the guide in chat", out["hookSpecificOutput"]["additionalContext"])
 
+    def test_a_guide_baseline_from_before_the_switch_flipped_counts_for_nothing(self):
+        """An agent's report: after `/frame-loop on` mid-session a turn said "~/.claude/CLAUDE.md:
+        19 lines added" though nobody touched it: with the loop off nothing was recorded, so the
+        turn compared against the last baseline before it went off."""
+        os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": "flip", "cwd": str(REPO), "prompt": "go"})
+        self.user_guide.write_text("# yours\n- one\n- two\n- three\n", encoding="utf-8")  # while the loop was off
+        time.sleep(0.05)
+        switch.write_text("on\n", encoding="utf-8")  # `/frame-loop on`, after the baseline
+        out = hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": "flip",
+                "cwd": str(REPO),
+                "last_assistant_message": "done",
+                "stop_hook_active": False,
+            }
+        )
+        self.assertNotIn("CLAUDE.md", json.dumps(out or {}, ensure_ascii=False))
+
     def test_a_turn_that_changes_a_guide_says_so_on_its_line(self):
         """Asked for: "transparency is nice"."""
 
@@ -4080,15 +4103,19 @@ class RulesTests(unittest.TestCase):
 
         mine = turn("yours", lambda: self.user_guide.write_text("# yours\n- one\n", encoding="utf-8"))
         self.assertEqual(
-            mine["systemMessage"],
-            "frame-loop · this turn\n  ~/.claude/CLAUDE.md: 2 lines added, 1 line removed; your rules all still hold",
+            " ".join(mine["systemMessage"].split()),
+            "frame-loop · this turn ~/.claude/CLAUDE.md: 2 lines added, 1 line removed; "
+            "the new lines are not rules yet: Claude offers them; your rules all still hold",
         )
 
         def append():
             with open(REPO / "AGENTS.md", "a", encoding="utf-8") as f:
                 f.write("- commit messages stay objective\n")
 
-        self.assertIn("AGENTS.md: 1 line added; your rules all still hold", turn("guide", append)["systemMessage"])
+        self.assertIn(
+            "AGENTS.md: 1 line added; the new lines are not rules yet: Claude offers them; your rules all still hold",
+            " ".join(turn("guide", append)["systemMessage"].split()),
+        )
         self.assertIsNone(turn("nothing", lambda: None))
 
     def bash(self, command, ok=True):

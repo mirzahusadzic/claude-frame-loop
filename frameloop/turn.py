@@ -21,7 +21,7 @@ from typing import Any
 import gate
 import signals as S
 import state
-from config import plugin_defaults
+from config import plugin_defaults, switch_path
 from declare import _declared
 from effort import _effort_rules, _rule_hits
 from framezero import load_frame0, rules_lost
@@ -339,6 +339,14 @@ def _turn_acts(turn: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[A
     ran = [r.get("command") for r in turn if r.get("event") == "act-ran"]
     acts = [{**r, "ran": r.get("command") in ran} if r.get("event") == "outward" else r for r in acts]
     start = next((r for r in turn if r.get("event") == "guides"), None)
+    # With the loop off nothing is recorded, so a turn after `/frame-loop on` would compare the
+    # guides with the last baseline before it went off, hours or days old (an agent's report).
+    try:
+        flipped = switch_path({"cwd": state.CWD}).stat().st_mtime
+    except OSError:
+        flipped = 0.0
+    if start and float(start.get("at", 0)) < flipped:
+        start = None
     return acts, (guide_changes(start["lines"], state.CWD) if start else [])
 
 

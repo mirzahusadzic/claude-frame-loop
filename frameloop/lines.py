@@ -271,13 +271,17 @@ def _tell(
 
 def _guide_words(change: str, lost: list[str]) -> str:
     """A guide's change as the author reads it, with what it did to the rules: "AGENTS.md:
-    5 lines added, 65 removed; your rules all still hold"."""
+    5 lines added, 2 removed; the new lines are not rules yet; your rules all still hold".
+    Only indexed lines are rules: new ones are offered, never said to have been checked."""
     name, _, counts = change.partition(" ")
-    said = []
+    said, added = [], False
     for n in counts.replace(" lines", "").replace(" line", "").split():
+        added = added or n[0] == "+"
         said.append(f"{n[1:]} line{'s' if n[1:] != '1' else ''} {'added' if n[0] == '+' else 'removed'}")
-    held = f"{len(lost)} of your rules lost their wording" if lost else "your rules all still hold"
-    return f"{name}: {', '.join(said)}; {held}"
+    if lost:  # what was lost is what the author needs to hear
+        return f"{name}: {', '.join(said)}; {len(lost)} of your rules lost their wording"
+    new = "the new lines are not rules yet: Claude offers them; " if added else ""
+    return f"{name}: {', '.join(said)}; {new}your rules all still hold"
 
 
 BUILT_IN = re.compile(r"\b[LT]\d+: ")  # the loop's own guards and triggers, as "T5: <what>"
