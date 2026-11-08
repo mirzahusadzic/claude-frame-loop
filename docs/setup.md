@@ -129,7 +129,7 @@ Then point the status line at it in `~/.claude/settings.json`; `refreshInterval`
 {
   "statusLine": {
     "type": "command",
-    "command": "~/.claude/statusline.sh",
+    "command": "sh ~/.claude/statusline.sh",
     "refreshInterval": 5
   }
 }

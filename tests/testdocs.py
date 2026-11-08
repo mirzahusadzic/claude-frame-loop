@@ -112,6 +112,13 @@ class DocsTests(unittest.TestCase):
         self.assertIn("ask Claude to compose it from a spec or an earlier plan", quickstart)
         self.assertIn("with where it came from", quickstart)
 
+    def test_the_agents_map_names_every_module_and_page(self):
+        """Sparky's third review: the map left out frameloop/procs.py and docs/roadmap.md."""
+        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+        files = [f"frameloop/{p.name}" for p in (ROOT / "frameloop").glob("*.py") if p.name != "__init__.py"]
+        files += [f"docs/{p.name}" for p in (ROOT / "docs").glob("*.md")]
+        self.assertEqual([f for f in sorted(files) if f"`{f}`" not in agents], [])
+
     def test_the_paper_is_cited_by_one_doi_everywhere(self):
         """Mirza: the paper first, then the release cites it. The citation file GitHub reads,
         the README's badge and its Cite block name one concept DOI."""
@@ -274,6 +281,24 @@ class StatusLineTests(unittest.TestCase):
         )
         self.assertEqual(done.stderr, "")
         return done.stdout
+
+    def test_the_documented_command_runs_a_script_saved_as_it_is(self):
+        """Sparky's third review: Setup pointed the status line at the script itself, which a
+        newly saved file cannot run (exit 126); the command runs it through sh."""
+        script = self.home / ".claude" / "statusline.sh"
+        script.write_text(self.script, encoding="utf-8")
+        script.chmod(0o644)
+        (self.home / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledPlugins": {"frame-loop@claude-frame-loop": True}}), encoding="utf-8"
+        )
+        command = self.settings["statusLine"]["command"].replace("~", str(self.home), 1)
+        event = json.dumps({"workspace": {"current_dir": str(self.repo)}})
+        env = {**os.environ, "HOME": str(self.home)}
+        done = subprocess.run(
+            ["sh", "-c", command], input=event, capture_output=True, text=True, encoding="utf-8", env=env
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertTrue(done.stdout.endswith(" · frame-loop on"), done.stdout)
 
     def test_the_line_says_what_the_switch_says(self):
         self.assertTrue(self.line(True).endswith(" · frame-loop on"))
