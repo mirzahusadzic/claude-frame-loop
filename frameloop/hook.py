@@ -448,6 +448,11 @@ def _loop_files_at(event: dict[str, Any]) -> Path:
     return work / "loop-files" / f"{session}-{call}.json"
 
 
+def _docs(name: str) -> str:
+    """A page of frame-loop's docs where the plugin is installed: a user has no source tree."""
+    return str(Path(__file__).resolve().parents[1] / "docs" / name)
+
+
 def _gadfly_missing() -> str | None:
     """With the live reader (reader:run), the install line when Gadfly cannot be started."""
     if (os.environ.get("FRAME_LOOP_READER") or "").split(":")[0] != "reader":
@@ -545,6 +550,17 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                     if mode == "enforce"
                     else "the write is the author's to see: frame-loop reports it to them."
                 )
+                + " How to compile it: an ask is an outcome this work is for, one claim per "
+                "sentence, kept in the author's words where they gave them and split where one "
+                "sentence holds two; a principle is how every change in this work must be (no new "
+                "dependency), a trigger what must reach the author first (a push), each only when "
+                "the author states it for this work: the guides' indexed rules are read in every "
+                "reading already, so never copy them in. Principles and triggers take no inversion. "
+                "Frame 0 covers this piece of work, not the whole project; an ask too coarse to "
+                "check in one step is split later, at a crossing, into nodes. An earlier frame kept "
+                "in another form (a FRAME-0.md, a spec) is material: reflect its lines to the "
+                "author and write only what they confirm. frame-loop's own docs are installed with "
+                f"it: {_docs('quickstart.md')}, {_docs('rules.md')} and {_docs('crossings.md')}."
             ]
             if frame0.get("unwritten")
             else ["Frame 0, asks:", *[f"- {a['id']}: {a['text']}" for a in frame0["asks"]]]

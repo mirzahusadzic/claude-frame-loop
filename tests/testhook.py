@@ -470,6 +470,28 @@ class AttackTests(unittest.TestCase):
         with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
             self.assertNotIn("systemMessage", hook.answer(start) or {})
 
+    def test_the_briefing_says_how_to_compile_frame0(self):
+        """An agent's report: a user's agent could not tell from the briefing which kind a line
+        is, whether to keep the author's words or derive requirements, how coarse an ask may
+        be, what to do with an earlier frame, or where frame-loop's own docs are."""
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(WORK / "frame0-unwritten.json")))
+        said = hook.briefing(unwritten, "shadow")
+        for part in (
+            "an ask is an outcome this work is for, one claim per sentence",
+            "a principle is how every change in this work must be",
+            "a trigger what must reach the author first",
+            "never copy them in",
+            "Principles and triggers take no inversion",
+            "Frame 0 covers this piece of work, not the whole project",
+            "write only what they confirm",
+        ):
+            self.assertIn(part, said)
+        for page in ("quickstart.md", "rules.md", "crossings.md"):
+            shown = str(ROOT / "docs" / page)
+            self.assertIn(shown, said)
+            self.assertTrue(Path(shown).is_file(), shown)
+
     def test_the_briefing_says_what_makes_a_line_a_rule(self):
         """An agent's report: asked to compile a project's rules, it offered the author's
         corrections of its conduct, lines no change can keep or break, and sorted none
