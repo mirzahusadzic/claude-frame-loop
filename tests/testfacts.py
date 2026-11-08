@@ -178,6 +178,17 @@ class PipedActTests(unittest.TestCase):
                 self.assertIsNone(facts.outward(command))
 
 
+class WrappedActTests(unittest.TestCase):
+    """Sparky's third review: `timeout 5 git push` read its duration as the program, and
+    `git lfs push` was no push."""
+
+    def test_a_push_behind_timeout_or_through_lfs_counts(self):
+        for command in ("timeout 5 git push origin main", "timeout -s KILL 30 git push", "git lfs push --all origin"):
+            with self.subTest(command):
+                self.assertEqual(facts.outward(command), "git push")
+        self.assertIsNone(facts.outward("timeout 5 git status"))
+
+
 class RehearsalTests(unittest.TestCase):
     """Sparky's second review: reading a release and rehearsing a push, a clean or a publish
     were reported as the acts themselves ("Claude made a GitHub release")."""

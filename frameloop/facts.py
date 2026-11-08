@@ -153,7 +153,10 @@ def command_words(words: list[str]) -> list[str]:
     while words and (re.fullmatch(r"\w+=.*", words[0]) or words[0] in KEYWORDS):
         words = words[1:]
     while words and words[0] in WRAPPERS:
-        words = _flags(words[1:], WRAPPERS[words[0]])
+        wrapper = words[0]
+        words = _flags(words[1:], WRAPPERS[wrapper])
+        if wrapper == "timeout" and words:  # `timeout 5 git push`: its duration comes first
+            words = words[1:]
         while words and re.fullmatch(r"\w+=.*", words[0]):
             words = words[1:]
     return words
@@ -171,7 +174,7 @@ def _act(words: list[str], depth: int) -> str | None:
     if name == "git":
         rest = _flags(args, GIT_VALUED)
         flags = "".join(a[1:] for a in rest[1:] if re.fullmatch(r"-[A-Za-z]+", a))
-        if rest[:1] == ["push"] and not (dry or "n" in flags):
+        if (rest[:1] == ["push"] or rest[:2] == ["lfs", "push"]) and not (dry or "n" in flags):
             return "git push"
         if rest[:1] == ["clean"] and ("f" in flags or "--force" in rest) and not (dry or "n" in flags):
             return "git clean"
