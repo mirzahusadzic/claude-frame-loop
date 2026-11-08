@@ -102,7 +102,7 @@ class ReadStepTests(Isolated):
         loaded.SEEN.clear()
         out = reading.read_step(FRAME0, self.step(), ["A1"], "private")
         self.assertEqual(out["decision"], "pass", out)
-        self.assertEqual({f["battery"]["reasoning"] for f in loaded.SEEN}, {"high"})
+        self.assertEqual({f["battery"]["reasoning"] for f in loaded.SEEN}, {"low"})
         self.assertFalse(hasattr(loaded, "on_progress"))
 
     def test_a_split_on_the_rules_is_not_lost_beside_an_unsettled_fit(self):

@@ -1052,16 +1052,16 @@ class EffortTests(unittest.TestCase):
                 FRAME_LOOP_READER="testhook:passing",
                 FRAME_LOOP_TIER="public",
                 FRAME_LOOP_TRAINING_OK="1",
-                FRAME_LOOP_EFFORT="low",
+                FRAME_LOOP_EFFORT="medium",
             )
         )
         seen = loaded_seen()
         out = hook.answer(plan_event("Serves: A2\nAdd a test."))
-        self.assertEqual(seen[0]["battery"]["reasoning"], "low")
-        self.assertIn("muse low ·", out["systemMessage"])
+        self.assertEqual(seen[0]["battery"]["reasoning"], "medium")
+        self.assertIn("muse medium uncalibrated ·", out["systemMessage"])
         os.environ.pop("FRAME_LOOP_EFFORT")
         hook.answer(plan_event("Serves: A2\nAdd a test."))
-        self.assertEqual(seen[-1]["battery"]["reasoning"], "high")
+        self.assertEqual(seen[-1]["battery"]["reasoning"], "low")
 
     def test_an_unknown_effort_is_never_read(self):
         os.environ.update(
@@ -1088,6 +1088,15 @@ class AdaptiveEffortTests(unittest.TestCase):
         os.environ.update(self.saved)
 
     start, stop = TurnTests.start, TurnTests.stop
+
+    def test_muse_reads_at_low_until_something_raises_it(self):
+        import effort
+
+        os.environ.pop("FRAME_LOOP_EFFORT", None)
+        for tier in ("contributor", "private"):
+            self.assertEqual(effort.effort_for("", {}, tier)[0], "low", tier)
+            self.assertEqual(effort.effort_for("Effort: high", {}, tier)[0], "high", tier)
+            self.assertEqual(effort.effort_for("", {"chars": 8001}, tier)[0], "high", tier)
 
     def test_the_agent_may_raise_the_effort_and_the_line_is_cut(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")

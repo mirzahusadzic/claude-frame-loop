@@ -12,7 +12,7 @@ from typing import Any
 # non-training) and "ultra-spark-private" need Gadfly 0.12.0 or later: 0.11.0's
 # name-based checks refused both. frame-loop itself needs 0.13.1 (reader.GADFLY_FLOOR).
 READERS: dict[str, dict[str, Any]] = {
-    "private": {"kind": "unified", "model": "openrouter/meta/muse-spark-1.3", "reasoning": "high"},
+    "private": {"kind": "unified", "model": "openrouter/meta/muse-spark-1.3", "reasoning": "low"},
     "ultra-spark-private": {
         "kind": "unified",
         "model": "ultra-spark-private/deepseek-v4.1-flash-1017",
@@ -27,7 +27,7 @@ READERS: dict[str, dict[str, Any]] = {
     "contributor": {
         "kind": "unified",
         "model": "openrouter/meta/muse-spark-1.3-contributor",
-        "reasoning": "high",
+        "reasoning": "low",
         "trainsOnInputs": ["openrouter/meta/muse-spark-1.3-contributor"],
     },
 }
