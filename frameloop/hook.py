@@ -65,6 +65,7 @@ from config import (  # noqa: E402
     loop_files,
     loop_off,
     plugin_defaults,
+    project_dir,
     shell_touches_config,
     shell_touches_unhashed,
     switch_path,
@@ -266,6 +267,23 @@ MARKER_IN_CHAIN = re.compile(r"(&&|\|\||;|\|)\s*: frame-loop-(declare|read|node)
 LONG_HOOKS = {("Stop", None), ("PreToolUse", "Bash"), ("PreToolUse", "ExitPlanMode")}
 
 
+def _say_the_project(event: dict[str, Any]) -> None:
+    """Whose switch this session's hooks read, for the band: only a hook is told the project.
+    After a reload the band knows only the current folder, and `/frame-loop on` said "on" for
+    a switch the hooks never read (seen). Never fails a hook."""
+    folder, session = os.environ.get("FRAME_LOOP_LIVE"), event.get("session_id")
+    if not (folder and session):
+        return
+    try:
+        path = Path(folder) / f"{session}.project"
+        project = project_dir(event)
+        if not path.is_file() or path.read_text(encoding="utf-8") != project:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(project, encoding="utf-8")
+    except OSError:
+        pass
+
+
 def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """The hook's stdout object, or None for no opinion. What the human reads
     (systemMessage) speaks in words; what the agent reads keeps the ids."""
@@ -276,6 +294,7 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     procs.DEADLINE = time.monotonic() + (570 if long else 25)
     state.LIVE.clear()
     plugin_defaults(event)
+    _say_the_project(event)
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
         flipped = _switched_by_a_call(event)  # the author's switch is the band's, never a shell call's
         if flipped:

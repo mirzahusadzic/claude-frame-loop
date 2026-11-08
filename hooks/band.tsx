@@ -43,12 +43,25 @@ const outcome = (decision: string | undefined) =>
             : { mark: '·', color: 'inactive', word: 'not checked', wordColor: 'inactive' }
 
 let switchPath = ''
+let liveFolder = ''
+
+// Whose switch the hooks read: what they said for this session. Only they are told the
+// project, and after a reload this band knows only the current folder.
+const followTheHooks = async ($: any) => {
+  try {
+    const project = (await $.fs.read(`${liveFolder}/${await $.session.id()}.project`)).trim()
+    if (project) switchPath = `${project}/.frame-loop/switch`
+  } catch {
+    // no hook has run yet: the folder found at the start stands
+  }
+}
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) // Windows may set only the latter
     // Where the hooks write it: FRAME_LOOP_LIVE when the settings name a folder, as the hook reads it.
     const folder = (await $.env.get('FRAME_LOOP_LIVE')) || `${home}/.claude/frame-loop/live`
+    liveFolder = folder
     // The project's switch, where the hooks read it: CLAUDE_PROJECT_DIR when it names a
     // folder that is there, else the directory the session started in.
     const project = await $.env.get('CLAUDE_PROJECT_DIR')
@@ -61,6 +74,7 @@ export const register: Register = on => {
     let seen = 0
     let shownFor = ''
     $.clock.every(250, async () => {
+      await followTheHooks($)
       try {
         const isOff = (await $.fs.read(switchPath)).trim().toLowerCase() === 'off'
         if (isOff !== (await read($, off))) await update($, off, () => isOff)
@@ -95,6 +109,7 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'frame-loop' }, async ($, e) => {
+    await followTheHooks($)
     const now = await read($, off)
     const args = e.args.trim().toLowerCase()
     const want = args === 'on' ? false : args === 'off' ? true : !now

@@ -300,6 +300,35 @@ class StatusLineTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertTrue(done.stdout.endswith(" · frame-loop on"), done.stdout)
 
+    def test_the_line_says_the_switch_the_hooks_read_and_whose_it_is(self):
+        """Seen: the session started in one repository and worked in another; `/frame-loop on`
+        and the line said on, for a switch the session's hooks never read, and nothing was
+        checked. The line reads the session's project and names it when it is not the folder."""
+        started = self.home / "started"
+        (started / ".frame-loop").mkdir(parents=True)
+        (started / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
+        (self.repo / ".frame-loop" / "switch").write_text("on\n", encoding="utf-8")
+        (self.home / ".claude" / "settings.json").write_text(
+            json.dumps({"enabledPlugins": {"frame-loop@claude-frame-loop": True}}), encoding="utf-8"
+        )
+        event = {"workspace": {"current_dir": str(self.repo), "project_dir": str(started)}}
+        env = {**os.environ, "HOME": str(self.home)}
+
+        def line(said):
+            done = subprocess.run(
+                ["sh", "-c", self.script],
+                input=json.dumps(said),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                env=env,
+            )
+            return done.stdout
+
+        self.assertTrue(line(event).endswith(" · frame-loop off for ~/started"), line(event))
+        event["workspace"]["project_dir"] = str(self.repo)
+        self.assertTrue(line(event).endswith(" · frame-loop on"), line(event))
+
     def test_the_line_says_what_the_switch_says(self):
         self.assertTrue(self.line(True).endswith(" · frame-loop on"))
         (self.repo / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")

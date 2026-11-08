@@ -4004,6 +4004,19 @@ class RulesTests(unittest.TestCase):
         self.assertIn("no check says a file must not hold one: for that, give `ran` a script", docs)
         self.assertIn("A `ran` command is matched as written", docs)
 
+    def test_the_hooks_say_whose_switch_they_read_even_when_it_is_off(self):
+        """Seen: after a reload the band knew only the current folder, and `/frame-loop on` said
+        "on" for a switch the hooks never read. Only a hook is told the session's project."""
+        live = WORK / f"live-{uid(self)}"
+        os.environ.update(FRAME_LOOP_LIVE=str(live), CLAUDE_PROJECT_DIR=str(REPO))
+        session = f"says-{uid(self)}"
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        switch.write_text("off\n", encoding="utf-8")
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(ROOT), "prompt": "go"})
+        self.assertEqual((live / f"{session}.project").read_text(encoding="utf-8"), str(REPO))
+
     def test_a_write_to_private_notes_is_told_where_rules_belong_once(self):
         """An agent's report: each way of working the author stated went to its own memory
         files, which the reader never sees, until the author asked why."""

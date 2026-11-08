@@ -98,14 +98,15 @@ The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` (read turns at 
 
 ### Status line
 
-Claude Code's status line can show whether frame-loop is on for the repository of the folder shown: on while the plugin is enabled and the switch that `/frame-loop` writes does not say off. Save this script as `~/.claude/statusline.sh`, with `jq` installed:
+Claude Code's status line can show whether frame-loop is on for the session's project, the switch its hooks read, and names that project when the folder shown is outside it: on while the plugin is enabled and the switch that `/frame-loop` writes does not say off. Save this script as `~/.claude/statusline.sh`, with `jq` installed:
 
 ```sh
 #!/bin/sh
 input=$(cat)
 dir=$(printf '%s' "$input" | jq -r '.workspace.current_dir // .cwd // empty')
 [ -z "$dir" ] && dir=$(pwd)
-repo=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
+repo=$(printf '%s' "$input" | jq -r '.workspace.project_dir // empty')
+[ -z "$repo" ] && repo=$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)
 [ -z "$repo" ] && repo=$dir
 enabled=""
 for f in "$HOME/.claude/settings.json" "$repo/.claude/settings.json" "$repo/.claude/settings.local.json"; do
@@ -117,6 +118,8 @@ loop=""
 if [ "$enabled" = "true" ]; then
   switch=$(cat "$repo/.frame-loop/switch" 2>/dev/null | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
   if [ "$switch" = "off" ]; then loop=" · frame-loop off"; else loop=" · frame-loop on"; fi
+  said=$(printf '%s' "$input" | jq -r '.workspace.project_dir // empty')
+  if [ -n "$said" ]; then case "$dir/" in "$repo"/*) ;; *) loop="$loop for $(printf '%s' "$repo" | sed "s#^$HOME#~#")" ;; esac; fi
 fi
 printf '%s%s' "$(printf '%s' "$dir" | sed "s#^$HOME#~#")" "$loop"
 ```

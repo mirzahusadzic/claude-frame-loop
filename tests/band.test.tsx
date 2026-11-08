@@ -106,6 +106,29 @@ for (const [why, projectDir, where] of [['no project folder is named', undefined
   })
 }
 
+// Seen: a reload left the band with only the current folder, and `/frame-loop on` said "on"
+// for a switch the hooks never read. What the hooks say for this session decides.
+test('the switch: /frame-loop writes where the hooks say they read it', async ($, on) => {
+  const store = seed(on, null)
+  const written: Record<string, string> = {}
+  on('fs.write', (_: unknown, e: { path: string; text: string }) => { written[posix(e.path)] = e.text; return { value: undefined } })
+  on('fs.exists', () => ({ value: false }))
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    if (posix(e.path).endsWith('/s.project')) return { value: '/started\n' }
+    throw new Error('no file')
+  })
+  on('command.run', () => ({ text: 'engine' }))
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/home/u' : undefined }))
+  on('session.id', () => ({ value: 's' }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/somewhere-else', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'frame-loop', args: 'on' })
+  expect(written).toEqual({ '/started/.frame-loop/switch': 'on\n' })
+  expect(store.off?.value).toBe(false)
+})
+
 test('past the usual count, the band never says almost done', async ($, on) => {
   seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
              step: 'does it do what you asked?', n: 1, of: 2, started: 1, step_started: 30, answers: 40, expected: 36 })
