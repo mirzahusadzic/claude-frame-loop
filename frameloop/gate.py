@@ -58,6 +58,17 @@ def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
     return RISE, f"not settled (baseline {baseline}, repeat {repeat})"
 
 
+def named_twice(result: dict[str, Any], frame0: dict[str, Any]) -> str | None:
+    """The ask an undeclared step's two readings both name, if any: agents rarely declare as
+    they work (seen in every pilot), and a person should not have to chase the bookkeeping."""
+    if _failed(result):
+        return None
+    levels = _levels(result)
+    baseline = levels.get("baseline")
+    asks = {a["id"] for a in frame0.get("asks", [])}
+    return baseline if baseline in asks and baseline == levels.get("repeat") else None
+
+
 def undeclared(result: dict[str, Any]) -> tuple[str, str]:
     """An undeclared step never passes (a reviewer): its reading, baseline and repeat, only
     says what to ask the author. Naming an ask without an ablation is no evidence that the

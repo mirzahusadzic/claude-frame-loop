@@ -211,12 +211,48 @@ def _read_only(command: str) -> bool:
     return True
 
 
+# What can carry a path from one part of a list to another, or run parts as one: such a call
+# is judged whole. A pipe stays inside its part, so `ls .frame-loop | xargs rm` is one.
+JOINED = re.compile(r"[(){}`]|<<|\b(for|while|until|if|case|select|function|eval|exec|source|alias)\b")
+SETS_UP = re.compile(r"\s*(cd|pushd|popd|export|local|readonly|declare|typeset|\w+=)")
+
+
+def _without_reads(command: str) -> str:
+    """A list's commands (`;`, `&&`, `||`, new lines) without those that only read, so that
+    `ls .frame-loop; gadfly --version` names nothing a command may write. A `cd` or an
+    assignment stays: it can aim a later command at the loop's files. What this misses,
+    the hashes kept around the call still show."""
+    if JOINED.search(command):
+        return command
+    parts, cur, i, quote = [], [], 0, ""
+    while i < len(command):
+        c = command[i]
+        if quote:
+            quote = "" if c == quote else quote
+        elif c in "'\"":
+            quote = c
+        elif c == "\\":
+            cur.append(command[i : i + 2])
+            i += 2
+            continue
+        elif c in ";\n" or command.startswith(("&&", "||"), i):
+            parts.append("".join(cur))
+            cur = []
+            i += 2 if c in "&|" else 1
+            continue
+        cur.append(c)
+        i += 1
+    parts.append("".join(cur))
+    return "; ".join(x for x in parts if x.strip() and (SETS_UP.match(x) or not _read_only(x)))
+
+
 def shell_touches_config(command: str) -> bool:
     """Whether a shell call that may write names the loop's own files: a word that is such
     a path (relative to the project, `~` and `$HOME` expanded), or such a path inside code
     a program runs. A read never does, and neither does a path that only shares a prefix."""
     if _read_only(command):
         return False
+    command = _without_reads(command)
     text, bodies = F.heredocs(command)
     ran = F.substitutions(command)  # run by the shell inside an unquoted heredoc: words to check too
     text = "\n".join([_without_printed(text), *ran])
@@ -236,6 +272,25 @@ def shell_touches_config(command: str) -> bool:
         return True
     spelled = {spelling for q in _protected() for spelling in (str(q), q.as_posix())}  # C:\\x and C:/x alike
     return any(re.search(re.escape(s) + r"(?![\w.-])", code) for s in spelled)
+
+
+# The loop's files the hashes around a shell call watch, and the folder that holds them.
+HASHED = re.compile(
+    r"(?<![\w-])\.frame-loop(?:[/\\](?:frame0\.json|rules\.json|switch|tree(?:[/\\][^\s'\"]*)?)(?![\w.-])|[/\\]?\*?(?![\w.-]|[/\\]\w))"
+    r"|\.claude[/\\](?:settings[^\s'\"]*|hooks\b[^\s'\"]*)",
+    re.I if FOLDS_CASE else 0,
+)
+
+
+def shell_touches_unhashed(command: str) -> bool:
+    """Whether a shell call may write a loop file its hashes cannot settle: the record, the
+    work folder, the loop's code, or a setting named FRAME_LOOP_. Anything else it did to the
+    loop's files shows in the hashes, so the call's text need not guess (`python3 -` that only
+    reads and runs `git check-ignore .frame-loop` looks like a write to any parser)."""
+    for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
+        if os.environ.get(name):
+            command = command.replace(os.environ[name], "")
+    return shell_touches_config(HASHED.sub("", command))
 
 
 def _without_printed(text: str) -> str:
@@ -296,6 +351,8 @@ def loop_files(event: dict[str, Any]) -> dict[str, str]:
 
     project = Path(project_dir(event))
     paths = [Path(os.environ[n]) for n in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES") if os.environ.get(n)]
+    if not os.environ.get("FRAME_LOOP_RULES") and os.environ.get("FRAME_LOOP_PLUGIN") == "1":
+        paths.append(project / ".frame-loop" / "rules.json")  # not written yet: its first write shows
     tree = os.environ.get("FRAME_LOOP_TREE")
     if tree and Path(tree).is_dir():
         paths += sorted(Path(tree).glob("*.json"))  # every node: a cap left the rest unwatched

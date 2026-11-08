@@ -28,9 +28,7 @@ holds such a line, or anything that looks like a secret, is never sent.
   (its diff, in a git repository) against frame 0 at the turn's end;
 - FRAME_LOOP_WRITER=writer:haiku: Haiku reads each change once into a plain-words label
   (through `claude -p` on the session's own login), and the reader reads the label, never
-  the change; a label that copies the change is not sent;
-- FRAME_LOOP_LABELS_OK=1: the human allows labels of this project, though it is not
-  confirmed public, to go to a reader that trains on its inputs (needs a writer).
+  the change.
 - FRAME_LOOP_LIVE=<folder>: write what a reading asks now, and what it found, to
   <folder>/<session>.json for a live view (the band in hooks/band.tsx reads it, by
   default ~/.claude/frame-loop/live); plain words only, never the change.
@@ -59,22 +57,70 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 # test) must find this very module, not a second copy.
 sys.modules.setdefault("hook", sys.modules[__name__])
 import facts as F  # noqa: E402
+import framezero  # noqa: E402
 import gate  # noqa: E402
 import readers  # noqa: E402
 import state  # noqa: E402
-from config import loop_files, loop_off, plugin_defaults, shell_touches_config, switch_path, touches_config  # noqa: E402
+from config import (  # noqa: E402
+    loop_files,
+    loop_off,
+    plugin_defaults,
+    shell_touches_config,
+    shell_touches_unhashed,
+    switch_path,
+    touches_config,
+)
 from declare import _declare_lines, _declared, _marks  # noqa: E402
-from framezero import _engaged, _tree_nodes, load_frame0, node_file_faults, project_rules  # noqa: E402
+from framezero import (  # noqa: E402
+    _engaged,
+    _quote_gone,
+    _rule_list,
+    _tree_nodes,
+    load_frame0,
+    node_file_faults,
+    project_rules,
+    rules_faults,
+    rules_file_faults,
+    rules_path,
+)
 from lines import _short_lines, _tell, for_user  # noqa: E402
 from live import _live, _live_interrupted  # noqa: E402
 from obligations import owed, ran  # noqa: E402
-from privacy import _short_path, _training_on, _trains, _writer, capture, hold, not_public  # noqa: E402
+from privacy import _short_path, _trains, _writer, real_home  # noqa: E402
 from reading import _proposal, _read, complete  # noqa: E402
-from record import _log, _records_all  # noqa: E402
+from record import _log, _records, _records_all  # noqa: E402
 from repo import _git, project_root  # noqa: E402
-from turn import _background, _last_reading, _read_turn, _turn_start, _turn_summary  # noqa: E402
+from turn import _background, _last_reading, _read_turn, _turn_start, _turn_summary, turn_so_far  # noqa: E402
 
 EDITS = {"Edit", "Write", "MultiEdit", "NotebookEdit"}
+
+
+def _index_recipe() -> str:
+    """How Claude indexes the guide's confirmed lines as rules: the file, its shape, each
+    kind's fields, and how a rule is retired."""
+    where = rules_path()
+    place = (
+        f"The index is the JSON file {where}"
+        if where
+        else "The index is the JSON file FRAME_LOOP_RULES names (none is set, so no rule is read yet)"
+    )
+    return (
+        f'{place}: {{"source": {{"file": "AGENTS.md", "sha256": "<that guide\'s sha256 once the lines '
+        'are in>"}, "rules": [...]}, one guide from the project\'s root; a rule may also quote '
+        '~/.claude/CLAUDE.md, read here only once this index holds it. Each rule is {"id": "R1", '
+        '"kind": "principle", "text": "<a short label>", "quote": ["<the guide\'s line, word for '
+        'word>"], "scope": ["*"], "accepted": true}. The kind: principle, or trigger, for the '
+        'whole project, scope ["*"]; semantic for a scoped rule, its scope the path globs it '
+        "covers; obligation for a code check, with its scope and one check: "
+        '{"changed": [globs]}, {"untouched": [globs]}, {"ran": [commands]}, {"exists": "<path>"} '
+        'or {"present": {"glob": "<glob>", "pattern": "<regex>"}}. A change to a file in the scope '
+        'owes the check; a "ran" command is matched as written, alone in its call or joined with '
+        "&&, and must pass on the final tree. No check says a file must not hold a pattern: "
+        'give "ran" a script that fails when it finds one. A rule is read by its quote, '
+        "never its label. To retire a rule, on the author's OK, remove it from the index. "
+        "frame-loop checks the index as it is written and tells you what to fix; like frame 0, "
+        "the write is the author's to see."
+    )
 
 
 def _rules_notes(frame0: dict[str, Any]) -> list[str]:
@@ -97,26 +143,32 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
     source = rules.get("source") or {}
     guide = root / source.get("file", "AGENTS.md")
     words = " ".join(guide.read_text(encoding="utf-8", errors="replace").split()) if guide.is_file() else ""
+    words += " " + framezero.user_guide_words()
     files = _git(str(root), "ls-files").stdout.splitlines()
-    for r in rules.get("rules", []):
+    for r in _rule_list(rules):
         if not r.get("accepted"):
             continue
-        scope = r.get("scope") or []
+        scope = r.get("scope") if isinstance(r.get("scope"), list) else []
+        scope = [g for g in scope if isinstance(g, str)]
         if scope and scope != ["*"] and not any(fnmatch.fnmatch(f, g) for f in files for g in scope):
-            notes.append(f"Rule {r['id']} ({', '.join(scope)}) matches no file: offer the author an update.")
-        gone = [q for q in r.get("quote") or [] if " ".join(q.split()) not in words]
-        if gone:
+            notes.append(f"Rule {r.get('id')} ({', '.join(scope)}) matches no file: offer the author an update.")
+        if _quote_gone(r, words):
             notes.append(
-                f"Rule {r['id']}'s lines are no longer in {source.get('file', 'AGENTS.md')}: "
+                f"Rule {r.get('id')}'s lines are no longer in {source.get('file', 'AGENTS.md')}: "
                 "re-index it from the guide as it stands."
             )
     if source.get("sha256") and guide.is_file():
         import hashlib
 
-        if hashlib.sha256(guide.read_bytes()).hexdigest() != source["sha256"]:
+        digest = hashlib.sha256(guide.read_bytes()).hexdigest()
+        if digest != source["sha256"]:
             notes.append(
-                f"{source.get('file', 'AGENTS.md')} changed since its rules were indexed: index its new lines."
+                f"{source.get('file', 'AGENTS.md')} changed since its rules were indexed: offer its new "
+                f"lines as rules, and on the author's OK index them, with the guide's sha256 now ({digest})."
             )
+    faults = rules_faults(rules, root, hashed=False)
+    if faults:
+        notes.append(f"The rules index has faults: {'; '.join(faults)}. Offer the author the fix.")
     return notes
 
 
@@ -133,7 +185,7 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     first, _, rest = command.strip().partition("\n")
     if "--complete" in shlex.split(first):
         frame0 = load_frame0()
-        text = complete(frame0)
+        text = complete(frame0, pending=turn_so_far(state.CWD or os.getcwd(), frame0))
         return {"systemMessage": text, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
     heredoc = HEREDOC.search(first)
     if heredoc:
@@ -143,7 +195,8 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     except (SystemExit, ValueError):
         return {
             "systemMessage": "frame-loop · read · not read: usage: : frame-loop-read "
-            "--serves A1[,A2] [--effort high] [--base REV] [<<'EOF' proposal EOF]"
+            "--serves A1[,A2] [--done O1[,O2]] [--effort high] [--base REV] "
+            f"[--touches a.py[,b.py]] [<<'EOF' proposal EOF]; see {_docs('agents.md')}"
         }
     if heredoc:
         dash, word = heredoc.group(1), heredoc.group(3)
@@ -289,9 +342,6 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         out: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": said}}
         return {**out, "systemMessage": f"frame-loop ■ not read: {missing}"} if missing else out
     if name == "UserPromptSubmit":
-        prompt = event.get("prompt") or ""
-        if _training_on() and "<cross-session-message" in prompt:
-            hold(prompt, "a message from another session")
         told = _last_reading()
         if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
             _log({"event": "briefed", "version": _version()})
@@ -302,18 +352,13 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         )
     changed: list[str] = []
     if name in ("PostToolUse", "PostToolUseFailure") and tool == "Bash":
+        changed = _loop_files_changed(event)  # first: what is logged next grows the record
         ran(event, frame0, ok=name == "PostToolUse")
         command = tool_input.get("command", "")
         # the act ran, as asked: an outward act, or a command on the loop's own files
         if name == "PostToolUse" and (F.outward(command) or shell_touches_config(command)):
             _log({"event": "act-ran", "command": command})
-        changed = _loop_files_changed(event)
     if name in ("PostToolUse", "PostToolUseFailure"):
-        if _training_on():  # a command that failed may still have printed what it read
-            brought = event.get("tool_response")
-            if name == "PostToolUseFailure":
-                brought = {"tool_response": brought, "error": event.get("error")}
-            capture(tool or "", tool_input, brought)
         if not changed:
             return None
         return _changed_report(name, changed, frame0)
@@ -329,15 +374,23 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
     if tool in EDITS:
         path = tool_input.get("file_path") or tool_input.get("notebook_path") or ""
+        if _private_notes(path) and not _records("notes-told"):  # once a session, to Claude alone; it blocks nothing
+            _log({"event": "notes-told"})
+            return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": NOTES_TOLD}}
         if path and touches_config(path):
             faults = node_file_faults(path, tool, tool_input, frame0)
-            _log({"event": "config", "tool": tool, "path": path, **({"faults": faults} if faults else {})})
-            return _rise(
-                mode,
-                "frame-loop: L1: the loop's own configuration or record is "
-                f"touched ({path}). This rises to the human."
-                + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else ""),
-                "ask",
+            index = rules_file_faults(path, tool, tool_input)
+            found = faults + index
+            _log({"event": "config", "tool": tool, "path": path, **({"faults": found} if found else {})})
+            return _told_index(
+                _rise(
+                    mode,
+                    "frame-loop: L1: the loop's own configuration or record is "
+                    f"touched ({path}). This rises to the human."
+                    + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else ""),
+                    "ask",
+                ),
+                index,
             )
         return None
 
@@ -420,7 +473,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
                 }
             }
         found = F.triggers([], command=command)
-        if shell_touches_config(command):
+        # Enforce mode must ask before the call, so it goes by the command's text. Shadow mode
+        # reports after it: the hashes kept around the call settle what changed.
+        if (shell_touches_config if mode == "enforce" else shell_touches_unhashed)(command):
             found.append("L1: the loop's own configuration or record is touched")
         if not found:
             return (
@@ -513,31 +568,75 @@ def _written_node_faults(path: str, frame0: dict[str, Any]) -> list[str]:
     return node_file_faults(path, "Write", {"content": text}, frame0) if text is not None else []
 
 
+RECORD_SIZE = "record size"  # the record only grows, so a smaller one was cut or removed
+
+
+def _record_size() -> int:
+    try:
+        return Path(os.environ.get("FRAME_LOOP_LOG") or "").stat().st_size
+    except (OSError, ValueError):
+        return 0
+
+
 def _keep_loop_files(event: dict[str, Any]) -> None:
     """Before a shell call: the hashes of the loop's own files, to compare after it (the
     text of a command cannot show every way it writes them: `git checkout -- .`)."""
     try:
         path = _loop_files_at(event)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(loop_files(event)), encoding="utf-8")
+        path.write_text(json.dumps({**loop_files(event), RECORD_SIZE: _record_size()}), encoding="utf-8")
     except OSError:
         pass
 
 
+def _told_index(out: dict[str, Any], index: list[str]) -> dict[str, Any]:
+    """A write to the rules index with faults: the human hears that in plain words; what to
+    fix, with the rules' ids, reaches Claude alone."""
+    if not index:
+        return out
+    out["systemMessage"] += "\nThe rules index has faults; Claude is told what to fix."
+    told = out["hookSpecificOutput"].get("additionalContext")
+    fix = "The rules index has faults: " + "; ".join(index) + "."
+    out["hookSpecificOutput"]["additionalContext"] = f"{told}\n{fix}" if told else fix
+    return out
+
+
+NOTES_TOLD = (
+    "frame-loop: your memory files are read by no one else, and never by the reader. A way of "
+    "working the author states goes in the guide and the rules index, offered in chat; what the "
+    "work is for goes in frame 0. Keep in memory only what is yours alone."
+)
+
+
+def _private_notes(path: str) -> bool:
+    """Whether a path is in Claude Code's memory folder for some project (an agent's report:
+    the author's rules went there by habit, a shadow rulebook no reading ever saw)."""
+    if not path:
+        return False
+    parts = Path(path).expanduser().parts
+    base = Path(real_home()).parts + (".claude", "projects")
+    return parts[: len(base)] == base and len(parts) > len(base) + 2 and parts[len(base) + 1] == "memory"
+
+
 def _changed_report(name: str | None, changed: list[str], frame0: dict[str, Any]) -> dict[str, Any]:
     """What a shell call that changed the loop's own files gets: each logged, a node file
-    checked as an edit's content is, and one line for the human."""
-    faults = []
+    and the rules index checked as an edit's content is, and one line for the human."""
+    faults, index = [], []
     for path in changed:
         found = _written_node_faults(path, frame0)
         faults += [f"{_short_path(Path(path))}: {x}" for x in found]
+        written = Path(path).is_file()
+        fixes = rules_file_faults(path, "Edit", {}) if written else []
+        index += fixes
+        found += fixes
         _log({"event": "config", "tool": "Bash", "path": path, "after": True, **({"faults": found} if found else {})})
     said = (
         "frame-loop: L1: the command changed the loop's own files "
         f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."
         + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else "")
     )
-    return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
+    out = {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
+    return _told_index(out, index)
 
 
 def _markers_alone(command: str) -> bool:
@@ -582,8 +681,10 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
         before = None
     if not isinstance(before, dict):  # the hashes kept before the call are gone: never "no change"
         return [str(path)]
+    was = before.pop(RECORD_SIZE, 0)
     after = loop_files(event)
-    return [p for p in sorted(set(before) | set(after)) if before.get(p, "") != after.get(p, "")]
+    changed = [p for p in sorted(set(before) | set(after)) if before.get(p, "") != after.get(p, "")]
+    return changed + ([os.environ["FRAME_LOOP_LOG"]] if _record_size() < was else [])
 
 
 def briefing(frame0: dict[str, Any], mode: str) -> str:
@@ -604,17 +705,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
     )
     if trains:
         trains += (
-            " frame-loop checks each reading before it leaves: GitHub must confirm this "
-            "repository is public, and no line you read from outside this project, nor "
-            "anything that looks like a secret, may be in it. Work as usual."
+            " A plain-words summary of each change goes to it, by the author's choice. It may "
+            "carry what the change holds; only secrets and the author's private names are "
+            "taken out. Work as usual."
+            if _writer()
+            else " Without a writer the change itself goes to it, in a repository GitHub confirms public only."
         )
-        if not_public(state.CWD) is not None:
-            trains += (
-                " This repository is not confirmed public; the human allowed labels here, "
-                "so only labels of your changes leave it, never the changes."
-                if _writer() and os.environ.get("FRAME_LOOP_LABELS_OK") == "1"
-                else " This repository is not confirmed public, so frame-loop will not read here."
-            )
     read = ": frame-loop-read --serves <ids>"
     lines = [
         "This project runs frame-loop. Its way of working: the human authored frame 0 "
@@ -652,7 +748,8 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "as a FRAME-0.md, the project's docs), which you compose into requirements and "
                 "reflect saying where each line came from. Only confirmed lines are written. "
                 "frame-loop's own docs are installed with "
-                f"it: {_docs('quickstart.md')}, {_docs('rules.md')} and {_docs('crossings.md')}."
+                f"it: {_docs('quickstart.md')}, {_docs('rules.md')}, {_docs('crossings.md')} and "
+                f"{_docs('agents.md')}, which gives every marker's flags and the files' shapes."
             ]
             if frame0.get("unwritten")
             else ["Frame 0, asks:", *[f"- {a['id']}: {a['text']}" for a in frame0["asks"]]]
@@ -675,6 +772,7 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "Know where every piece of content came from. Never bring anything from a private "
         "source into work a reader that trains on its inputs will read; if you must, say so "
         "before the next reading: it goes to a non-training reader or does not happen.",
+        "Your own memory is read by no reader: a way of working goes in the guide. "
         "When the author states or corrects a way of working, offer the line for the guide "
         "in chat: the author's words, in the guide's style, and the section it goes under "
         "(AGENTS.md for the project, ~/.claude/CLAUDE.md for the author's own across projects). "
@@ -684,8 +782,13 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "for the guide as one, never as a rule; when in doubt, offer it as a rule and ask. "
         "Asked to compile rules from what exists, read what is already in rule shape first "
         "(spec tables of invariants and boundaries, the guides), and past corrections last. "
-        "The author's OK is the acceptance; then write it, through the repository's own "
-        "session where it has one, and re-index its rules.",
+        "The author's OK is the acceptance; then write the line, through the repository's own "
+        "session where it has one, and index it, or a rule is never read. " + _index_recipe(),
+        "A requirement's and a rule's words reach the reader word for word on every reading, "
+        "and the private-names check catches names only, never a line whose content is private "
+        "(one describing a private method). When the reader trains on its inputs, sort these "
+        "yourself as you compile: tell the author about such a line and leave it out of frame 0 "
+        "and the index, or keep the project on the non-training tier.",
         *_rules_notes(frame0),
         "Claude Code's plan mode stays exactly as Claude Code has it: frame-loop never "
         "replaces it, blocks it or stands in for its approval, and you do not use frame-loop "
@@ -744,7 +847,8 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "propose the requirement in plain words, and on their OK add it with its inversion. The "
         "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",
         "When you present finished work, run `: frame-loop-read --complete`: each ask is read "
-        "over the steps that claimed it, and an ask no step claimed is unfulfilled. A change that "
+        "over the steps that claimed it, this turn's change included, or over all of the "
+        "session's steps when none did. A turn's declarations add up. A change that "
         "meets a check the rules require names it in its declaration, `--done <ids>`.",
         *(
             [

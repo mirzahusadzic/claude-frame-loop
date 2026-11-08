@@ -64,27 +64,20 @@ def facts_line(text: str, manifests: list[str]) -> str:
     return "Files: " + "; ".join(parts) + "." + (f" Manifests: {', '.join(touched)}." if touched else "")
 
 
-def _cache(text: str, avoid: tuple[str, ...] = ()) -> Path:
+def _cache(text: str) -> Path:
     work = Path(os.environ.get("FRAME_LOOP_WORK", Path.cwd() / ".frame-loop")) / "labels"
     work.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha256(f"{MODEL}\n{INSTRUCTION}\n{text}\n{list(avoid)}".encode()).hexdigest()
+    key = hashlib.sha256(f"{MODEL}\n{INSTRUCTION}\n{text}".encode()).hexdigest()
     return work / f"{key}.json"
 
 
-def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
+def haiku(text: str) -> dict[str, Any]:
     """The change's label, or why there is none: {"label", "seconds", "cost", "model"} or
-    {"error"}. A change already labelled is not labelled again. `avoid` holds the phrases
-    a refused label repeated from the change; the writer is asked to write without them."""
+    {"error"}. A change already labelled is not labelled again."""
     if len(text) > LIMIT:
-        return {"error": f"the change holds {len(text)} characters, more than the writer's {LIMIT}"}
-    avoid = tuple(avoid)
-    ask = "Write the label for this change." + (
-        " Your last label repeated these phrases of the change word for word; describe them "
-        "in other words: " + "; ".join(f'"{a}"' for a in avoid)
-        if avoid
-        else ""
-    )
-    cached = _cache(text, avoid)
+        text = text[:LIMIT] + f"\n[the change is cut here, at {LIMIT} of {len(text)} characters]"
+    ask = "Write the label for this change."
+    cached = _cache(text)
     keep = os.environ.get("FRAME_LOOP_WRITER_CACHE", "1") != "0"  # off: a fresh label each time
     if keep and cached.exists():
         return {**json.loads(cached.read_text(encoding="utf-8")), "cached": True}
@@ -143,6 +136,23 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
     return made
 
 
+def _mask_runs(label: str, text: str) -> str:
+    """The label without the runs it shares with `text`."""
+    flat = " ".join(label.split())
+    for run in sorted(copied(flat, text), key=len, reverse=True):
+        flat = flat.replace(run, "[…]")
+    return flat
+
+
+def mask_ask(label: str, ask: str) -> str:
+    """The label without a requirement's words: a run of WIDTH characters, or a short one whole."""
+    flat = _mask_runs(label, ask)
+    words = re.findall(r"\w+", ask.casefold())
+    if len(" ".join(ask.split())) >= WIDTH or len(words) < 3:
+        return flat
+    return re.sub(r"\b" + r"\W+".join(map(re.escape, words)) + r"\b", "[…]", flat, flags=re.I)
+
+
 def copied(label: str, text: str) -> list[str]:
     """The label's runs of WIDTH or more characters that the change holds, each the
     longest run, so the writer can be told what it repeated."""
@@ -158,18 +168,6 @@ def copied(label: str, text: str) -> list[str]:
         else:
             i += 1
     return runs
-
-
-def quotes_ask(label: str, ask: str) -> bool:
-    """Whether the label carries a requirement: WIDTH characters of it in a row, or, for a
-    requirement shorter than that, the whole of it (of three words or more, so two common
-    words never refuse a label by chance), in any case and spacing."""
-    if quotes(label, ask):
-        return True
-    words = re.findall(r"\w+", ask.casefold())
-    if len(" ".join(ask.split())) >= WIDTH or len(words) < 3:
-        return False
-    return re.search(r"\b" + r"\W+".join(map(re.escape, words)) + r"\b", label.casefold()) is not None
 
 
 def quotes(label: str, text: str) -> bool:

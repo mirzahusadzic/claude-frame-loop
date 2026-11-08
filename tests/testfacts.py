@@ -189,6 +189,19 @@ class WrappedActTests(unittest.TestCase):
         self.assertIsNone(facts.outward("timeout 5 git status"))
 
 
+class GitHubActsTests(unittest.TestCase):
+    def test_an_act_on_github_is_told_in_plain_words(self):
+        """The corpus: `gh repo edit --visibility public`, `gh pr merge` and `gh api -X POST`
+        went unreported; each is told as a change on GitHub, the command in the details."""
+        import lines
+
+        for command in ("gh pr merge 64 --merge", "gh repo edit me/x --visibility public", "gh api -X POST x"):
+            found = facts.triggers([], command=command)
+            words, _, shown = lines.act_words({"event": "outward", "triggers": found, "command": command})
+            self.assertEqual(words, "Claude changed something on GitHub", command)
+            self.assertIn(command.split()[1], shown)
+
+
 class RehearsalTests(unittest.TestCase):
     """Sparky's second review: reading a release and rehearsing a push, a clean or a publish
     were reported as the acts themselves ("Claude made a GitHub release")."""
@@ -197,6 +210,15 @@ class RehearsalTests(unittest.TestCase):
         for command in (
             "gh release view v1",
             "gh release list",
+            "gh pr view 64 --json state",
+            "gh pr checks 64",
+            "gh repo view --json visibility",
+            "gh run watch 40",
+            "gh run list --limit 3",
+            "gh secret list",
+            "gh api repos/me/x/releases/latest",
+            "gh api -X GET search/issues -f q=hello",
+            "gh api graphql -f query='{ viewer { login } }'",
             "gh -R owner/repo release download v1",
             "git push --dry-run origin main",
             "git push -n",
@@ -210,6 +232,19 @@ class RehearsalTests(unittest.TestCase):
 
     def test_the_acts_themselves_still_count(self):
         runs = {
+            "gh pr merge 64 --merge": "gh pr merge",
+            "gh pr comment 64 --body hello": "gh pr comment",
+            "gh repo edit me/x --visibility public --accept-visibility-change-consequences": "gh repo edit",
+            "gh repo create me/x --private": "gh repo create",
+            "gh repo rename y --yes": "gh repo rename",
+            "gh -R me/x workflow run pages.yml": "gh workflow run",
+            "gh run rerun 40": "gh run rerun",
+            "gh secret delete TOKEN": "gh secret delete",
+            "gh api -X POST repos/me/x/pages -f build_type=workflow": "gh api",
+            "gh api --method=DELETE repos/me/x": "gh api",
+            "gh api -XPUT repos/me/x/topics": "gh api",
+            "gh api repos/me/x/issues -f title=hello": "gh api",
+            "gh api graphql -f query='mutation { addStar(input: {}) { clientMutationId } }'": "gh api",
             "gh release create v1": "gh release",
             "gh release delete v1": "gh release",
             "gh release upload v1 dist/a.whl": "gh release",

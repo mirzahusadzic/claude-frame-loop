@@ -52,18 +52,17 @@ Then install the plugin at the prompt of a Claude Code session, for every projec
 
 To work on the plugin itself, load a clone instead: `git clone https://github.com/mirzahusadzic/claude-frame-loop.git`, then `claude --plugin-dir claude-frame-loop`.
 
-The default reader trains on what it reads, so allow it per project, in the project's `.claude/settings.local.json`; `FRAME_LOOP_LABELS_OK` is needed only for a repository GitHub does not confirm public. Claude Code passes these to the hooks:
+The default reader trains on what it reads, so allow it per project, in the project's `.claude/settings.local.json`. A plain-words summary of each change goes to it, and may carry what the change holds:
 
 ```json
 {
   "env": {
-    "FRAME_LOOP_TRAINING_OK": "1",
-    "FRAME_LOOP_LABELS_OK": "1"
+    "FRAME_LOOP_TRAINING_OK": "1"
   }
 }
 ```
 
-For private code, set `"FRAME_LOOP_TIER": "private"` there instead; it needs neither line. The loop keeps a project's files in `<project>/.frame-loop/`: `frame0.json`, `steps.jsonl` (the record), `rules.json`, `tree/` and `work/`. Commit `frame0.json`, `rules.json` and `tree/` to share them; keep the rest out of git.
+For private code, set `"FRAME_LOOP_TIER": "private"` there instead; it needs no such line. The loop keeps a project's files in `<project>/.frame-loop/`: `frame0.json`, `steps.jsonl` (the record), `rules.json`, `tree/` and `work/`. Commit `frame0.json`, `rules.json` and `tree/` to share them; keep the rest out of git.
 
 ---
 
@@ -75,7 +74,6 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | --- | --- | --- |
 | `FRAME_LOOP_TIER` | `contributor` | the reader, from the table above |
 | `FRAME_LOOP_TRAINING_OK=1` | off | allows a tier that trains on its inputs, for the project |
-| `FRAME_LOOP_LABELS_OK=1` | off | sends labels, never code, to such a tier from a repository not confirmed public |
 | `FRAME_LOOP_MODE` | `shadow` | `shadow` reports; `enforce` also asks before acts and sends Claude back on a ▲ at a turn's end |
 | `FRAME_LOOP_EFFORT` | the tier's | the reader's effort floor, `low` to `max`; risky changes raise it, never below |
 | `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that |

@@ -39,6 +39,16 @@ def _git(cwd: str, *args: str, index: str | None = None) -> subprocess.Completed
     return bounded(command, _git_timeout(), cwd=cwd, env=env, what="git")
 
 
+def still_here(cwd: str, before: str, after: str) -> list[str]:
+    """A pathspec leaving out what a snapshot lost while the file stays on disk: a file newly
+    ignored is not deleted (seen: `.gitignore` gains a line, and the reader is told the file
+    was deleted). Empty when there is none."""
+    gone = _git(cwd, "diff", "--no-renames", "--name-only", "--diff-filter=D", before, after)
+    root = project_root(cwd)
+    kept = [path for path in gone.stdout.splitlines() if (root / path).exists()]
+    return ["--", ":/", *(f":(top,exclude,literal){path}" for path in kept)] if kept else []
+
+
 def snapshot(cwd: str) -> str | None:
     """The working tree as a git tree, tracked and untracked files alike, through an
     index of the loop's own inside .git: the user's index and files are never touched.

@@ -2,13 +2,12 @@
 
 One Claude Code session with frame-loop, from the first prompt to done. Installation is in the [README](../README.md); every line the loop prints is in [Verdicts](verdicts.md).
 
-Before the first check, allow the reader for the project in its `.claude/settings.local.json`; without it, every check ends "■ not read". The second line is needed only for a repository GitHub does not confirm public; for private code, use `"FRAME_LOOP_TIER": "private"` instead of both:
+Before the first check, allow the reader for the project in its `.claude/settings.local.json`; without it, every check ends "■ not read". For private code, use `"FRAME_LOOP_TIER": "private"` instead:
 
 ```json
 {
   "env": {
-    "FRAME_LOOP_TRAINING_OK": "1",
-    "FRAME_LOOP_LABELS_OK": "1"
+    "FRAME_LOOP_TRAINING_OK": "1"
   }
 }
 ```

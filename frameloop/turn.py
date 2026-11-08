@@ -31,7 +31,7 @@ from obligations import obligations_line, outside_scope
 from privacy import _hash
 from reading import read_change
 from record import _log, _records, _records_all, rows, step_diff
-from repo import _git, project_root, snapshot
+from repo import _git, project_root, snapshot, still_here
 
 
 def guides(cwd: str) -> dict[str, str]:
@@ -117,8 +117,9 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     it owes, and its signals. No model is involved."""
     # A rename is a delete and an add, so the path it left counts for scope and checks.
     # git's own diff, never an external tool's view or a textconv's, and a failed one is said
+    only = still_here(cwd, before, after)
     runs = [
-        _git(cwd, "diff", "--no-ext-diff", "--no-textconv", *how, "--no-renames", before, after)
+        _git(cwd, "diff", "--no-ext-diff", "--no-textconv", *how, "--no-renames", before, after, *only)
         for how in (["--name-status"], ["--numstat"], ["--patch"])
     ]
     listed, counted, diff = (x.stdout for x in runs)
@@ -175,6 +176,26 @@ def _keep_step(step: dict[str, Any]) -> None:
     _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"}, "diff_file": str(path)})
 
 
+def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
+    """The step this turn's change will be when the turn ends, with what it has declared so
+    far: work presented inside its own turn is the work (an agent's report: "nothing claims
+    it" straight after declaring, and an agent cannot start a later turn by itself). Kept
+    nowhere: the turn's end records it."""
+    if os.environ.get("FRAME_LOOP_READ_TURNS") != "1":
+        return None
+    path = os.environ.get("FRAME_LOOP_LOG")
+    records = rows(path) if path and Path(path).exists() else []
+    records = [r for r in records if r.get("session") == state.SESSION]
+    last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
+    starts = [r for r in records[last_stop + 1 :] if r.get("event") == "turn-start"]
+    before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
+    if before is None or after is None or before == after:
+        return None
+    marked = [x for r in records[last_stop + 1 :] if r.get("event") == "declare" for x in r.get("lines", [])]
+    step = step_label(cwd, before, after, frame0, _declared("\n".join(marked), frame0))
+    return step if step["paths"] else None
+
+
 def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict[str, Any] | None:
     """At a turn's end: read what the turn changed. None when nothing changed."""
     if os.environ.get("FRAME_LOOP_READ_TURNS") != "1":
@@ -202,6 +223,8 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     if marked:  # the turn's markers, after any line the reply still holds
         said += "\n" + "\n".join(marked)
     step = step_label(cwd, before, after, frame0, _declared(said, frame0))
+    if not step["paths"]:  # only a file newly ignored: nothing changed
+        return None
     _keep_step(step)
     if not step["signals"]:  # checked for free: say so, so quiet never reads as "never ran"
         state.LIVE["decision"] = gate.PASS

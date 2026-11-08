@@ -6,7 +6,7 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 
 ### Map
 
-- Docs: `README.md` (what it is, install), `docs/quickstart.md`, `docs/verdicts.md`, `docs/rules.md`, `docs/privacy.md`, `docs/crossings.md`, `docs/recoil.md`, `docs/architecture.md`, `docs/setup.md`, `docs/roadmap.md`; figures in `docs/images/`, rebuilt by `scripts/figures.py`.
+- Docs: `README.md` (what it is, install), `docs/quickstart.md`, `docs/verdicts.md`, `docs/rules.md`, `docs/privacy.md`, `docs/crossings.md`, `docs/recoil.md`, `docs/architecture.md`, `docs/setup.md`, `docs/agents.md`, `docs/roadmap.md`; figures in `docs/images/`, rebuilt by `scripts/figures.py`.
 - Plugin: `.claude-plugin/plugin.json`; `.claude-plugin/marketplace.json` (the marketplace that lists it); `.claude-plugin/icon.png` (exported from `assets/icon.svg`); `hooks/hooks.json` (the command hooks); `hooks/band.tsx` (the band and `/frame-loop`); `types/index.d.ts` (the band's state).
 - Dev: Python 3.13+, Gadfly's, which `hooks/run.sh` finds for the hooks; `ruff check .` and `ruff format .` (settings in `ruff.toml`; `.git-blame-ignore-revs` lists the formatting commit); `sh scripts/coverage.sh` for branch coverage, held to the floor in `.coveragerc`; `uv run --no-project --python 3.13 python -m unittest discover -s tests` (the contract tests need a Gadfly checkout); `claude plugin test .` for the band.
 

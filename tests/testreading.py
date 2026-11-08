@@ -5,12 +5,14 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
+import framezero  # noqa: E402
 import gate  # noqa: E402
 import hook  # noqa: E402
 import reading  # noqa: E402
@@ -113,6 +115,19 @@ class ReadStepTests(Isolated):
         self.assertEqual(spent, {"calls": 4, "input_tokens": 15, "reasoned_calls": 3, "unthought": 0})
 
 
+AT_ONCE = {}
+
+
+def together(frame, only=()):
+    """A reader that answers only when every requirement's reading is running beside it."""
+    AT_ONCE["barrier"].wait()
+    return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+
+def cut_short(frame, only=()):
+    return {"error": {"message": "the reader gave no answer within 300 s, so it was stopped"}}
+
+
 class CompletionTests(Isolated):
     def setUp(self):
         super().setUp()
@@ -125,6 +140,25 @@ class CompletionTests(Isolated):
         row = {"session": self.session, "event": "step", "id": step_id, "text": "a step", "claims": asks}
         with self.log.open("a", encoding="utf-8") as out:
             out.write(json.dumps({**row, "diff_file": str(path)}) + "\n")
+
+    def test_requirements_are_read_at_once(self):
+        """A pilot: one after another, three requirements filled the hook's ten minutes, the
+        fourth went unread, and the agent waited through all of it."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:together"
+        AT_ONCE["barrier"] = threading.Barrier(len(framezero.load_frame0()["asks"]), timeout=20)
+        self.claim("S1", ["A1"])
+        self.claim("S2", ["A2"])
+        text = self.complete()
+        self.assertIn("A1 ✓", text)
+        self.assertIn("A2 ✓", text)
+
+    def test_a_reading_cut_short_is_not_shown_as_a_verdict(self):
+        """A pilot: a reading stopped at the deadline read "✗ (None, not firm)"."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:cut_short"
+        self.claim("S1", ["A1"])
+        text = self.complete()
+        self.assertIn("not read (the reader gave no answer within 300 s", text)
+        self.assertNotIn("None", text)
 
     def complete(self):
         out = hook.answer(
@@ -148,7 +182,7 @@ class CompletionTests(Isolated):
         """An ask with no reader, or a training tier not allowed, would be read as done or sent anyway."""
         self.claim("S1", ["A1"])
         os.environ.pop("FRAME_LOOP_READER")
-        self.assertIn("A1 not read (no reader configured) · A2: nothing claims it", self.complete())
+        self.assertIn("A1 not read (no reader configured) · A2 not read (no reader configured)", self.complete())
         os.environ.update(FRAME_LOOP_READER="testhook:completing", FRAME_LOOP_TIER="contributor")
         self.assertIn("A1 not read (reader tier contributor trains on its inputs", self.complete())
 

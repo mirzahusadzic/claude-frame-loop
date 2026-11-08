@@ -2,6 +2,9 @@
 
 What a reading sends, to whom, and what is refused before it leaves the machine. The reader never sees the session (your prompts, Claude's replies) or a file the change does not touch.
 
+- **`private` tier:** frame 0, the rules, and Haiku's summary and file names of each change go to an endpoint that keeps no data; secrets are refused. Not ensured: that a summary holds nothing private, or the endpoint's promise, which frame-loop cannot check.
+- **`contributor` tier:** the same go to a reader that trains on them; secrets are refused and your private names masked. Not ensured: frame-loop cannot keep a private repository's content private.
+
 ---
 
 ### Models
@@ -19,7 +22,7 @@ The plugin always labels: its hooks set the writer, so the reader never gets the
 
 ### What a reading sends
 
-Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The requirements and rules themselves go with their ids, which the reader answers with. Requirement and rule text is not masked: on a training tier, a reading whose requirements or rules hold one of your private names is refused whole by Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading.
+Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. The private-names check masks names only, so a line whose content is private stays out of frame 0 and the rules on a reader that trains on its inputs. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The requirements and rules themselves go with their ids, which the reader answers with. Requirement and rule text is not masked: on a training tier, a reading whose requirements or rules hold one of your private names is refused whole by Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading.
 
 | Reading | Labels off | Labels on |
 | --- | --- | --- |
@@ -27,6 +30,16 @@ Every reading also carries frame 0's requirements and the rules, in their own wo
 | plan, on leaving plan mode | the plan's text | the file names, if any, and the plan's label |
 | proposal, before any code | its text | its label |
 | completion | each step's free label and the claimed steps' diffs, cut at 4,000 characters each | each step's label, from its whole diff |
+
+---
+
+### What no reading sends
+
+Nothing goes to the writer or the reader without a reading, and a turn is read only when the repository's snapshot changed. A turn that only writes outside the repository is not labelled or read, and sends neither frame 0 nor the rules. The file's path and content are not seen by the loop; Claude Code still sends the session to its own model, as it always does. On a reader that trains on its inputs, the session's briefing runs `gh repo view` with the repository's address, to ask GitHub whether it is public; that sends no content.
+
+The snapshot belongs to the working tree, not to a session: when another session changes the repository during a turn, this session's turn labels and reads that change, though never this session's replies or files outside the repository.
+
+The switch holds for a whole project. To leave one session out, start it with `claude --settings '{"disableAllHooks":true}'`, adding `--resume <id>` to continue a thread; this turns off every hook in that session, other plugins' too, and it cannot be done from inside a running session.
 
 ---
 
@@ -38,21 +51,13 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 | --- | --- | --- | --- |
 | secrets: API, AWS, GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
-| repository not confirmed public | a training tier | refused unless `gh` confirms it public, or labels are on and `FRAME_LOOP_LABELS_OK=1` | frame-loop |
-| lines of 24 characters or more read from outside the project, also inside a longer line, a file name or a label (any 31 characters of one in a row) | a training tier | refused unless the public repository holds them | frame-loop, then Gadfly's withhold |
-| private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names and labels, as a whole word in any case; refused if one remains | frame-loop, then Gadfly's withhold |
-| a label sharing 24 characters in a row with the change | labels on | rewritten once, told what it repeated; refused if still copied | frame-loop |
-| a label naming an id or quoting a requirement: 24 characters of it in a row, or a shorter one of three words or more whole | labels on | refused | frame-loop |
-| a change over 40,000 characters | labels on | not labelled, not read | frame-loop |
+| no writer, and a repository not confirmed public | a training tier | refused: the change itself would go | frame-loop |
+| private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names, labels and frame 0, as a whole word in any case | frame-loop |
+| a label naming an id or quoting a requirement, so the reader's question is not answered for it | labels on | taken out, and the rest goes | frame-loop |
+| a change over 40,000 characters | labels on | labelled from its first 40,000 characters; the list of files stays whole | frame-loop |
 
 ---
 
 ### How to stop
 
 `/frame-loop off` stops every check and every send for the project at once; a background read already running finishes and writes its outcome. `/frame-loop on` resumes. `claude plugin uninstall frame-loop@claude-frame-loop` removes the plugin; the project's `.frame-loop/` folder stays until you delete it.
-
----
-
-### Not checked
-
-The checks guard what a reading sends, not what Claude writes into the project, and not a paraphrase of a private file or of a requirement. Prompts, web results and subagents' reports are not held as lines read from outside; neither are lines under 24 characters. Code: `outgoing`, `mask_private`, `outbound_faults`, `tier_for` and `not_public` in `frameloop/privacy.py`; `haiku` and `copied` in `frameloop/writer.py`; Gadfly's `midwife/withhold.py`.

@@ -253,9 +253,12 @@ class CompletionTests(unittest.TestCase):
         self.assertNotIn("claims", whole)
         self.assertNotIn("Serves", whole)
 
-    def test_an_ask_nothing_claims_is_not_read(self):
-        with self.assertRaises(frames.FrameError):
-            frames.completion(ASK0, "A2", [dict(s, claims=[]) for s in STEPS], "public", with_diffs=True)
+    def test_an_ask_nothing_claims_is_read_over_every_step(self):
+        """Pilots: real sessions declare when they present, after their steps have ended, so
+        no step claimed anything and every requirement came back unread."""
+        frame = frames.completion(ASK0, "A2", [dict(s, claims=[]) for s in STEPS], "public", with_diffs=True)
+        for step in STEPS:
+            self.assertIn(step["id"], json.dumps(frame))
 
     def test_an_ask_not_in_frame0_is_never_read(self):
         """A completion for an ask frame 0 lacks would be read against nothing and could pass."""

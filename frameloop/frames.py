@@ -332,15 +332,12 @@ def completion(
 ) -> dict[str, Any]:
     """One ask at completion or a crossing. The ask is the input; the
     steps are the body, each with its deterministic label, and the steps claimed for the
-    ask carry their diff snippets when `with_diffs`. The claimed steps are the anchors; a
-    claim itself never reaches the reader. An ask no step claims is not read: it is
-    unfulfilled by rule."""
+    ask carry their diff snippets when `with_diffs`, or all of them when none is claimed. The
+    claimed steps are the anchors; a claim itself never reaches the reader."""
     ask = next((a for a in frame0["asks"] if a["id"] == ask_id), None)
     if ask is None:
         raise FrameError(f"{ask_id} is not an ask of frame 0")
-    claimed = [s["id"] for s in steps if ask_id in s.get("claims", [])]
-    if not claimed:
-        raise FrameError(f"no step is claimed for {ask_id}: unfulfilled by rule, not read")
+    claimed = [s["id"] for s in steps if ask_id in s.get("claims", [])] or [s["id"] for s in steps]
     body = [
         {
             "id": s["id"],

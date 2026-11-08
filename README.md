@@ -24,7 +24,7 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 - **Frame 0:** your requirements, in your words, on your OK.
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
 - **Reader:** on a signal only, under Gadfly's trials; a fit without your requirement is rejected.
-- **Labels, not code:** Haiku, on your login, labels the change; the reader (another model, Muse Spark) gets the label and file names; secrets are refused. [Privacy](docs/privacy.md).
+- **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
 - **Authority:** pushes, releases, recursive deletes, the loop's own files: reported; in enforce mode, wait for your OK.
 - **Live:** a band above the prompt.
 
@@ -61,13 +61,12 @@ Gadfly: `midwife` 0.13.1 or later; the hooks run on its Python. The plugin, at a
 
 To update: `claude plugin marketplace update claude-frame-loop`, then `claude plugin update frame-loop@claude-frame-loop`, then `/reload-plugins` in each open session, or restart it; the next prompt brings the new briefing.
 
-Allow the `contributor` tier (it trains on inputs) per project, in `.claude/settings.local.json`; `FRAME_LOOP_LABELS_OK` only for a repository GitHub does not confirm public:
+Allow the `contributor` tier (it trains on inputs) per project, in `.claude/settings.local.json`. A plain-words summary of each change goes to it, and may carry what the change holds:
 
 ```json
 {
   "env": {
-    "FRAME_LOOP_TRAINING_OK": "1",
-    "FRAME_LOOP_LABELS_OK": "1"
+    "FRAME_LOOP_TRAINING_OK": "1"
   }
 }
 ```
@@ -134,4 +133,4 @@ The method, Gadfly's paper:
 
 ---
 
-[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · [Crossings](docs/crossings.md) · [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)
+[Quickstart](docs/quickstart.md) · [Verdicts](docs/verdicts.md) · [Crossings](docs/crossings.md) · [For agents](docs/agents.md) · [Recoil](docs/recoil.md) · [Architecture](docs/architecture.md) · [Roadmap](docs/roadmap.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md)

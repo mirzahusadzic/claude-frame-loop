@@ -18,7 +18,7 @@ DECLARE_FLAGS = {"--serves": "Serves", "--done": "Done", "--effort": "Effort", "
 
 
 def _claimed(said: str) -> list[str]:
-    return [x.strip(" .*") for x in _value(said, "done").split(",") if x.strip(" .*")]
+    return [x.strip(" .*") for x in _all_values(said, "done") if x.strip(" .*")]
 
 
 def _key(line: str) -> str:
@@ -34,6 +34,18 @@ def _value(plan: str, key: str) -> str:
         if ":" in line and _key(line) == key:
             return line.split(":", 1)[1].strip(" .*")
     return ""
+
+
+def _all_values(plan: str, key: str) -> list[str]:
+    """Every value of a list key, across its lines: a turn's declarations add up (an agent's
+    report: `--serves A1 A3`, then `--serves A1 A2 A3`, and the step claimed only the first)."""
+    found = [
+        x
+        for line in plan.splitlines()
+        if ":" in line and _key(line) == key
+        for x in line.split(":", 1)[1].strip(" .*").split(",")
+    ]
+    return list(dict.fromkeys(found))
 
 
 def _marks() -> list[str]:
@@ -83,5 +95,5 @@ def _masked(text: str, frame0: dict[str, Any]) -> str:
 def _declared(plan: str, frame0: dict[str, Any]) -> list[str]:
     """The asks a plan declares: a line "Serves: A3, A5" that the agent writes in it."""
     asks = {a["id"] for a in frame0["asks"]}
-    ids = [x.strip(" .*") for x in _value(plan, "serves").split(",")]
-    return [x for x in ids if x in asks]
+    ids = [x.strip(" .*") for x in _all_values(plan, "serves")]
+    return list(dict.fromkeys(x for x in ids if x in asks))

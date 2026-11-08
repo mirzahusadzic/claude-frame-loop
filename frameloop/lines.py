@@ -20,6 +20,7 @@ import state
 ACT_WORDS = (
     ("git push", "Claude pushed", False),
     ("gh release", "Claude made a GitHub release", False),
+    ("(gh ", "Claude changed something on GitHub", False),
     ("npm publish", "Claude published a package", False),
     ("twine upload", "Claude published a package", False),
     (" publish", "Claude published a package", False),
@@ -38,6 +39,7 @@ ACT_WORDS = (
 ASKED = {
     "git push": "Claude asked to push",
     "gh release": "Claude asked to make a GitHub release",
+    "(gh ": "Claude asked to change something on GitHub",
     "npm publish": "Claude asked to publish a package",
     "twine upload": "Claude asked to publish a package",
     " publish": "Claude asked to publish a package",
@@ -121,8 +123,6 @@ def _verdict(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     reason = result["reason"]
     if result.get("where") and " is not confirmed public" in reason:
         return "not read: not confirmed public, and the reader trains on its inputs"
-    if result.get("where") and "read from outside the project" in reason:
-        return "not read: it holds lines read from outside the project"
     if result.get("where") and "looks like it holds a secret" in reason:
         return "not read: it looks like it holds a secret"
     named = re.match(r"violation: names (\S+): stage 2", reason)

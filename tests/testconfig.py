@@ -28,6 +28,55 @@ class Isolated(unittest.TestCase):
 
 
 class ShellTests(Isolated):
+    def test_what_the_hashes_settle_is_not_guessed_from_the_text(self):
+        for settled in (
+            "python3 - <<'EOF'\nimport subprocess\nsubprocess.run(['git', 'check-ignore', '-q', '.frame-loop'])\nEOF",
+            "rm -rf .frame-loop",
+            "tool .frame-loop/frame0.json",
+            "tool .frame-loop/rules.json .frame-loop/switch .frame-loop/tree/a.json",
+            "tool .frame-loop/*",
+            "tool .claude/settings.local.json",
+            "printf x > .claude/hooks/guard.sh",
+        ):
+            self.assertFalse(config.shell_touches_unhashed(settled), settled)
+        for unsettled in (
+            "sed -i s/a/b/ .frame-loop/steps.jsonl",
+            "tool .frame-loop/work/x",
+            "tool .frame-loop/new.json",
+            "export FRAME_LOOP_MODE=shadow",
+        ):
+            self.assertTrue(config.shell_touches_unhashed(unsettled), unsettled)
+
+    def test_a_read_beside_another_command_is_not_a_touch(self):
+        """An agent's report: `ls -la .frame-loop 2>/dev/null; git status --short; gadfly --version`
+        rose as touching the loop's files. Any program not on the read list made every path in
+        the call count, while the docs say a command that only reads them is not an act."""
+        for read in (
+            "ls -la .frame-loop 2>/dev/null; git status --short; git log --oneline -1; gadfly --version",
+            "gadfly --version; ls .frame-loop",
+            "uv --version && cat .frame-loop/frame0.json",
+            "make build || cat .frame-loop/steps.jsonl",
+            "gadfly --version\nls .frame-loop",
+        ):
+            self.assertFalse(config.shell_touches_config(read), read)
+        for write in (
+            "ls .frame-loop; rm .frame-loop/frame0.json",
+            "gadfly --version; echo off > .frame-loop/switch",
+            "cat .frame-loop/frame0.json > copy; tool .frame-loop/frame0.json",
+            "cd .frame-loop; rm frame0.json",
+            "pushd .frame-loop && tool frame0.json",
+            "F=.frame-loop/frame0.json; rm $F",
+            "export F=.frame-loop/frame0.json; tool",
+            "ls .frame-loop | xargs rm",
+            "(ls .frame-loop; true) | xargs rm",
+            "{ ls .frame-loop; } | xargs rm",
+            "rm $(ls .frame-loop/*)",
+            "for f in .frame-loop/*; do rm $f; done",
+            "ls .frame-loop & rm .frame-loop/x",
+            "tool 'a;b' .frame-loop/x",
+        ):
+            self.assertTrue(config.shell_touches_config(write), write)
+
     def test_a_read_with_an_unclosed_quote_is_still_only_a_read(self):
         """A quote left open would raise in the guard, or make a read of the record rise."""
         self.assertFalse(config.shell_touches_config("cat '.frame-loop/steps.jsonl"))

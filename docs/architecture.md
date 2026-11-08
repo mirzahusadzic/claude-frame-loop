@@ -1,6 +1,6 @@
 # Architecture
 
-frame-loop runs as Claude Code hooks on the user's machine. Each turn's change passes the free checks; a signal sends a label, never code, through the privacy gate to the reader; fixed rules turn the reader's answers into one line. What leaves the machine is in [Privacy](privacy.md).
+frame-loop runs as Claude Code hooks on the user's machine. Each turn's change passes the free checks; a signal sends a label through the privacy gate to the reader; fixed rules turn the reader's answers into one line. What leaves the machine is in [Privacy](privacy.md).
 
 ---
 
@@ -181,7 +181,7 @@ flowchart LR
 | Snapshot | each prompt | the working tree, tracked and untracked | a git tree, through the loop's own index; your index is never touched |
 | Free checks | each turn's end | the diff between the turn's first snapshot and now | files, size, the checks the rules require, and the signals |
 | Writer | on a signal, with labels on | the change, without the requirements Claude named, ids masked | a plain-words label, by Haiku through `claude -p` on your login |
-| Privacy gate | before any call | the label and file names | refuses secrets and lines read from outside the project; masks private names |
+| Privacy gate | before any call | the label and file names | refuses secrets; masks private names |
 | Reader | each read | frame 0, the rules, the label | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
 | Gate | after the reader | the answers | ✓, ▲ or ■, by fixed rules |
 | Guard | each tool call | the command or the file | an act that is yours, on the line |
@@ -196,7 +196,7 @@ flowchart LR
 | `SessionStart`, on startup, resume, clear and compact | briefs Claude: frame 0, the rules, the markers |
 | `UserPromptSubmit` | takes the snapshot; tells Claude what the last turn's check found |
 | `PreToolUse`, on `ExitPlanMode`, `Bash` and the edit tools | the guard; reads Claude's markers; checks a node file before it is written; reads a plan on leaving plan mode |
-| `PostToolUse`, on the read tools, `Bash` and MCP tools | records lines read from outside the project, and the commands the rules ask for that passed |
+| `PostToolUse`, on the read tools, `Bash` and MCP tools | records the commands the rules ask for that passed |
 | `PostToolUseFailure`, on `Bash` | records the commands the rules ask for that failed |
 | `Stop` | the free checks, then the read on a signal; the line |
 

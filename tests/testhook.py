@@ -27,6 +27,7 @@ import readers  # noqa: E402
 import record  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
+import writer as writer_module  # noqa: E402
 
 SEEN = []
 FIXTURE = ROOT / "tests/fixtures/frame0.json"
@@ -159,6 +160,7 @@ def make_repo(path, url=None):
 
 
 PUBLIC = make_repo(PUBLIC_REPO, PUBLIC_URL)
+os.chdir(WORK)  # a hook event with no cwd must not read this checkout's own switch or settings
 
 
 def plan_event(plan, cwd=PUBLIC):
@@ -242,16 +244,25 @@ class HookTests(unittest.TestCase):
         out = hook.answer(plan_event("Refactor everything."))
         self.assertIn("declares no ask", out["hookSpecificOutput"]["additionalContext"])
 
-    def test_an_undeclared_change_is_read_for_the_question_and_never_passes(self):
-        """the reading only says what to ask the author; an undeclared change
-        rises whatever it reads."""
+    def test_an_ask_named_twice_is_tested_as_a_declaration_would_be(self):
+        """Every pilot's agent declared nothing as it worked, and the author was asked to chase
+        it though the reader named the right ask. Naming is no evidence, so the fit tests it."""
         os.environ.update(env(FRAME_LOOP_READER="testhook:naming_twice"))
+        seen = loaded_seen()
+        out = hook.answer(plan_event("Refactor everything."))
+        self.assertEqual([f["name"].split("-")[0] for f in seen], ["undeclared", "which", "violation"])
+        self.assertEqual(seen[0]["only"], ["baseline", "repeat"])
+        self.assertNotIn("declare it?", out["systemMessage"])
+        self.assertNotRegex(out["systemMessage"], r"\bA\d\b")
+
+    def test_an_undeclared_change_with_no_ask_named_is_read_for_the_question_and_never_passes(self):
+        """The reading only says what to ask the author: it rises whatever it reads."""
+        os.environ.update(env(FRAME_LOOP_READER="testhook:reading_another_purpose"))
         seen = loaded_seen()
         out = hook.answer(plan_event("Refactor everything."))
         self.assertEqual([f["name"].split("-")[0] for f in seen], ["undeclared"])
         self.assertEqual(seen[0]["only"], ["baseline", "repeat"])
         self.assertIn("rise", out["systemMessage"].split("\n")[0])
-        self.assertIn("declare it?", out["systemMessage"])
         self.assertNotRegex(out["systemMessage"], r"\bA\d\b")
         for levels, says in (
             (("A2", "A2"), "declare it?"),
@@ -273,7 +284,7 @@ class HookTests(unittest.TestCase):
             for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()
             if json.loads(x).get("event") == "plan"
         ][-1]
-        self.assertEqual(plan["question"], "declare")
+        self.assertEqual(plan["question"], "missing-ask")
 
     def test_without_a_reader_nothing_passes_by_default(self):
         os.environ.update(env(FRAME_LOOP_MODE="enforce"))
@@ -316,6 +327,11 @@ def canned_walk(start, frames):
     import testhook as loaded
 
     return loaded.WALKED
+
+
+def reading_another_purpose(frame, only=()):
+    SEEN.append({**frame, "only": list(only)})
+    return {"exit": 0, "findings": [{"levels": {"baseline": "other", "repeat": "other"}}]}
 
 
 def naming_twice(frame, only=()):
@@ -498,7 +514,7 @@ class AttackTests(unittest.TestCase):
             "Frame 0 changes only with the author",
             "is the author's alone: never write it",
             ": frame-loop-read --complete",
-            "an ask no step claimed is unfulfilled",
+            "over all of the session's steps when none did",
             "Large work can nest",
             "nodes nest to any depth",
         ):
@@ -1502,7 +1518,7 @@ class CoopTests(unittest.TestCase):
 class WriterTests(unittest.TestCase):
     """Haiku as a writer. With a writer, a reading sends a label of the change, never
     the change; a private project sends labels to a reader that trains on its inputs only
-    where the human allowed it (FRAME_LOOP_LABELS_OK=1)."""
+    once the human allowed the tier."""
 
     def setUp(self):
         self.saved = dict(os.environ)
@@ -1512,7 +1528,6 @@ class WriterTests(unittest.TestCase):
                 FRAME_LOOP_TIER="public",
                 FRAME_LOOP_TRAINING_OK="1",
                 FRAME_LOOP_WRITER="testhook:labeling",
-                FRAME_LOOP_LABELS_OK="1",
                 FRAME_LOOP_WORK=str(WORK / "writer-work"),
             )
         )
@@ -1532,20 +1547,38 @@ class WriterTests(unittest.TestCase):
         self.assertIn("adds a short greeting and a test for it", self.sent(seen))
         self.assertNotIn("greeting helper", self.sent(seen))
 
-    def test_without_the_allowance_a_private_project_is_still_never_read(self):
-        os.environ.pop("FRAME_LOOP_LABELS_OK")
+    def test_a_turn_that_only_writes_outside_the_repository_sends_nothing(self):
+        """An agent's question: a session writes a private note outside the repository. No
+        writer, no reader; and when another session changes the repository during the turn,
+        that change is read, never this session's note or reply."""
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:recording"
+        os.environ["FRAME_LOOP_READ_TURNS"] = "1"
+        os.environ.pop("FRAME_LOOP_BACKGROUND", None)
+        WRITTEN.clear()
         seen = loaded_seen()
-        out = hook.answer(plan_event("Serves: A2\nAdd a test.", cwd=self.private))
-        self.assertIn("not confirmed public", out["systemMessage"])
-        self.assertEqual(seen, [])
+        note = Path(tempfile.mkdtemp(prefix="frame-loop-outside-")) / "note.md"
+        private = "private-note-words-98765"
+        base = {"session_id": "outside", "cwd": str(self.private)}
+        hook.answer({**base, "hook_event_name": "UserPromptSubmit", "prompt": "write the note"})
+        write = {"tool_name": "Write", "tool_input": {"file_path": str(note), "content": private}}
+        self.assertIsNone(hook.answer({**base, **write, "hook_event_name": "PreToolUse"}))
+        note.write_text(private, encoding="utf-8")
+        self.assertIsNone(hook.answer({**base, **write, "hook_event_name": "PostToolUse", "tool_response": {}}))
+        stop = {"hook_event_name": "Stop", "last_assistant_message": f"Wrote {private}.", "stop_hook_active": False}
+        hook.answer({**base, **stop})
+        self.assertEqual((WRITTEN, seen), ([], []))
+        hook.answer({**base, "hook_event_name": "UserPromptSubmit", "prompt": "again"})
+        (Path(self.private) / "elsewhere.py").write_text(f"print('{uid(self)}')\n", encoding="utf-8")
+        hook.answer({**base, **stop})
+        self.assertTrue(WRITTEN)
+        self.assertNotIn(private, json.dumps(WRITTEN) + self.sent(seen))
 
-    def test_a_label_that_copies_the_change_or_no_label_is_not_sent(self):
-        for spec, why in (("testhook:quoting", "the label quotes the change"), ("testhook:failing", "no label")):
-            os.environ["FRAME_LOOP_WRITER"] = spec
-            seen = loaded_seen()
-            out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
-            self.assertIn(why, out["systemMessage"], spec)
-            self.assertEqual(seen, [], spec)
+    def test_no_label_is_not_sent(self):
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:failing"
+        seen = loaded_seen()
+        out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
+        self.assertIn("no label", out["systemMessage"])
+        self.assertEqual(seen, [])
 
     def test_a_secret_never_reaches_the_writer(self):
         """The first review: the writer got the raw change, a secret in it included."""
@@ -1556,13 +1589,15 @@ class WriterTests(unittest.TestCase):
         self.assertIn("secret", out["systemMessage"])
         self.assertEqual(WRITTEN, [])
 
-    def test_a_secret_on_a_removed_or_unchanged_line_is_held_too(self):
+    def test_a_secret_on_a_removed_or_unchanged_line_is_refused_too(self):
         """The first review: with labels off, only added lines were checked, and a diff
         sends removed and context lines too."""
         token = "AKIA" + "ABCDEFGHIJKLMNOP"
         for line in (f"-KEY = '{token}'", f" KEY = '{token}'"):
             diff = f"--- a/x.py\n+++ b/x.py\n@@ -1,2 +1,2 @@\n{line}\n+print('hi')\n"
-            self.assertTrue(any("secret" in f for f in privacy.outbound_faults(diff, "the turn's change")), line)
+            self.assertIn(
+                "secret", privacy.outgoing(diff, "the turn's change", "private", framezero.load_frame0())[1], line
+            )
 
     def test_without_a_reader_the_writer_is_never_called(self):
         """The first review: with no reader set, the change still went to the writer."""
@@ -1573,34 +1608,17 @@ class WriterTests(unittest.TestCase):
         self.assertIn("no reader", out["systemMessage"])
         self.assertEqual(WRITTEN, [])
 
-    def test_a_label_that_copies_is_rewritten_once_and_checked_again(self):
-        """Seen on the loop's own release: Haiku echoed a docstring's phrase, and the reading
-        was lost. One rewrite, told which phrases it repeated, faces the same check."""
-        os.environ["FRAME_LOOP_WRITER"] = "testhook:echoing"
-        seen = loaded_seen()
-        out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
-        self.assertNotIn("quotes the change", out["systemMessage"])
-        self.assertEqual(len(seen), 2)
-        self.assertNotIn("greeting helper", self.sent(seen))
-        os.environ["FRAME_LOOP_WRITER"] = "testhook:stubborn"
-        seen = loaded_seen()
-        out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
-        self.assertIn("the label quotes the change", out["systemMessage"])
-        self.assertEqual(seen, [])
-
     def test_the_briefing_says_the_reader_reads_a_label(self):
         text = hook.briefing(framezero.load_frame0(), "shadow")
         self.assertIn("reads only that label, never your code", text)
 
-    def test_with_labels_allowed_the_briefing_never_says_a_private_project_is_not_read(self):
-        """Seen live on frame-loop itself: the briefing said "will not read here" while its
-        labels were read."""
-        state.CWD = str(self.private)
-        text = hook.briefing(framezero.load_frame0(), "shadow")
-        self.assertNotIn("will not read here", text)
-        self.assertIn("only labels of your changes leave it", text)
-        os.environ.pop("FRAME_LOOP_LABELS_OK")
-        self.assertIn("will not read here", hook.briefing(framezero.load_frame0(), "shadow"))
+    def test_the_briefing_says_truthfully_what_goes_to_a_training_reader(self):
+        """frame-loop cannot keep a private repository's content private, and says so."""
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn("A plain-words summary of each change goes to it", said)
+        self.assertIn("It may carry what the change holds", said)
+        docs = " ".join((ROOT / "docs/privacy.md").read_text(encoding="utf-8").split())
+        self.assertIn("cannot keep a private repository's content private", docs)
 
     def test_the_writer_sees_the_change_alone_never_the_declaration_or_an_id(self):
         """Haiku cannot claim an ask it never saw."""
@@ -1614,15 +1632,16 @@ class WriterTests(unittest.TestCase):
         self.assertNotRegex(loaded.WRITTEN[0], r"\bA[23]\b")
 
     def test_a_label_naming_an_id_or_quoting_an_ask_is_not_sent(self):
-        for spec, why in (
-            ("testhook:id_naming", "the label names an id of frame 0"),
-            ("testhook:ask_quoting", "the label quotes an ask"),
-        ):
+        frame0 = framezero.load_frame0()
+        for spec in ("testhook:id_naming", "testhook:ask_quoting"):
             os.environ["FRAME_LOOP_WRITER"] = spec
             seen = loaded_seen()
-            out = hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
-            self.assertIn(why, out["systemMessage"], spec)
-            self.assertEqual(seen, [], spec)
+            hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
+            self.assertTrue(seen, spec)
+            sent = self.sent(seen)
+            self.assertNotRegex(sent, r"\bA[0-9]\b", spec)
+            for ask in frame0["asks"]:
+                self.assertFalse(writer_module.quotes(sent, ask["text"]), spec)
 
     def test_a_label_carrying_a_short_requirement_whole_is_not_sent(self):
         """The claims ledger: a requirement under the copy guard's 24 characters rode in a
@@ -1637,9 +1656,9 @@ class WriterTests(unittest.TestCase):
         path.write_text(json.dumps(short), encoding="utf-8")
         os.environ.update(FRAME_LOOP_FRAME0=str(path), FRAME_LOOP_WRITER="testhook:short_ask_quoting")
         seen = loaded_seen()
-        out = hook.answer(plan_event("Serves: A2\nAdd the limit and its unit test.", cwd=self.private))
-        self.assertIn("the label quotes an ask", out["systemMessage"])
-        self.assertEqual(seen, [])
+        hook.answer(plan_event("Serves: A2\nAdd the limit and its unit test.", cwd=self.private))
+        self.assertTrue(seen)
+        self.assertNotIn("HTTP 429", self.sent(seen))
 
     def test_code_states_the_files_and_the_copy_guard_reads_only_the_writers_part(self):
         import writer
@@ -1675,10 +1694,31 @@ class WriterTests(unittest.TestCase):
             self.assertIn("error", writer.haiku("a change"))
             self.assertTrue(run.called)
 
-    def test_the_writer_refuses_a_change_longer_than_it_reads_and_quotes_is_exact(self):
+    def test_a_change_too_long_for_the_writer_is_labelled_from_its_start(self):
+        """A long change lost its reading entirely; its label now covers what the writer can
+        read, says where it was cut, and the list of files, made by code, stays whole."""
         import writer
 
-        self.assertIn("error", writer.haiku("x" * (writer.LIMIT + 1)))
+        told = {}
+
+        class Done:
+            returncode = 0
+            stdout = json.dumps({"result": "a label", "total_cost_usd": 0.0})
+            stderr = ""
+
+        def run(command, **kwargs):
+            told["text"] = kwargs.get("input") or " ".join(command)
+            return Done()
+
+        os.environ["FRAME_LOOP_WRITER_CACHE"] = "0"
+        with unittest.mock.patch.object(writer.subprocess, "run", run):
+            made = writer.haiku("x" * (writer.LIMIT + 1))
+        self.assertNotIn("error", made)
+        self.assertIn(f"cut here, at {writer.LIMIT} of {writer.LIMIT + 1}", told["text"])
+
+    def test_quotes_is_exact(self):
+        import writer
+
         self.assertTrue(writer.quotes("it returns the parsed frame object", "+    return the parsed frame object\n"))
         self.assertFalse(writer.quotes("adds a greeting", "+print('hello world, this is a test')"))
 
@@ -1736,10 +1776,7 @@ class VisibilityTests(unittest.TestCase):
 
 
 class ChannelTests(unittest.TestCase):
-    """The default seal (Asked for: "in the bg deterministically without me even noticing it"):
-    the agent works normally; whatever it read from outside the project is hashed line by
-    line, and a training-tier reading whose outgoing text holds such a line, or a secret,
-    is never sent. Only hashes are kept."""
+    """What a reading sends in a project on a training tier: no secret, and the work is read."""
 
     SECRET_LINE = "def private_algorithm(x): return sum(v * 7919 for v in x)  # from a private repo"
 
@@ -1796,281 +1833,40 @@ class ChannelTests(unittest.TestCase):
         self.assertIn("pass", out["systemMessage"])
         self.assertEqual(len(seen), 2)
 
-    def test_a_line_read_from_outside_never_leaves_in_a_diff(self):
-        self.post(
-            "Read",
-            {"file_path": str(self.outside)},
-            {"file": {"filePath": str(self.outside), "content": self.outside.read_text(encoding="utf-8")}},
-        )
-        seen = loaded_seen()
-        out = self.read_turn(self.SECRET_LINE)
-        self.assertIn("not read", out["systemMessage"])
-        self.assertIn("outside", out["systemMessage"])
-        self.assertEqual(seen, [])
-
-    def test_every_spelling_of_an_outside_path_in_a_shell_read_is_held(self):
-        """The first review: `cat</path`, a quoted path with a space and `$HOME/…` read a
-        file outside the project, and its lines were not held."""
-        spaced = Path(OUTSIDE) / f"frame-loop private {uid(self)}" / "notes.py"
-        spaced.parent.mkdir()
-        spaced.write_text(self.SECRET_LINE + "\n", encoding="utf-8")
-        self.addCleanup(lambda: spaced.exists() and spaced.unlink())
-        home = Path(os.path.expanduser("~"))
-        commands = [f"cat<{self.outside}", f'cat "{spaced}"']
-        if home in self.outside.resolve().parents:  # only where the temporary folder is under the home
-            commands.append("cat $HOME/" + str(self.outside.resolve().relative_to(home)))
-        self.assertIn(privacy.real_home() + "/notes/a.py", privacy._path_words('cat "${HOME}/notes/a.py"'))
-        for n, command in enumerate(commands):
-            session = f"spell-{n}-{uid(self)}"
-            self.post("Bash", {"command": command}, {"stdout": self.SECRET_LINE + "\n"}, session=session)
-            seen = loaded_seen()
-            out = self.read_turn(self.SECRET_LINE, session=session)
-            self.assertIn("outside", out["systemMessage"], command)
-            self.assertEqual(seen, [], command)
-
-    def test_held_lines_are_checked_against_the_repository_in_one_call(self):
-        """The first review: two git calls for each held line in an outgoing reading."""
-        many = [f"an outside line long enough to hold, number {n:03d} {uid(self)}" for n in range(100)]
-        self.outside.write_text("\n".join(many) + "\n", encoding="utf-8")
-        self.post(
-            "Read",
-            {"file_path": str(self.outside)},
-            {"content": self.outside.read_text(encoding="utf-8")},
-            session="many",
-        )
-        state.SESSION = "many"
-        with unittest.mock.patch.object(privacy, "_git", wraps=privacy._git) as calls:
-            faults = privacy.outbound_faults("\n".join(many), "the label")
-        self.assertTrue(any("100 line(s)" in f for f in faults), faults)
-        self.assertLessEqual(calls.call_count, 2)
-
-    def test_another_session_is_not_held_by_this_ones_reads(self):
-        self.post(
-            "Read",
-            {"file_path": str(self.outside)},
-            {"content": self.outside.read_text(encoding="utf-8")},
-            session="c2",
-        )
-        seen = loaded_seen()
-        self.read_turn(self.SECRET_LINE, session="c3")
-        self.assertEqual(len(seen), 2)
-
-    def test_a_line_in_any_script_is_held(self):
-        """Sparky's second review: a line needed three Latin letters to be held, so a line of
-        Chinese read from outside left in a diff."""
-        line = "这是一段从项目外部读取的私有代码注释，不应离开本机"
-        self.outside.write_text(line + "\n", encoding="utf-8")
-        self.post("Read", {"file_path": str(self.outside)}, {"content": line + "\n"})
-        seen = loaded_seen()
-        out = self.read_turn(line)
-        self.assertIn("not read", out["systemMessage"])
-        self.assertEqual(seen, [])
-
-    def test_held_text_inside_a_longer_line_or_a_file_name_never_leaves(self):
-        """Sparky's second review: the seal compared whole lines, so a held line kept inside
-        a string, a comment or a file name left in the diff."""
-        phrase = f"outside-source-phrase-741852963-keep-private-{uid(self)[-6:]}"
-        self.outside.write_text(phrase + "\n", encoding="utf-8")
-        for n, (path, text) in enumerate(
-            [
-                ("hello.py", f"NOTE = '{phrase}'  # kept from a private file\n"),
-                (f"{phrase}.txt", "an ordinary line of our own\n"),
-            ]
-        ):
-            with self.subTest(path):
-                session = f"inside-{n}-{uid(self)}"
-                self.post("Read", {"file_path": str(self.outside)}, {"content": phrase + "\n"}, session=session)
-                hook.answer(
-                    {"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"}
-                )
-                (REPO / path).write_text(text, encoding="utf-8")
-                self.addCleanup(
-                    lambda p=REPO / path: (
-                        git("checkout", "--", p.name) if p.name == "hello.py" else p.unlink(missing_ok=True)
-                    )
-                )
-                seen = loaded_seen()
-                out = hook.answer(
-                    {
-                        "hook_event_name": "Stop",
-                        "session_id": session,
-                        "cwd": str(REPO),
-                        "last_assistant_message": "Serves: A1",
-                        "stop_hook_active": False,
-                    }
-                )
-                self.assertIn("outside the project", out["systemMessage"])
-                self.assertEqual(seen, [])
-                if path == "hello.py":
-                    git("checkout", "--", "hello.py")
-                else:
-                    (REPO / path).unlink(missing_ok=True)
-
-    def test_a_line_of_digits_is_held_and_a_rule_of_dashes_is_not(self):
-        """Sparky's third review: a line needed three letters, so 30 digits read from outside
-        (an account number, a key) left in a diff."""
-        digits = "123456789012345678901234567890"
-        self.outside.write_text(digits + "\n", encoding="utf-8")
-        self.post("Read", {"file_path": str(self.outside)}, {"content": digits + "\n"})
-        seen = loaded_seen()
-        out = self.read_turn(digits)
-        self.assertIn("not read", out["systemMessage"])
-        self.assertEqual(seen, [])
-        self.assertIsNone(privacy._norm("-" * 40))
-
-    def test_short_or_common_lines_are_never_held(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": "short\nreturn x\n}\n"})
-        seen = loaded_seen()
-        self.read_turn("short")
-        self.assertEqual(len(seen), 2)
-
-    def test_reading_inside_the_project_is_not_held(self):
-        inside = REPO / "notes.md"
-        inside.write_text(self.SECRET_LINE + "\n", encoding="utf-8")
-        self.addCleanup(lambda: inside.exists() and inside.unlink())
-        self.post("Read", {"file_path": str(inside)}, {"content": inside.read_text(encoding="utf-8")})
-        seen = loaded_seen()
-        self.read_turn(self.SECRET_LINE)
-        self.assertEqual(len(seen), 2)
-
-    def test_a_shell_command_on_an_outside_path_or_the_network_is_held(self):
-        for command in (
-            f"cat {self.outside}",
-            "gh api repos/example/private-repo/contents/x.py",
-            "curl -s https://example.invalid/private",
-        ):
-            session = f"sh-{abs(hash(command)) % 10000}"
-            self.post("Bash", {"command": command}, {"stdout": self.SECRET_LINE, "stderr": ""}, session=session)
-            seen = loaded_seen()
-            out = self.read_turn(self.SECRET_LINE, session=session)
-            self.assertIn("outside the project", out["systemMessage"], command)
-            self.assertEqual(seen, [], command)
-
-    def test_every_way_a_shell_command_reads_from_outside_is_held(self):
-        """Sparky's second review: after `cd ..` a relative read is outside; a quoted client
-        is still a client; a file the command removes is gone when the hook looks; and a
-        command that fails still prints what it read, in Claude Code's failure event."""
-        gone = Path(OUTSIDE) / f"frame-loop-gone-{uid(self)}.txt"
-        cases = [
-            ("PostToolUse", f"cd .. && cat {self.outside.name}"),
-            ("PostToolUse", '"curl" -s example.invalid/private'),
-            ("PostToolUse", f"cat {gone}; rm {gone}"),
-            ("PostToolUseFailure", f"cat {self.outside}; exit 1"),
-        ]
-        for n, (event, command) in enumerate(cases):
-            with self.subTest(command):
-                self.check_held(event, command, f"ways-{n}-{uid(self)}")
-
-    def check_held(self, event, command, session):
+    def test_a_file_newly_ignored_is_not_a_deleted_file(self):
+        """A pilot: `.gitignore` gained an untracked file's name, the turn's snapshot lost it,
+        and the reader was told the settings file was deleted. A file truly gone stays gone."""
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:labeling"
+        name = f"notes-{uid(self)[-6:]}.txt"
+        (REPO / name).write_text("kept by the person\n", encoding="utf-8")
+        self.addCleanup(lambda: (REPO / name).unlink(missing_ok=True))
+        ignore = REPO / ".git" / "info" / "exclude"
+        before = ignore.read_text(encoding="utf-8") if ignore.exists() else ""
+        self.addCleanup(lambda: ignore.write_text(before, encoding="utf-8"))
+        session = f"ignored-{uid(self)}"
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"})
+        ignore.write_text(before + name + "\n", encoding="utf-8")
+        (REPO / "hello.py").write_text("print('hello')\nprint('more')\n", encoding="utf-8")
+        self.addCleanup(lambda: git("checkout", "--", "hello.py"))
         hook.answer(
             {
-                "hook_event_name": event,
-                "tool_name": "Bash",
+                "hook_event_name": "Stop",
                 "session_id": session,
                 "cwd": str(REPO),
-                "tool_input": {"command": command},
-                **(
-                    {"tool_response": {"stdout": self.SECRET_LINE + "\n", "stderr": ""}}
-                    if event == "PostToolUse"
-                    else {"error": f"Exit code 1\n{self.SECRET_LINE}"}
-                ),
+                "last_assistant_message": "done",
+                "stop_hook_active": False,
             }
         )
-        seen = loaded_seen()
-        out = self.read_turn(self.SECRET_LINE, session=session)
-        self.assertIn("outside the project", out["systemMessage"], command)
-        self.assertEqual(seen, [], command)
-
-    def test_a_shell_command_inside_the_project_is_not_held(self):
-        self.post("Bash", {"command": "cat README.md"}, {"stdout": self.SECRET_LINE, "stderr": ""}, session="sh-in")
-        seen = loaded_seen()
-        self.read_turn(self.SECRET_LINE, session="sh-in")
-        self.assertEqual(len(seen), 2)
-
-    def test_mcp_results_and_messages_from_other_sessions_are_held(self):
-        self.post("mcp__docs__read", {}, {"text": self.SECRET_LINE}, session="mcp")
-        seen = loaded_seen()
-        self.assertIn("outside the project", self.read_turn(self.SECRET_LINE, session="mcp")["systemMessage"])
-        hook.answer(
-            {
-                "hook_event_name": "UserPromptSubmit",
-                "session_id": "msg",
-                "cwd": str(REPO),
-                "prompt": f'<cross-session-message from="x">\n{self.SECRET_LINE}\n</cross-session-message>',
-            }
-        )
-        self.assertIn("outside the project", self.read_turn(self.SECRET_LINE, session="msg")["systemMessage"])
-        self.assertEqual(seen, [])
+        rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()]
+        step = next(r for r in rows if r.get("event") == "step" and r.get("session") == session)
+        self.assertEqual(step["paths"], ["hello.py"])
+        self.assertFalse(any("deleted-file" in s for s in step["signals"]), step["signals"])
 
     def test_a_secret_never_leaves(self):
         seen = loaded_seen()
         out = self.read_turn('API_KEY = "sk-ant-api03-' + "x" * 40 + '"')
         self.assertIn("secret", out["systemMessage"])
         self.assertEqual(seen, [])
-
-    def test_only_hashes_are_kept(self):
-        self.post("Read", {"file_path": str(self.outside)}, {"content": self.outside.read_text(encoding="utf-8")})
-        kept = "".join(
-            p.read_text(encoding="utf-8") for p in Path(os.environ["FRAME_LOOP_WORK"]).rglob("*") if p.is_file()
-        )
-        self.assertNotIn("private_algorithm", kept)
-        self.assertTrue(kept)
-
-    def test_a_proposal_is_checked_too(self):
-        self.post(
-            "Read",
-            {"file_path": str(self.outside)},
-            {"content": self.outside.read_text(encoding="utf-8")},
-            session="prop",
-        )
-        seen = loaded_seen()
-        command = f": frame-loop-read --serves A1 <<'EOF'\n{self.SECRET_LINE}\nEOF"
-        out = hook.answer(
-            {
-                "hook_event_name": "PreToolUse",
-                "tool_name": "Bash",
-                "session_id": "prop",
-                "cwd": str(REPO),
-                "tool_input": {"command": command},
-            }
-        )
-        self.assertIn("outside the project", out["systemMessage"])
-        self.assertEqual(seen, [])
-
-    def test_a_line_already_in_the_public_repository_is_never_held(self):
-        common = "from __future__ import annotations  # a line the project already has"
-        (REPO / "base.py").write_text(common + "\n", encoding="utf-8")
-        git("add", "-A")
-        git("commit", "-q", "--allow-empty", "-m", "base line")
-        self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="common")
-        seen = loaded_seen()
-        self.read_turn(common, session="common")
-        self.assertEqual(len(seen), 2)
-
-    def test_the_briefing_says_the_check_runs_before_a_reading_leaves(self):
-        out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
-        text = out["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("before it leaves", text)
-        self.assertNotIn("Sandboxed mode", text)
-
-    def test_the_withhold_file_gadfly_enforces_holds_the_session_and_excuses_the_repository(self):
-        self.post(
-            "Read",
-            {"file_path": str(self.outside)},
-            {"content": self.outside.read_text(encoding="utf-8")},
-            session="wh",
-        )
-        common = "from __future__ import annotations  # already in the public repository"
-        (REPO / "base.py").write_text(common + "\n", encoding="utf-8")
-        git("add", "-A")
-        git("commit", "-q", "--allow-empty", "-m", "base line")
-        self.post("Read", {"file_path": str(self.outside)}, {"content": common + "\n"}, session="wh")
-        self.read_turn(common, session="wh")
-        data = json.loads(Path(os.environ["FRAME_LOOP_WITHHOLD"]).read_text(encoding="utf-8"))
-        lines = data["training"]["lines"]
-        self.assertIn(privacy._hash(privacy._norm(self.SECRET_LINE)), lines)
-        self.assertNotIn(privacy._hash(privacy._norm(common)), lines)  # excused: the repository has it
-        self.assertTrue(data["always"]["patterns"])
 
     def test_no_wall_and_no_sandbox_in_channel_mode(self):
         self.assertIsNone(
@@ -3341,7 +3137,7 @@ class CoreTests(unittest.TestCase):
             )
 
         hidden = {
-            f": frame-loop-declare --serves A1 > {frame0}": "loop's own",
+            f": frame-loop-declare --serves A1 > {frame0}": "not read",  # the hashes report the write after it
             ": frame-loop-declare --serves A1 & git push origin main": "git push",
             ": frame-loop-read --serves A1 <<'EOF'\nadd a test\nEOF\ngit push origin main": "git push",
             ": frame-loop-read --serves A1 <<'EOF' > notes.md\nadd a test\nEOF": "not read",
@@ -3563,7 +3359,64 @@ class CoreTests(unittest.TestCase):
         a1 = next(f for f in seen if "-A1-" in f["name"])
         self.assertIn("greet by name", json.dumps(a1["body"]))
         self.assertIn(lines.for_user("A1 ✓", framezero.load_frame0()), out["systemMessage"])
-        self.assertIn(lines.for_user("A3: nothing claims it", framezero.load_frame0()), out["systemMessage"])
+        self.assertTrue(any(n.startswith("completion-") and "-A3-" in n for n in names), names)
+
+    def test_a_turns_declarations_add_up(self):
+        """An agent's record: `--serves A1 A3`, then `--serves A1 A2 A3`, and the step claimed
+        A1 and A3: only the first line counted."""
+        frame0 = framezero.load_frame0()
+        self.assertEqual(declare._declared("Serves: A1, A3\nServes: A1, A2, A3", frame0), ["A1", "A3", "A2"])
+        self.assertEqual(declare._claimed("Done: O1\nDone: O1, R7"), ["O1", "R7"])
+
+    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
+    def test_completion_inside_the_turn_reads_that_turns_claims(self):
+        """An agent's report: declared, then `--complete` in the same turn, and "nothing claims
+        it" for each: a turn's change was a step only once the turn ended, and an agent cannot
+        start a later turn by itself. The turn's end still records its one step."""
+
+        def bash(command):
+            return hook.answer(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Bash",
+                    "session_id": self.session,
+                    "cwd": str(REPO),
+                    "tool_input": {"command": command},
+                }
+            )
+
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        (REPO / "hello.py").write_text(f"print('greet by name {uid(self)}')\n", encoding="utf-8")
+        (REPO / "README.md").write_text(f"usage {uid(self)}\n", encoding="utf-8")
+        bash(": frame-loop-declare --serves A1")
+        bash(": frame-loop-declare --serves A1 A2")
+        seen = loaded_seen()
+        bash(": frame-loop-read --complete")
+        names = [f["name"] for f in seen]
+        self.assertTrue(any(n.startswith("completion-") and "-A1-" in n for n in names), names)
+        self.assertTrue(any(n.startswith("completion-") and "-A2-" in n for n in names), names)
+        hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "done",
+                "stop_hook_active": False,
+            }
+        )
+        made = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        steps = [r for r in made if r.get("event") == "step" and r.get("session") == self.session]
+        self.assertEqual([r["claims"] for r in steps], [["A1", "A2"]])
+
+    def test_the_briefing_and_docs_say_a_completion_counts_its_own_turn(self):
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn("this turn's change included", said)
+        self.assertIn("A turn's declarations add up", said)
+        docs = (ROOT / "docs/agents.md").read_text(encoding="utf-8")
+        self.assertIn("this turn's change included", docs)
+        self.assertIn("add up across its markers", docs)
 
 
 class TreeHookTests(CoreTests):
@@ -3860,6 +3713,7 @@ class ReadOnlyTests(unittest.TestCase):
         words = " ".join(guide.decode().split())
         lost = [r["id"] for r in rules["rules"] for q in r.get("quote") or [] if " ".join(q.split()) not in words]
         self.assertEqual(lost, [])
+        self.assertEqual(framezero.rules_faults(rules, ROOT), [])
 
     def test_no_band_hook_can_hold_up_a_prompt(self):
         """`claude plugin validate`: a gating hook without `.catch` fails closed, so a throw
@@ -4107,6 +3961,263 @@ class RulesTests(unittest.TestCase):
         elsewhere = violation_frames(lambda: (REPO / "README.md").write_text(f"run it {uid(self)}\n", encoding="utf-8"))
         self.assertTrue(elsewhere)
         self.assertFalse(any("R4" in f for f in elsewhere))
+
+    def index(self, rules, sha=None):
+        import hashlib
+
+        guide = (REPO / "AGENTS.md").read_bytes()
+        return {"source": {"file": "AGENTS.md", "sha256": sha or hashlib.sha256(guide).hexdigest()}, "rules": rules}
+
+    def test_the_briefing_says_how_to_index_a_confirmed_line(self):
+        """An agent's report: the briefing said to re-index a confirmed line, and neither it
+        nor rules.md said where the index is, its shape, or how a rule is retired, so nine
+        confirmed lines stayed unread."""
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn(f"The index is the JSON file {self.rules}", said)
+        for part in (
+            '"quote": ["<the guide\'s line, word for word>"]',
+            '"accepted": true',
+            "obligation for a code check",
+            "semantic for a scoped rule",
+            "remove it from the index",
+            "A rule is read by its quote, never its label",
+        ):
+            self.assertIn(part, said)
+        for check in framezero.CHECKS:
+            self.assertIn(f'{{"{check}": ', said)
+        del os.environ["FRAME_LOOP_RULES"]
+        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(REPO))
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn(f"The index is the JSON file {REPO / '.frame-loop' / 'rules.json'}", said)
+        docs = " ".join((ROOT / "docs/rules.md").read_text(encoding="utf-8").split())
+        self.assertIn("### The rules index", (ROOT / "docs/rules.md").read_text(encoding="utf-8"))
+        for part in ('"quote"', '"accepted": true', "removes it from the index", *framezero.CHECKS):
+            self.assertIn(part, docs)
+
+    def test_the_briefing_says_what_a_code_check_cannot_say(self):
+        """An agent's report: a rule that a path must not hold a pattern has no check of its
+        own, and nothing said how to write one, so the agent would not write the index."""
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        docs = " ".join((ROOT / "docs/rules.md").read_text(encoding="utf-8").split())
+        self.assertIn('No check says a file must not hold a pattern: give "ran" a script', said)
+        self.assertIn('A change to a file in the scope owes the check; a "ran" command is matched as written', said)
+        self.assertIn("no check says a file must not hold one: for that, give `ran` a script", docs)
+        self.assertIn("A `ran` command is matched as written", docs)
+
+    def test_a_write_to_private_notes_is_told_where_rules_belong_once(self):
+        """An agent's report: each way of working the author stated went to its own memory
+        files, which the reader never sees, until the author asked why."""
+        session = f"notes-{uid(self)}"
+        memory = Path(privacy.real_home()) / ".claude/projects/-some-project/memory/a-rule.md"
+
+        def write(path):
+            return hook.answer(
+                {
+                    "hook_event_name": "PreToolUse",
+                    "tool_name": "Write",
+                    "session_id": session,
+                    "cwd": str(REPO),
+                    "tool_input": {"file_path": str(path), "content": "a rule"},
+                }
+            )
+
+        told = write(memory)["hookSpecificOutput"]
+        self.assertIn("goes in the guide and the rules index", told["additionalContext"])
+        self.assertNotIn("permissionDecision", told)
+        self.assertNotIn("systemMessage", write(memory) or {})
+        self.assertIsNone(write(memory))
+        self.assertFalse(hook._private_notes(str(REPO / "memory/a-rule.md")))
+        self.assertFalse(hook._private_notes(str(Path(privacy.real_home()) / ".claude/projects/-x/session.jsonl")))
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn("Your own memory is read by no reader", said)
+
+    def test_a_project_may_index_a_line_of_the_authors_own_guide(self):
+        """An agent's report: lines confirmed for `~/.claude/CLAUDE.md` had no index that could
+        hold them, as each index checks quotes against one project guide."""
+        line = f"- a run states its question first {uid(self)}"
+        own = WORK / f"own-guide-{uid(self)}.md"
+        own.write_text(f"# mine\n{line}\n", encoding="utf-8")
+        os.environ["FRAME_LOOP_USER_GUIDE"] = str(own)
+        made = self.index(
+            [{"id": "R1", "kind": "principle", "text": "runs", "quote": [line], "scope": ["*"], "accepted": True}]
+        )
+        self.assertEqual(framezero.rules_faults(made, REPO), [])
+        self.rules.write_text(json.dumps(made), encoding="utf-8")
+        self.assertEqual(framezero.rules_lost(str(REPO)), [])
+        self.assertIn(line.strip("- "), json.dumps(framezero.load_frame0()["principles"]))
+        self.assertNotIn("no longer in", " ".join(hook.briefing(framezero.load_frame0(), "shadow").split()))
+        own.write_text("# mine\n", encoding="utf-8")
+        self.assertEqual(framezero.rules_lost(str(REPO)), ["R1"])
+        self.assertTrue(framezero.rules_faults(made, REPO))
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn("a rule may also quote ~/.claude/CLAUDE.md", said)
+        self.assertIn("once that project's index quotes it", (ROOT / "docs/rules.md").read_text(encoding="utf-8"))
+
+    def test_an_index_written_as_the_briefing_shows_is_read(self):
+        """The recipe's own shape is read as rules, and nothing in it is a fault."""
+        line = "- docs change with the code"
+        made = self.index(
+            [{"id": "R1", "kind": "principle", "text": "docs move", "quote": [line], "scope": ["*"], "accepted": True}]
+        )
+        self.assertEqual(framezero.rules_faults(made, REPO), [])
+        self.rules.write_text(json.dumps(made), encoding="utf-8")
+        self.assertIn({"id": "R1", "text": line}, framezero.load_frame0()["principles"])
+
+    def test_a_write_to_the_index_that_cannot_be_read_tells_claude_what_to_fix(self):
+        """A misquoted line, an unknown kind or a stale hash would leave a confirmed rule
+        unread with nothing said. The human hears it in plain words; Claude gets the fix."""
+        bad = self.index(
+            [
+                {"id": "R1", "kind": "rule", "text": "x", "quote": ["not in the guide"], "scope": ["*"]},
+                {"id": "R1", "kind": "obligation", "text": "y", "quote": ["- docs change"], "scope": ["*"]},
+            ],
+            sha="0" * 64,
+        )
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Write",
+                "cwd": str(REPO),
+                "tool_input": {"file_path": str(self.rules), "content": json.dumps(bad)},
+            }
+        )
+        told = out["hookSpecificOutput"]["additionalContext"]
+        for part in (
+            "source.sha256 is not AGENTS.md's",
+            "R1: its kind is one of",
+            "R1: its quote is not word for word in AGENTS.md",
+            "an id is R and a number, once in the index",
+            "a code check has one check",
+            "accepted is true",
+        ):
+            self.assertIn(part, told)
+        self.assertIn("Claude is told what to fix", out["systemMessage"])
+        self.assertNotIn("R1", out["systemMessage"])
+        self.assertEqual(framezero.rules_file_faults(str(self.rules), "Write", {"content": "{"}), ["it is not JSON"])
+        self.assertEqual(framezero.rules_faults([], REPO), ['it is not {"source": {...}, "rules": [...]}'])
+
+    def test_a_session_start_names_an_index_fault_and_the_guides_new_hash(self):
+        """The briefing says what keeps the index from being read, and, for a changed guide,
+        the hash its next index carries."""
+        import hashlib
+
+        (REPO / "AGENTS.md").write_text("# guide, edited\n", encoding="utf-8")
+        out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
+        text = " ".join(out["hookSpecificOutput"]["additionalContext"].split())
+        self.assertIn(hashlib.sha256((REPO / "AGENTS.md").read_bytes()).hexdigest(), text)
+        self.assertIn("The rules index has faults: R1: its quote is a list", text)
+        self.assertIn("Offer the author the fix", text)
+        self.assertNotIn("R3:", text)  # offered, not confirmed: not held to the shape
+
+    def test_a_malformed_rule_leaves_the_loop_running_and_is_named(self):
+        """The index is hand-written now. A rule with no kind, or not an object, stopped every
+        hook with a KeyError; the rest of the index is read and the briefing names the fault."""
+        line = "- docs change with the code"
+        made = self.index(
+            [
+                {"id": "R1", "kind": "principle", "text": "ok", "quote": [line], "scope": ["*"], "accepted": True},
+                {"id": "R2", "accepted": True},
+                {"kind": "principle", "accepted": True},
+                "not a rule",
+                {"id": "R3", "kind": "obligation", "text": "t", "quote": [line], "scope": "x", "accepted": True},
+            ]
+        )
+        self.rules.write_text(json.dumps(made), encoding="utf-8")
+        out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
+        text = " ".join(out["hookSpecificOutput"]["additionalContext"].split())
+        self.assertNotIn("not running", text)
+        self.assertIn(f"- R1: {line}", text)
+        for part in ("R2: its kind is one of", "rule 4 is not an object", "R3: its scope is a list of path globs"):
+            self.assertIn(part, text)
+        self.rules.write_text("[]", encoding="utf-8")
+        out = hook.safe_answer({"hook_event_name": "SessionStart", "source": "startup", "cwd": str(REPO)})
+        self.assertIn("is not a rules index", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_enforce_mode_asks_and_still_tells_claude_what_to_fix(self):
+        os.environ["FRAME_LOOP_MODE"] = "enforce"
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Write",
+                "cwd": str(REPO),
+                "tool_input": {"file_path": str(self.rules), "content": "{"},
+            }
+        )
+        self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "ask")
+        self.assertIn("it is not JSON", out["hookSpecificOutput"]["additionalContext"])
+
+    def shell(self, name, command, write=None):
+        event = {"tool_name": "Bash", "session_id": "shell", "cwd": str(REPO), "tool_input": {"command": command}}
+        pre = hook.answer({**event, "hook_event_name": "PreToolUse"})
+        if write:
+            write()
+        return pre, hook.answer({**event, "hook_event_name": name, "tool_response": {"stdout": "", "stderr": ""}})
+
+    def test_a_script_that_only_reads_the_loops_files_stays_quiet_in_shadow_mode(self):
+        """An agent's report, the sixth of its kind: `python3 -` that read a list and ran
+        `git check-ignore -q .frame-loop` was told to the author as a command on the loop's
+        files. No parser can settle what a program does; the hashes around the call can."""
+        script = (
+            "python3 - <<'EOF'\nimport subprocess\nprint(open('list.txt').read())\n"
+            "subprocess.run(['git', 'check-ignore', '-q', '.frame-loop'])\nEOF"
+        )
+        pre, post = self.shell("PostToolUse", script)
+        self.assertFalse((pre or {}).get("systemMessage"))
+        self.assertFalse((post or {}).get("systemMessage"))
+        self.assertFalse(
+            [r for r in record._records_all() if r.get("event") == "outward" and r.get("session") == "shell"]
+        )
+        os.environ["FRAME_LOOP_MODE"] = "enforce"  # it must ask before the call: only the text is there yet
+        pre, _ = self.shell("PostToolUse", script)
+        self.assertEqual(pre["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_a_script_that_changes_the_loops_files_is_still_reported_after_it(self):
+        """The hashes carry the report in shadow mode: a write through a script, and a record
+        cut or removed, which only grows otherwise."""
+        pre, post = self.shell("PostToolUse", "sh s.sh", lambda: self.rules.write_text("{}", encoding="utf-8"))
+        self.assertFalse((pre or {}).get("systemMessage"))
+        self.assertIn("changed the loop's own files", post["systemMessage"])
+        self.rules.write_text(json.dumps(self.index([])), encoding="utf-8")
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": "shell", "cwd": str(REPO), "prompt": "go"})
+        self.assertGreater(self.log.stat().st_size, 0)
+        _, post = self.shell("PostToolUse", "sh s.sh", lambda: self.log.write_text("", encoding="utf-8"))
+        self.assertIn("changed the loop's own files", post["systemMessage"])
+        self.assertIn(self.log.name, post["systemMessage"])
+        _, post = self.shell("PostToolUse", "sh s.sh")
+        self.assertFalse((post or {}).get("systemMessage"))
+
+    def test_docs_give_every_markers_flags_the_separator_and_frame_0s_keys(self):
+        """An agent's report: the read marker's flags were only in the briefing, the separator
+        for several ids nowhere, and frame 0's top-level keys had to be inferred."""
+        import ondemand
+
+        page = (ROOT / "docs/agents.md").read_text(encoding="utf-8")
+        flags = [
+            o for a in ondemand.parser()._actions for o in a.option_strings if o.startswith("--") and o != "--help"
+        ]
+        for flag in [*flags, *declare.DECLARE_FLAGS]:
+            self.assertIn(f"`{flag}", page)
+        for part in (
+            "separated by commas",
+            "--serves A1,A2",
+            ": frame-loop-node <id>",
+            '"asks"',
+            '"principles"',
+            '"triggers"',
+        ):
+            self.assertIn(part, page)
+        said = hook.briefing(framezero.load_frame0(), "shadow")
+        self.assertIn("word for word on every reading", said)
+        self.assertIn("the private-names check catches names only", " ".join(said.split()))
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        self.assertIn(str(ROOT / "docs/agents.md"), hook.briefing(unwritten, "shadow"))
+
+    def test_an_index_not_written_yet_is_watched_by_its_hash(self):
+        """Installed as a plugin with no index yet, a script that writes the first one is
+        seen after the call, as a change to any loop file is."""
+        del os.environ["FRAME_LOOP_RULES"]
+        os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(REPO))
+        self.assertIn(str(REPO / ".frame-loop" / "rules.json"), config.loop_files({"cwd": str(REPO)}))
 
     def test_the_rules_index_is_the_loops_own_record_wherever_it_lives(self):
         """FRAME_LOOP_RULES belongs in the guard. An index outside the work

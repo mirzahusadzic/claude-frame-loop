@@ -19,13 +19,13 @@ import state
 from declare import _claimed, _declared, _masked, _without_declaration
 from effort import _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
-from lines import _reader_name, _tell, for_user
+from lines import _reader_name, _tell
 from live import _live_step, _on_answers, _ran
 from obligations import obligations_line, outside_scope
-from privacy import _short_path, _writer, outgoing, tier_for, withhold_file
+from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
 from procs import within
 from record import _log, _records, _records_all, step_diff
-from repo import _git, project_root
+from repo import _git, project_root, still_here
 
 
 def _reader():
@@ -66,10 +66,15 @@ def read_step(
             frame["battery"]["reasoning"] = effort
         return frame
 
-    if not declared:  # read only for the question to put to the author; it never passes
+    if not declared:  # what it is for, as the reader reads it, twice alike
         _live_step("what is it for? (Claude didn't say)", 1, 1, "undeclared")
         read = run(at(frames.undeclared(frame0, step, tier)), only=("baseline", "repeat"))
         _ran(read)
+        named = gate.named_twice(read, frame0)
+        if named:  # naming an ask is no evidence: the fit below tests it, as it tests a declaration
+            step = {**step, "claim": {"serves": [named]}}
+            declared = [named]
+    if not declared:  # no ask to test: only the question to put to the author; it never passes
         decision, reason = gate.undeclared(read)
         question = (
             "declare"
@@ -149,6 +154,7 @@ def _read(
     tier allowed, or it rises unread. `said` is where the agent's lines are (the reply,
     for a turn); by default the text itself (a plan)."""
     tier, tier_note = tier_for(said if said is not None else text)
+    frame0 = mask_frame(frame0, tier) if tier else frame0
     faults = frames.frame0_faults(frame0)
     # The declaration never reaches the reader: its lines are cut, and every id of
     # frame 0 left in the text is masked.
@@ -197,8 +203,9 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     """Read the change between two trees against frame 0: the diff for the reader, the
     agent's lines (`said`) for the declaration and effort only. Logged as `kind`."""
     started = time.time()
-    patch = _git(cwd, "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch", before, after)
-    named = _git(cwd, "diff", "--no-ext-diff", "--name-status", "--no-renames", before, after)
+    only = still_here(cwd, before, after)
+    patch = _git(cwd, "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch", before, after, *only)
+    named = _git(cwd, "diff", "--no-ext-diff", "--name-status", "--no-renames", before, after, *only)
     diff = patch.stdout
     status = [line.split("\t") for line in named.stdout.splitlines() if "\t" in line]
     if patch.returncode != 0 or named.returncode != 0:  # a failed reading is never a pass
@@ -266,15 +273,19 @@ def completion_frame(
     return frame
 
 
+COMPLETION_AT_ONCE = 4  # asks read at once, each with its own parallel calls
+
+
 def _cut(text: str, cap: int) -> str:
     """A text cut at `cap` characters says so, as the turn's diff does."""
     return text if len(text) <= cap else text[:cap] + f"\n[diff cut at {cap} characters]"
 
 
-def complete(frame0: dict[str, Any], said: str = "") -> str:
-    """When the agent presents its work: each ask the session's steps claim is read once
-    with the claimed steps' diffs (the reviewer's completion frame); an ask nothing claims
-    is unfulfilled by rule, unread."""
+def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | None = None) -> str:
+    """When the agent presents its work: each ask is read once with the diffs of the steps
+    that claim it, or of all the session's steps when none does, since the reader decides and
+    a claim only narrows what it looks at (seen: real sessions declare when presenting, after
+    their steps have ended). `pending` is the change of the turn still running."""
 
     def kept(step_id: str) -> str | None:
         """A step's diff, from where the loop kept it and nowhere else: a log row cannot
@@ -294,6 +305,8 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         for r in _records("step")
         if (r.get("node") or "root") == (state.NODE or "root")
     ]  # this node's leaves
+    if pending:
+        steps.append({k: pending[k] for k in ("id", "claims", "diff")} | {"label": pending["text"]})
     if not steps:
         return "frame-loop · completion · nothing to read: no step was labelled in this session"
     faults = frames.frame0_faults(frame0)
@@ -301,17 +314,16 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         return "frame-loop · completion · not read: frame 0 is not ready: " + "; ".join(faults)
     started = time.time()
     tier, tier_note = tier_for(said)
+    frame0 = mask_frame(frame0, tier) if tier else frame0
     parts, used = [], {}
     checked: dict[str, tuple[str | None, str | None]] = {}
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
-    for n, ask in enumerate(frame0["asks"], 1):
-        claimed = [s for s in steps if ask["id"] in s["claims"]]
-        if not claimed:
-            parts.append(f"{ask['id']}: nothing claims it")
-            continue
+    planned: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []  # each ask's frame, or why it has none
+    for ask in frame0["asks"]:
+        claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
         if within(600) < 90:  # too little of the hook's time is left for one more reading
-            parts.append(f"{ask['id']} not read (out of time: read it again)")
+            planned.append((ask, None, f"{ask['id']} not read (out of time: read it again)"))
             continue
         refusal = None
         missing = [s["id"] for s in claimed if s["diff"] is None]
@@ -342,22 +354,41 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
                 ]
             )  # masked, as every reading is
         if refusal:
-            parts.append(f"{ask['id']} not read ({refusal})")
+            planned.append((ask, None, f"{ask['id']} not read ({refusal})"))
             continue
         effort, _, error = effort_for(said, None, tier)
         if error:  # an effort floor that cannot be read is never read below, as for a step
-            parts.append(f"{ask['id']} not read ({error})")
+            planned.append((ask, None, f"{ask['id']} not read ({error})"))
             continue
         frame = completion_frame(frame0, ask, frame_steps, tier, bool(os.environ.get("FRAME_LOOP_TREE")))
         if effort:
             frame["battery"]["reasoning"] = effort
+        planned.append((ask, frame, ""))
+    # All asks at once: the agent waits on this, and one after another three asks filled the
+    # hook's ten minutes and the last went unread (seen in a pilot).
+    to_read = [frame for _, frame, _ in planned if frame]
+    results: dict[int, dict[str, Any]] = {}
+    if to_read:
+        from concurrent.futures import ThreadPoolExecutor
+
         withhold_file()
-        _live_step(for_user(f"whether {ask['id']} is done", frame0), n, len(frame0["asks"]))
-        result = run(frame)
+        _live_step("whether the work is done", 1, 1)
+        with ThreadPoolExecutor(max_workers=min(len(to_read), COMPLETION_AT_ONCE)) as pool:
+            results = {id(frame): done for frame, done in zip(to_read, pool.map(run, to_read), strict=True)}
+    for ask, frame, why in planned:
+        if frame is None:
+            parts.append(why)
+            state.LIVE["decision"] = gate.RISE
+            continue
+        result = results[id(frame)]
+        if gate._failed(result):  # a reading that did not finish says so: it is no verdict
+            state.LIVE["decision"] = gate.RISE
+            parts.append(f"{ask['id']} not read ({gate._failure(result)})")
+            for k, v in _spent(result).items():
+                used[k] = used.get(k, 0) + v
+            continue
         level = ((result.get("findings") or [{}])[0].get("levels") or {}).get("baseline")
-        ok = (
-            (not gate._failed(result)) and result.get("firm") and result.get("category") == "carried" and level == "yes"
-        )
+        ok = result.get("firm") and result.get("category") == "carried" and level == "yes"
         state.LIVE["decision"] = state.LIVE.get("decision", gate.PASS) if ok else gate.RISE
         parts.append(
             f"{ask['id']} ✓"

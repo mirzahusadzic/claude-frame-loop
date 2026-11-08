@@ -162,6 +162,48 @@ def command_words(words: list[str]) -> list[str]:
     return words
 
 
+# What `gh` commands act on GitHub, by group: a listed read stays quiet, an unknown word in a
+# group acted on is no act (seen: `gh repo view`), and all of `gh release` but its reads acts.
+GH_ACTS = {
+    "pr": {"create", "merge", "close", "reopen", "edit", "comment", "review", "ready", "lock", "unlock"},
+    "issue": {"create", "close", "reopen", "edit", "comment", "delete", "transfer", "lock", "unlock", "pin", "unpin"},
+    "repo": {"create", "delete", "edit", "rename", "archive", "unarchive", "fork", "sync"},
+    "gist": {"create", "edit", "delete", "rename"},
+    "secret": {"set", "delete"},
+    "variable": {"set", "delete"},
+    "workflow": {"run", "enable", "disable"},
+    "run": {"rerun", "cancel", "delete"},
+    "label": {"create", "edit", "delete", "clone"},
+    "ruleset": set(),
+    "deploy-key": {"add", "delete"},
+    "ssh-key": {"add", "delete"},
+    "gpg-key": {"add", "delete"},
+    "cache": {"delete"},
+}
+GH_API_FIELDS = {"-f", "--raw-field", "-F", "--field", "--input"}
+
+
+def _gh_act(args: list[str]) -> str | None:
+    """The act a `gh` command runs on GitHub, if any. `gh api` reads by default: it acts with
+    a method other than GET, or with fields, which make it a POST unless it names a method."""
+    rest = _flags(args, GH_VALUED)
+    group = rest[0] if rest else ""
+    sub = (_flags(rest[1:], GH_VALUED) or [""])[0]
+    if group == "release":
+        return None if sub in ("view", "list", "download") else "gh release"
+    if group == "api":
+        method = next((args[i + 1] for i, a in enumerate(args[:-1]) if a in ("-X", "--method")), None)
+        method = method or next((a.split("=", 1)[1] for a in args if a.startswith("--method=")), None)
+        method = method or next((a[2:] for a in args if a.startswith("-X") and len(a) > 2), None)
+        if (_flags(rest[1:], GH_VALUED) or [""])[0] == "graphql":  # a POST either way: only a mutation acts
+            return "gh api" if any(re.search(r"\bmutation\b", a) for a in args) else None
+        fields = any(a in GH_API_FIELDS or a.split("=", 1)[0] in GH_API_FIELDS for a in args)
+        if method.upper() != "GET" if method else fields:
+            return "gh api"
+        return None
+    return f"gh {group} {sub}" if sub in GH_ACTS.get(group, ()) else None
+
+
 def _act(words: list[str], depth: int) -> str | None:
     words = command_words(words)
     if not words:
@@ -178,10 +220,10 @@ def _act(words: list[str], depth: int) -> str | None:
             return "git push"
         if rest[:1] == ["clean"] and ("f" in flags or "--force" in rest) and not (dry or "n" in flags):
             return "git clean"
-    if name == "gh" and _flags(args, GH_VALUED)[:1] == ["release"]:
-        sub = _flags(_flags(args, GH_VALUED)[1:], GH_VALUED)[:1]
-        if sub not in (["view"], ["list"], ["download"]):  # reading a release is no release
-            return "gh release"
+    if name == "gh":
+        act = _gh_act(args)
+        if act:
+            return act
     if dry and name in {"npm", "yarn", "twine", *PUBLISH}:
         return None
     if name == "npm" and _flags(args, NPM_VALUED)[:1] == ["publish"]:

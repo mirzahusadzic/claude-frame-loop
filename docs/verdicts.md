@@ -35,7 +35,7 @@ The change is put into plain words first (with labels on); then two questions ru
 | ▲ needs you: a change lies outside what you authorized | outside the crossing's scope; "· not checked: a reason" follows when its reading failed too | widen the scope, or undo |
 | ▲ needs you: what this work is for isn't written yet | no frame 0 | state the work |
 | ▲ needs you: 2 of 3 requirements read as done | completion found requirements not done or unclaimed | finish or claim them |
-| ■ not read: a reason | refused before sending, such as a secret or lines read from outside the project | see [Privacy](privacy.md); never counted as a fit |
+| ■ not read: a reason | refused before sending, such as a secret | see [Privacy](privacy.md); never counted as a fit |
 
 ---
 
@@ -45,7 +45,7 @@ Acts the loop always reports, after the outcome on the same line. In shadow mode
 
 | Act | ▲ in shadow mode |
 | --- | --- |
-| Claude pushed · made a GitHub release · published a package | no |
+| Claude pushed · made a GitHub release · changed something on GitHub · published a package | no |
 | Claude asked to push (or another act), and it did not run: denied, or the command failed | no |
 | Claude changed something people see | no |
 | Claude changed the loop's own files · ran a command on the switch, frame 0 or another of the loop's files, named, its command on one cut line · tried, and it did not go through | no |
@@ -54,6 +54,6 @@ Acts the loop always reports, after the outcome on the same line. In shadow mode
 | Claude touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 
-An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled.
+An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act, even beside other commands in one call. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled. In shadow mode that comparison is the report, so a script that only reads stays quiet; only a command naming the record, the work folder or the loop's code, which the hashes do not settle, is reported from its text. Enforce mode has to ask before the call, so it goes by the command's text and may ask about a script that only reads.
 
 At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is reported after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.

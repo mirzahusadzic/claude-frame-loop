@@ -364,27 +364,6 @@ class LiveReaderTests(unittest.TestCase):
         frame["battery"] = {**frames.READERS["anthropic"], "kind": "fake-ideal"}
         self.assertNotIn("withheld", json.dumps(reader.run(frame)))  # a non-training reader may read it
 
-    def test_frameloops_line_hash_is_gadflys(self):
-        sys.path.insert(0, str(ROOT / "frameloop"))
-        import privacy
-
-        line = "   def private_algorithm(x):    return sum(v for v in x)  "
-        done = subprocess.run(
-            [
-                "uv",
-                "run",
-                "--project",
-                str(GADFLY),
-                "python",
-                "-c",
-                f"from midwife.withhold import line_sha256; print(line_sha256({line!r}))",
-            ],
-            capture_output=True,
-            text=True,
-            cwd=GADFLY,
-        )
-        self.assertEqual(done.stdout.strip(), privacy._hash(privacy._norm(line)))
-
     def test_reader_runs_stage_one_as_run_then_report(self):
         import reader
 

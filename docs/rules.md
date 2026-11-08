@@ -18,7 +18,36 @@ OK to add it?
 
 A rule is a line some change could keep or break, offered with its kind from the table below. A line no change could keep or break, such as how Claude talks with you, is a way of working: it can go in the guide, offered as one, but is never indexed or read. Asked to compile rules from what exists, Claude reads what is already in rule shape first, such as spec tables of invariants and boundaries, and past corrections last.
 
-The confirmed line is indexed as a rule that quotes it, so the rule is always read by the guide's words. A guide line is checked only once it is indexed: when a guide gains lines, the briefing tells Claude to offer them to you as rules. A line in `~/.claude/CLAUDE.md` holds for every project; one in the project's guides, for that project.
+The confirmed line is indexed as a rule that quotes it, so the rule is always read by the guide's words. A guide line is checked only once it is indexed: when a guide gains lines, the briefing tells Claude to offer them to you as rules. A rule kept only in Claude's private memory is never read, so Claude is told once a session, when it writes there, that a way of working goes in the guide. A line in a project's guides holds for that project. A line in `~/.claude/CLAUDE.md` is read in a project once that project's index quotes it. A rule's words reach the reader word for word on every reading: [what reaches the reader](agents.md#what-reaches-the-reader) says what that asks of a line with private content.
+
+---
+
+### The rules index
+
+The index is `<project>/.frame-loop/rules.json`, or the file `FRAME_LOOP_RULES` names. Claude writes it on your OK, as it writes frame 0, and the write is yours to see. It names one guide from the project's root, with the guide's sha256 as it stands once the confirmed lines are in, so a later change to the guide is noticed; a rule may also quote `~/.claude/CLAUDE.md`:
+
+```json
+{
+  "source": {"file": "AGENTS.md", "sha256": "<the guide's sha256>"},
+  "rules": [
+    {"id": "R1", "kind": "principle", "text": "no new dependency", "quote": ["No new dependency is added."], "scope": ["*"], "accepted": true},
+    {"id": "R2", "kind": "obligation", "text": "a change comes with a test", "quote": ["Every change to the client comes with a test that fails before the change."], "scope": ["client/*"], "check": {"changed": ["tests/*"]}, "accepted": true}
+  ]
+}
+```
+
+Each rule has an id `R` and a number, a short label, its guide lines word for word in `quote`, path globs in `scope`, and `"accepted": true`; it is read by its quote, never its label. Its kind is one from the table below:
+
+| Kind | In the index | Its scope | Its check |
+| --- | --- | --- | --- |
+| code check | `obligation` | the files that owe it | one of `{"changed": [globs]}`, `{"untouched": [globs]}`, `{"ran": [commands]}`, `{"exists": "<path>"}`, `{"present": {"glob": "<glob>", "pattern": "<regex>"}}` |
+| principle | `principle` | `["*"]` | none |
+| trigger | `trigger` | `["*"]` | none |
+| scoped rule | `semantic` | the files it covers | none |
+
+A change to a file in a code check's scope owes the check. A `ran` command is matched as written, alone in its shell call or joined with `&&`, and must pass on the tree as it finally stands. `present` passes when any matching file holds the pattern, and no check says a file must not hold one: for that, give `ran` a script that fails when it finds the pattern.
+
+To retire a rule, on your OK, Claude removes it from the index. frame-loop checks every write to the index: a quote not in the guide, an unknown kind or check, a repeated id or a stale hash is told to Claude to fix, and you hear that it was.
 
 ---
 
