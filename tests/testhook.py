@@ -597,6 +597,17 @@ class AttackTests(unittest.TestCase):
         self.assertNotIn("claude-sonnet", said)
         self.assertIn("for calibration runs only", said)
 
+    def test_a_plan_of_its_declaration_alone_is_not_read(self):
+        """Sparky's third review: a plan holding only `Serves: A1` was read as an empty text,
+        and a reader that answered could pass it."""
+        os.environ.update(env(FRAME_LOOP_READER="testhook:passing"))
+        seen = loaded_seen()
+        for plan in ("Serves: A1", "Serves: A1\n\n   \n"):
+            with self.subTest(plan=plan):
+                out = hook.answer(plan_event(plan))
+                self.assertIn("not read", json.dumps(out, ensure_ascii=False))
+        self.assertEqual(seen, [])
+
     def test_a_reader_of_claudes_own_family_is_for_calibration_only(self):
         """Sparky's second review: a plan's `reader: anthropic` tightened a contributor
         reading to a Claude model, and a setting could name it, though Setup promises a

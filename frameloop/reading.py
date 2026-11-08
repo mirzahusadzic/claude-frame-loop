@@ -154,6 +154,8 @@ def _read(
     step = {"id": step_id, "summary": _masked(_without_declaration(text, kind), frame0), "facts": {"kind": kind}}
     if faults:
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
+    if not step["summary"].strip():  # a plan of its declaration alone: nothing is left to read
+        return {"decision": gate.BLOCK, "reason": "not read: nothing to read past the declaration"}, tier, tier_note
     if tier is None:
         return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
