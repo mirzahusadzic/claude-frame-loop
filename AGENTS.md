@@ -44,6 +44,8 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 - Shadow mode blocks nothing, and its reads run in the background; enforce mode asks before the user's acts and sends Claude back on a ▲.
 - Frame 0, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user.
 - The user reads plain words: no JSON, ids or internal terms; "requirement", never "ask".
+- An act's line is its symbol and what it acted on, no sentence; the exact command stays under details.
+- The band is minimal but live: one line of what is happening now and the tokens spent, never a dump, even through a three-minute read.
 
 ---
 

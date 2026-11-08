@@ -3,7 +3,7 @@
  "version": 2,
  "source": {
   "file": "AGENTS.md",
-  "sha256": "a04efa77cb02779cf67d93492f282bccfb966ebae815390470102507a702d431"
+  "sha256": "4bf76baaf9e16f5d94efeb1ebe49db5e662ff3f80e6298a5dc724501641794c0"
  },
  "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
  "rules": [
@@ -172,6 +172,8 @@
    "check": null,
    "accepted": true
   },
-    {"id": "R13", "kind": "principle", "text": "the workflow comes first", "quote": ["Claude following the workflow is frame-loop's core feature: it is tested first, in real sessions, and what those tests find comes before anything else."], "scope": ["*"], "accepted": true}
+    {"id": "R13", "kind": "principle", "text": "the workflow comes first", "quote": ["Claude following the workflow is frame-loop's core feature: it is tested first, in real sessions, and what those tests find comes before anything else."], "scope": ["*"], "accepted": true},
+    {"id": "R14", "kind": "principle", "text": "an act's line is a symbol and its object", "quote": ["An act's line is its symbol and what it acted on, no sentence; the exact command stays under details."], "scope": ["*"], "accepted": true},
+    {"id": "R15", "kind": "principle", "text": "the band is minimal but live", "quote": ["The band is minimal but live: one line of what is happening now and the tokens spent, never a dump, even through a three-minute read."], "scope": ["*"], "accepted": true}
   ]
 }
