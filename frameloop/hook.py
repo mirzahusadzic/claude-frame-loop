@@ -214,6 +214,9 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     state.LIVE.clear()
     plugin_defaults(event)
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
+        flipped = _switched_by_a_call(event)  # the author's switch is the band's, never a shell call's
+        if flipped:
+            return flipped
         if event.get("hook_event_name") == "SessionStart":
             return {
                 "hookSpecificOutput": {
@@ -300,20 +303,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             capture(tool or "", tool_input, brought)
         if not changed:
             return None
-        faults = []
-        for path in changed:
-            # a node file a command wrote is checked as an edit to it is
-            found = _written_node_faults(path, frame0)
-            faults += [f"{_short_path(Path(path))}: {x}" for x in found]
-            _log(
-                {"event": "config", "tool": "Bash", "path": path, "after": True, **({"faults": found} if found else {})}
-            )
-        said = (
-            "frame-loop: L1: the command changed the loop's own files "
-            f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."
-            + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else "")
-        )
-        return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
+        return _changed_report(name, changed, frame0)
     if name == "Stop":
         turn = _read_turn(event, frame0, mode)
         if turn and turn.get("decision") == "block":
@@ -340,7 +330,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
     if tool == "Bash":
         command = tool_input.get("command", "")
-        if not command.strip().startswith(": frame-loop-"):
+        if not _markers_alone(command):
             _keep_loop_files(event)  # compared after the call: whatever its spelling, a change shows
         parts = [x for x in re.split(r"\s*(?:&&|;|\n)\s*", command.strip()) if x] if "<<" not in command else [command]
         if len(parts) > 1 and all(x.startswith(": frame-loop-") and _marker_only(x) for x in parts):
@@ -521,16 +511,64 @@ def _keep_loop_files(event: dict[str, Any]) -> None:
         pass
 
 
+def _changed_report(name: str | None, changed: list[str], frame0: dict[str, Any]) -> dict[str, Any]:
+    """What a shell call that changed the loop's own files gets: each logged, a node file
+    checked as an edit's content is, and one line for the human."""
+    faults = []
+    for path in changed:
+        found = _written_node_faults(path, frame0)
+        faults += [f"{_short_path(Path(path))}: {x}" for x in found]
+        _log({"event": "config", "tool": "Bash", "path": path, "after": True, **({"faults": found} if found else {})})
+    said = (
+        "frame-loop: L1: the command changed the loop's own files "
+        f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."
+        + ("\nThe node file does not narrow its parent: " + "; ".join(faults) + "." if faults else "")
+    )
+    return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
+
+
+def _markers_alone(command: str) -> bool:
+    """A command of frame-loop's markers and nothing else, the only one that keeps no hashes."""
+    text = command.strip()
+    if not text.startswith(": frame-loop-"):
+        return False
+    parts = [x for x in re.split(r"\s*(?:&&|;|\n)\s*", text) if x] if "<<" not in text else [text]
+    return all(x.startswith(": frame-loop-") and _marker_only(x) for x in parts)
+
+
+def _switched_by_a_call(event: dict[str, Any]) -> dict[str, Any] | None:
+    """With the loop off: a shell call that changed the switch is still told, with the loop's
+    files it changed besides. A call that turns the loop off would otherwise go unreported,
+    and `git checkout -- .` restoring a committed `off` too."""
+    if event.get("tool_name") != "Bash" or event.get("hook_event_name") not in ("PostToolUse", "PostToolUseFailure"):
+        return None
+    state.SESSION = event.get("session_id")
+    state.CWD = event.get("cwd") or os.getcwd()
+    project = os.environ.get("CLAUDE_PROJECT_DIR")
+    if project and Path(project).is_dir():
+        state.CWD = project
+    changed = _loop_files_changed(event)
+    if not changed or str(switch_path(event)) not in changed:
+        return None
+    try:
+        frame0 = load_frame0()
+    except (OSError, ValueError, KeyError):
+        frame0 = {"asks": []}
+    return _changed_report(event.get("hook_event_name"), changed, frame0)
+
+
 def _loop_files_changed(event: dict[str, Any]) -> list[str]:
     """After a shell call: the loop's own files it changed, created or removed."""
     path = _loop_files_at(event)
+    if _markers_alone((event.get("tool_input") or {}).get("command", "")):
+        return []  # no hashes were kept before a marker: it runs nothing
     try:
         before = json.loads(path.read_text(encoding="utf-8"))
         path.unlink()
     except (OSError, ValueError):
-        return []
-    if not isinstance(before, dict):
-        return []
+        before = None
+    if not isinstance(before, dict):  # the hashes kept before the call are gone: never "no change"
+        return [str(path)]
     after = loop_files(event)
     return [p for p in sorted(set(before) | set(after)) if before.get(p, "") != after.get(p, "")]
 

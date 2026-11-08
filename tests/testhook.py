@@ -2990,8 +2990,72 @@ class CoreTests(unittest.TestCase):
             hook._keep_loop_files(event)
         kept = hook._loop_files_at(event)
         kept.parent.mkdir(parents=True, exist_ok=True)
-        kept.write_text("[]", encoding="utf-8")
-        self.assertEqual(hook._loop_files_changed(event), [])
+        kept.write_text("[]", encoding="utf-8")  # kept hashes that are no object were tampered with
+        self.assertEqual(hook._loop_files_changed(event), [str(kept)])
+
+    def shell_call(self, command, act, use):
+        """A shell call as Claude Code sends it: PreToolUse, the command's effect, PostToolUse."""
+
+        def call(event):
+            return hook.answer(
+                {
+                    "hook_event_name": event,
+                    "tool_name": "Bash",
+                    "session_id": self.session,
+                    "cwd": str(REPO),
+                    "tool_use_id": use,
+                    "tool_input": {"command": command},
+                    "tool_response": {"stdout": "", "stderr": ""},
+                }
+            )
+
+        call("PreToolUse")
+        act()
+        return call("PostToolUse") or {}
+
+    def backstop(self):
+        frame0 = WORK / f"frame0-backstop-{uid(self)}.json"
+        frame0.write_text(Path(FIXTURE).read_text(encoding="utf-8"), encoding="utf-8")
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        os.environ.update(FRAME_LOOP_FRAME0=str(frame0), CLAUDE_PROJECT_DIR=str(REPO))
+        return frame0, switch
+
+    def test_the_backstop_holds_against_a_call_that_hides_its_change(self):
+        """Sparky's third review: a call that turned the loop off was never compared after; a
+        call that removed the hashes kept before it read as no change; a marker-prefixed chain
+        kept none; and nodes past the 500th and the project's .claude/hooks were not hashed."""
+        frame0, switch = self.backstop()
+
+        def off_and_rewrite():
+            switch.write_text("off\n", encoding="utf-8")
+            frame0.write_text('{"asks": []}', encoding="utf-8")
+
+        out = self.shell_call("sh s.sh", off_and_rewrite, "b1")
+        self.assertIn("changed the loop's own files", out.get("systemMessage", ""), "switched off")
+        switch.write_text("on\n", encoding="utf-8")
+
+        def wipe_and_rewrite():
+            for kept in (WORK / "loop-files").glob("*") if (WORK / "loop-files").is_dir() else []:
+                kept.unlink()
+            for kept in Path(os.environ.get("FRAME_LOOP_WORK", REPO / ".frame-loop" / "work")).glob("loop-files/*"):
+                kept.unlink()
+            frame0.write_text('{"asks": [1]}', encoding="utf-8")
+
+        out = self.shell_call("sh s.sh", wipe_and_rewrite, "b2")
+        self.assertIn("changed the loop's own files", out.get("systemMessage", ""), "hashes removed")
+        out = self.shell_call(
+            ": frame-loop-declare --serves A1; sh s.sh", lambda: frame0.write_text("{}", encoding="utf-8"), "b3"
+        )
+        self.assertIn("changed the loop's own files", out.get("systemMessage", ""), "marker chain")
+        hooks = REPO / ".claude" / "hooks"
+        hooks.mkdir(parents=True, exist_ok=True)
+        guard = hooks / f"guard-{uid(self)}.sh"
+        self.addCleanup(lambda: guard.unlink(missing_ok=True))
+        out = self.shell_call("sh s.sh", lambda: guard.write_text("x", encoding="utf-8"), "b4")
+        self.assertIn("changed the loop's own files", out.get("systemMessage", ""), ".claude/hooks")
+        self.assertIsNone(self.shell_call(": frame-loop-declare --serves A1", lambda: None, "b5").get("systemMessage"))
 
     def test_a_command_on_the_loops_files_that_ran_is_marked_as_run(self):
         """An agent's report: a command that rose as touching the loop's files was told as
