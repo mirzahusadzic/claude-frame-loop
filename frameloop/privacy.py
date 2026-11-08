@@ -223,10 +223,11 @@ SECRETS = [(name, re.compile(pattern)) for name, pattern in S.SECRET_PATTERNS]
 
 
 def _norm(line: str) -> str | None:
-    """A line worth holding: trimmed, spaces collapsed, at least 24 characters with letters
-    in any script (a line of Chinese or Cyrillic is as private as one of English)."""
+    """A line worth holding: trimmed, spaces collapsed, at least 24 characters, three of them
+    letters or digits in any script (a line of Chinese, or an account number, is as private
+    as one of English; a rule of dashes is not)."""
     text = " ".join(line.split())
-    return text if len(text) >= 24 and sum(c.isalpha() for c in text) >= 3 else None
+    return text if len(text) >= 24 and sum(c.isalnum() for c in text) >= 3 else None
 
 
 def _hash(text: str) -> str:

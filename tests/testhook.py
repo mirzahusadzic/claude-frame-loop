@@ -1895,6 +1895,18 @@ class ChannelTests(unittest.TestCase):
                 else:
                     (REPO / path).unlink(missing_ok=True)
 
+    def test_a_line_of_digits_is_held_and_a_rule_of_dashes_is_not(self):
+        """Sparky's third review: a line needed three letters, so 30 digits read from outside
+        (an account number, a key) left in a diff."""
+        digits = "123456789012345678901234567890"
+        self.outside.write_text(digits + "\n", encoding="utf-8")
+        self.post("Read", {"file_path": str(self.outside)}, {"content": digits + "\n"})
+        seen = loaded_seen()
+        out = self.read_turn(digits)
+        self.assertIn("not read", out["systemMessage"])
+        self.assertEqual(seen, [])
+        self.assertIsNone(privacy._norm("-" * 40))
+
     def test_short_or_common_lines_are_never_held(self):
         self.post("Read", {"file_path": str(self.outside)}, {"content": "short\nreturn x\n}\n"})
         seen = loaded_seen()
