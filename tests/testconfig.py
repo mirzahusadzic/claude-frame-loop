@@ -251,3 +251,27 @@ class PrintedTextTests(unittest.TestCase):
         ):
             with self.subTest(command):
                 self.assertTrue(config.shell_touches_config(command))
+
+
+class PythonReadTests(unittest.TestCase):
+    """An agent's report: a json load of a file whose path holds an "a" rose as a write, since
+    any quoted string in open(...) with w, a, x or + read as a writing mode."""
+
+    def test_open_writes_only_by_its_mode(self):
+        reads = (
+            "python3 -c \"import json; print(json.load(open('/home/a/.claude/plugins/installed_plugins.json')))\"",
+            "python3 -c \"print(open('data/wax.txt').read())\"",
+            "python3 -c \"print(open('notes.txt', 'r').read())\"",
+        )
+        writes = (
+            "python3 -c \"open('notes.txt', 'w').write('x')\"",
+            "python3 -c \"open('notes.txt', mode='a')\"",
+            "python3 -c \"from pathlib import Path; Path('n.txt').open('w')\"",
+            "python3 -c \"open('n.txt', 'r+')\"",
+        )
+        for command in reads:
+            with self.subTest(command):
+                self.assertTrue(config._read_only(command))
+        for command in writes:
+            with self.subTest(command):
+                self.assertFalse(config._read_only(command))

@@ -93,7 +93,9 @@ GIT_READS = {
 FIND_WRITES = {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
 # A `python -c` one-liner reads unless its code holds a call that may write, run or remove.
 PYTHON_WRITES = re.compile(
-    r"open\([^)]*['\"][^'\"]*[wax+]|\.write|write_text|write_bytes|unlink|remove|rmdir|rmtree|rename|replace\(|"
+    # a mode that writes: open's second argument or `mode=`, or Path.open's first; never the path
+    r"\bopen\([^),]*,\s*(?:mode\s*=\s*)?['\"][^'\"]*[wax+]|\.open\(\s*(?:mode\s*=\s*)?['\"][^'\"]*[wax+]|"
+    r"mode\s*=\s*['\"][^'\"]*[wax+]|\.write|write_text|write_bytes|unlink|remove|rmdir|rmtree|rename|replace\(|"
     r"dump\(|truncate|mkdir|chmod|chown|copy|move|symlink|subprocess|system\(|popen|exec|eval|__import__|setattr"
 )
 # Programs that keep a heredoc as data, never run it.
