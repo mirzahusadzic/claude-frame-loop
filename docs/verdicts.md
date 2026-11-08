@@ -48,7 +48,7 @@ Acts the loop always reports, after the outcome on the same line. In shadow mode
 | Claude pushed · made a GitHub release · published a package | no |
 | Claude asked to push (or another act), and it did not run: denied, or the command failed | no |
 | Claude changed something people see | no |
-| Claude changed the loop's own files · ran a command on the loop's own files · tried, and it did not go through | no |
+| Claude changed the loop's own files · ran a command on the switch, frame 0 or another of the loop's files, named, its command on one cut line · tried, and it did not go through | no |
 | AGENTS.md: 5 lines added, 2 lines removed; your rules all still hold | no |
 | Claude deleted a folder · deleted untracked files · deleted files | yes |
 | Claude touched a personal file | yes |

@@ -57,12 +57,33 @@ def _landed(record: dict[str, Any]) -> bool:
         return False
 
 
+SHOWN = 60  # an act's command or path, as the details show it: one line, cut
+LOOP_FILES = (
+    ("switch", "the switch"),
+    ("frame0", "frame 0"),
+    ("rules.json", "the rules index"),
+    ("/tree", "the tree"),
+    ("steps.jsonl", "the record"),
+    ("settings", "the project's settings"),
+)
+
+
+def _cut(text: str) -> str:
+    return text if len(text) <= SHOWN else text[: SHOWN - 1].rstrip() + "…"
+
+
+def _which(command: str) -> str:
+    """The loop's own files a command names, in a few words: "the switch and frame 0"."""
+    named = [words for key, words in LOOP_FILES if key in command]
+    return " and ".join(named[:2]) if named else "the loop's own files"
+
+
 def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     """An act as the author reads it: what Claude did, whether it needs the author, and
     the exact command or path, for the details."""
     said = " ".join(record.get("triggers") or []) if record.get("event") == "outward" else "L1:"
     # The command as it ran, its heredocs' text left out, so a line after one still shows.
-    exact = (
+    exact = _cut(
         " ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
         if record.get("event") == "outward"
         else record.get("path", "")
@@ -73,7 +94,7 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
             if record.get("event") == "outward" and record.get("ran") is False:
                 return f"{ASKED.get(key, 'Claude asked for an act')}, and it did not run", False, exact
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
-                words = "Claude ran a command on the loop's own files"
+                words = f"Claude ran a command on {_which(record.get('command') or '')}"
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
                 words = "Claude tried to change the loop's own files, and it did not go through"
             return words, needs, exact

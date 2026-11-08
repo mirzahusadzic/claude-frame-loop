@@ -131,3 +131,26 @@ class SignalTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ActLineTests(unittest.TestCase):
+    """An agent's report: an act's line printed its whole command, wrapped over four lines,
+    in the band and again for the agent; name the act in a few words, the command one cut line."""
+
+    def test_an_act_shows_its_command_on_one_cut_line_and_names_its_files(self):
+        command = (
+            'ls ~/.claude/plugins/cache/claude-frame-loop/frame-loop; python3 -c "import json; '
+            "print(json.load(open('/x/installed_plugins.json')))\"; cat .frame-loop/switch\nwc -l notes"
+        )
+        record = {
+            "event": "outward",
+            "command": command,
+            "triggers": ["L1: the loop's own configuration or record is touched"],
+        }
+        words, _, shown = lines.act_words(record)
+        self.assertEqual(words, "Claude ran a command on the switch")
+        self.assertLessEqual(len(shown), lines.SHOWN)
+        self.assertNotIn("\n", shown)
+        self.assertTrue(shown.endswith("…"))
+        short = {**record, "command": "echo off > .frame-loop/switch"}
+        self.assertEqual(lines.act_words(short)[2], "echo off > .frame-loop/switch")
