@@ -27,6 +27,7 @@ import state  # noqa: E402
 from framezero import load_frame0  # noqa: E402
 from reading import read_change  # noqa: E402
 from repo import _git, snapshot  # noqa: E402
+from turn import stop_covered_background  # noqa: E402
 
 
 def project_env(root: Path) -> dict[str, str] | None:
@@ -79,6 +80,7 @@ def reading(root: Path, serves: str, effort: str | None, base: str, done: str | 
     if before == after:
         return 0, f"frame-loop · read · nothing changed since {base}"
     said = f"Serves: {serves}" + (f"\nEffort: {effort}" if effort else "") + (f"\nDone: {done}" if done else "")
+    stop_covered_background(str(root), before, after, said, frame0)
     return 0, read_change(str(root), before, after, said, frame0, "read")["tell"]
 
 

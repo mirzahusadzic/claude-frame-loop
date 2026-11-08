@@ -22,7 +22,7 @@ import gate
 import signals as S
 import state
 from config import plugin_defaults, switch_path
-from declare import _declared
+from declare import _declared, _value
 from effort import _effort_rules, _rule_hits
 from framezero import load_frame0, rules_lost
 from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words, unsettled_note
@@ -326,14 +326,8 @@ def _carried() -> dict[str, Any]:
     }
 
 
-def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str, said: str) -> dict[str, Any]:
-    """Shadow mode blocks nothing, so the turn need not wait for its read (Asked for: "it was 2
-    min...that is unacceptable"): the read runs in a process of its own, the band shows it,
-    and Claude hears the outcome at the next prompt."""
-    work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(cwd) / ".frame-loop" / "work")
-    work.mkdir(parents=True, exist_ok=True)
-    # One background read a session: a newer one stops the one still running and reads from
-    # where that one began, so no turn goes unread and no two reads run at once.
+def _running_background() -> dict[str, Any] | None:
+    """This session's background read still running, as it was queued."""
     queued = [r for r in _records("turn-queued") if r.get("pid")]
     # Still running only while its payload is there (it removes it as it ends) and no turn has
     # landed since: a finished read's pid may already be another process's (the cold review, M1).
@@ -345,12 +339,52 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
         and not landed
         and _alive(queued[-1]["pid"])
     )
-    if running and queued[-1].get("before"):
-        stop(queued[-1]["pid"])  # with the calls it started: Gadfly's stop too
-        # A forced stop (Windows) skips the read's own cleanup: its payload goes here.
-        Path(queued[-1].get("payload") or work / "none").unlink(missing_ok=True)
-        before = queued[-1]["before"]
-        _log({"event": "background-replaced", "pid": queued[-1]["pid"]})
+    return queued[-1] if running and queued[-1].get("before") else None
+
+
+def _replace_background(running: dict[str, Any]) -> None:
+    stop(running["pid"])  # with the calls it started: Gadfly's stop too
+    # A forced stop (Windows) skips the read's own cleanup: its payload goes here.
+    Path(running["payload"]).unlink(missing_ok=True)
+    _log({"event": "background-replaced", "pid": running["pid"]})
+
+
+def stop_covered_background(cwd: str, before: str, after: str, said: str, frame0: dict[str, Any]) -> None:
+    """A reading Claude asks for covers the background read still running, of the same final
+    tree, the same files and requirements and no harder: that one would only spend again."""
+    running = _running_background()
+    if not running:
+        return
+    try:
+        theirs = json.loads(Path(running["payload"]).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    names = [
+        _git(cwd, "diff", "--no-ext-diff", "--name-only", "--no-renames", start, after)
+        for start in (theirs["before"], before)
+    ]
+    if (
+        theirs.get("after") == after
+        and all(x.returncode == 0 for x in names)
+        and set(names[0].stdout.splitlines()) <= set(names[1].stdout.splitlines())
+        and set(_declared(theirs.get("said") or "", frame0)) <= set(_declared(said, frame0))
+        and _value(theirs.get("said") or "", "effort").lower() in ("", _value(said, "effort").lower())
+    ):
+        _replace_background(running)
+
+
+def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str, said: str) -> dict[str, Any]:
+    """Shadow mode blocks nothing, so the turn need not wait for its read (Asked for: "it was 2
+    min...that is unacceptable"): the read runs in a process of its own, the band shows it,
+    and Claude hears the outcome at the next prompt."""
+    work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(cwd) / ".frame-loop" / "work")
+    work.mkdir(parents=True, exist_ok=True)
+    # One background read a session: a newer one stops the one still running and reads from
+    # where that one began, so no turn goes unread and no two reads run at once.
+    running = _running_background()
+    if running:
+        _replace_background(running)
+        before = running["before"]
     payload = work / f"background-{state.SESSION}-{time.time_ns()}.json"
     payload.write_text(
         json.dumps(

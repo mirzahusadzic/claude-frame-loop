@@ -10,7 +10,7 @@ The band is one line that changes in place: what is happening now, the time left
 
 What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 
-The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules indexed for the project only the first. For a change Claude declared no requirement for, the one question is "what is it for?". When you ask whether the work is done, or Claude presents it as done, Claude runs `: frame-loop-read --complete`, a marker: a shell command that does nothing (`:` is the shell's no-op), which the loop's hooks read; then each requirement is read against the changes that claim it.
+The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules indexed for the project only the first. For a change Claude declared no requirement for, the one question is "what is it for?". A change already read in the session is not read again. When you ask whether the work is done, or Claude presents it as done, Claude runs `: frame-loop-read --complete`, a marker: a shell command that does nothing (`:` is the shell's no-op), which the loop's hooks read; then each requirement is read against the changes that claim it.
 
 ---
 

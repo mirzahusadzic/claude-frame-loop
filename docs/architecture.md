@@ -215,4 +215,6 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 A change gets one round of answers, and whether a requirement is done up to three. What a change's round leaves unsettled goes to Claude with the split, not back to the reader: Claude has the diff, and its look never turns the reading into a pass.
 
+The reader is not asked twice about one change. In a session, a reading of the same final tree and frame 0, on the same reader, at least as hard and about the same requirements and files is reused, and the free checks still run. A turn's end can lean on a wider reading; a reading Claude asks for leans only on the very same diff, and stops a background read it covers. A reading that failed is never reused.
+
 A refused or failed reading is "not read", never a fit. Effort rises for risky changes (a deletion, a dependency, the loop's settings, a large diff), never falls below the user's floor.

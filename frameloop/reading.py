@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import json
 import os
 import sys
 import time
@@ -17,7 +18,7 @@ import frames
 import gate
 import state
 from declare import _claimed, _declared, _masked, _without_declaration
-from effort import _effort_rules, effort_for
+from effort import RANK, _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
 from lines import UNSETTLED_NOTE, _reader_name, _tell
 from live import _live_step, _on_answers, _on_tokens, _ran
@@ -205,10 +206,39 @@ def _read(
     )
 
 
+def _read_before(
+    kind: str, before: str, after: str, said: str, mark: str, declared: list[str], facts: dict[str, Any]
+) -> dict[str, Any] | None:
+    """The reading this one would repeat, in this session: of the same final tree and frame 0,
+    on the same reader, at least as hard, about the same requirements and files. A turn's end
+    may lean on a wider reading; a reading Claude asks for, only on the very same diff, as it
+    may be the wider one. Only a reading the reader answered counts."""
+    tier, _ = tier_for(said)
+    effort = effort_for(said, facts, tier)[0] if tier else None
+    if effort is None:
+        return None
+    for r in reversed(_records_all()):
+        if (
+            r.get("session") == state.SESSION
+            and r.get("event") in ("read", "turn", "reused")
+            and r.get("verdict")
+            and r.get("frame0") == mark
+            and r.get("to") == after
+            and r.get("tier") == tier
+            and RANK.get(r.get("effort"), -1) >= RANK[effort]
+            and set(declared) <= set(r.get("declared") or [])
+            and set(facts["paths"]) <= set(r.get("paths") or [])
+            and (kind != "read" or r.get("from") == before)
+        ):
+            return r
+    return None
+
+
 def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, Any], kind: str) -> dict[str, Any]:
     """Read the change between two trees against frame 0: the diff for the reader, the
     agent's lines (`said`) for the declaration and effort only. Logged as `kind`."""
     started = time.time()
+    mark = hashlib.sha256(json.dumps(frame0, sort_keys=True).encode("utf-8")).hexdigest()[:16]
     only = still_here(cwd, before, after)
     patch = _git(cwd, "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch", before, after, *only)
     named = _git(cwd, "diff", "--no-ext-diff", "--name-status", "--no-renames", before, after, *only)
@@ -228,9 +258,15 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     cap = int(os.environ.get("FRAME_LOOP_DIFF_CHARS", "12000"))
     if len(diff) > cap and _writer() is None:  # the reader's cap; a writer reads it whole, to its own limit
         diff = diff[:cap] + f"\n[diff cut at {cap} characters]"
-    result, tier, tier_note = _read(
-        frame0, diff, _declared(said, frame0), "the turn's change", f"{kind}-{int(started)}", said=said, facts=facts
-    )
+    prior = _read_before(kind, before, after, said, mark, _declared(said, frame0), facts)
+    if prior:
+        result, tier, tier_note = {**prior["verdict"], "effort": prior["effort"]}, prior["tier"], ""
+    else:
+        result, tier, tier_note = _read(
+            frame0, diff, _declared(said, frame0), "the turn's change", f"{kind}-{int(started)}", said=said, facts=facts
+        )
+    answered = (result.get("usage") or {}).get("calls") and result["decision"] != gate.BLOCK
+    verdict = prior["verdict"] if prior else _verdict_kept(result) if answered else None
     line, faults = obligations_line(frame0, project_root(cwd), facts["paths"], _claimed(said), status)
     scope = outside_scope(frame0, facts["paths"])
     faults += scope
@@ -242,21 +278,35 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
             "decision": gate.RISE if result["decision"] in (gate.PASS, gate.UNSETTLED) else result["decision"],
             "scope": [f.split(" is outside")[0].replace("not authorized: ", "") for f in scope],
         }
+    repeat = prior is not None and not faults  # nothing new to tell, unless a free check found it
     _log(
         {
-            "event": kind,
+            "event": "reused" if repeat else kind,
+            "of": kind,
             "declared": _declared(said, frame0),
             "tier": tier,
             "tier_note": tier_note,
             "from": before,
             "to": after,
             "paths": facts["paths"],
+            "frame0": mark,
+            "verdict": verdict,
             "obligations": faults,
             **result,
         }
     )
+    if repeat and kind == "turn":  # its outcome already reached Claude and the author
+        state.LIVE["decision"] = "quiet"
+        return {"result": result, "tier": tier, "tell": "frame-loop · turn · already read, no new calls"}
     tell = _tell(kind, result, tier, started, frame0)
+    if prior:
+        tell += " · already read, no new calls"
     return {"result": result, "tier": tier, "tell": tell + ("\n" + line if line else "")}
+
+
+def _verdict_kept(result: dict[str, Any]) -> dict[str, Any]:
+    """What the reader settled on, apart from any free check: those run again each time."""
+    return {k: result[k] for k in ("decision", "reason", "fit") if k in result}
 
 
 def completion_frame(
