@@ -47,6 +47,12 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 
 ---
 
+### Core feature
+
+- Claude following the workflow is frame-loop's core feature: it is tested first, in real sessions, and what those tests find comes before anything else.
+
+---
+
 ### Validate and document
 
 - Behavior change: a test that fails on the old code, then the suite twice; band changes also `claude plugin test .`.
