@@ -325,7 +325,9 @@ class StatusLineTests(unittest.TestCase):
             )
             return done.stdout
 
-        self.assertTrue(line(event).endswith(" · frame-loop off for ~/started"), line(event))
+        said = line(event)  # Windows prints the path its own way
+        self.assertIn(" · frame-loop off for ", said)
+        self.assertTrue(said.endswith("started"), said)
         event["workspace"]["project_dir"] = str(self.repo)
         self.assertTrue(line(event).endswith(" · frame-loop on"), line(event))
 
