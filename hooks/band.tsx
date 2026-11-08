@@ -13,11 +13,15 @@ const openedAt = atom({ plugin: 'frame-loop', key: 'openedAt' } as const, 0)
 // The author's switch, mirrored from <project>/.frame-loop/switch, which the hooks read.
 const off = atom({ plugin: 'frame-loop', key: 'off' } as const, false)
 
-const SPIN = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
+const SPIN = ['◐', '◓', '◑', '◒']
 const STALE = 180 // seconds without an update: the read was interrupted, not running
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`
+
+// The tokens the reader has spent, once it has spent any.
+const spentTokens = (tokens: number | undefined) =>
+  !tokens ? '' : ` · ${tokens < 1000 ? tokens : `${Math.round(tokens / 1000)}k`} tokens`
 
 // Colours by measured contrast (WCAG) in Claude Code's four themes (light, light
 // colour-blind, dark, dark colour-blind), against white or black:
@@ -154,28 +158,17 @@ export const register: Register = on => {
         now.expected && answers > 0 ? (inStep / answers) * Math.max(now.expected - answers, 0)
           : now.expected_seconds ? now.expected_seconds - inStep : null
       // Past what the same step took last time, the band says so and never "almost done":
-      // the reader's answers disagree, and Gadfly asks again until they settle.
+      // the count alone can't tell why, so it claims nothing about the answers.
       const over = (now.expected ? answers >= now.expected : false)
         || (!now.expected && now.expected_seconds ? inStep > now.expected_seconds : false)
-      const count = over ? `${answers} answers, more than usual`
-        : now.expected ? `${answers} of about ${now.expected} answers`
-        : answers > 0 ? `${answers} answers in` : 'waiting for the first answer'
-      const eta = over ? ' · longer than usual: asked again until the answers agree'
-        : left === null ? '' : left > 5 ? ` · about ${clock(left)} left` : ' · almost done'
-      const step = now.of && now.of > 1 ? `step ${now.n} of ${now.of}: ` : ''
+      const said = over ? 'still asking' : now.what ?? 'checking'
+      const when = over || left === null ? spent : left > 5 ? `about ${clock(left)} left` : 'almost done'
       return (
-        <Box flexDirection="column">
-          <Box>
-            <Text color="permission">{SPIN[f % SPIN.length]} </Text>
-            <Text bold>frame-loop </Text>
-            <Text>{now.what ?? 'checking'}</Text>
-            <Text color="inactive">{now.why ? `, because ${now.why}` : ''} · {spent}</Text>
-          </Box>
-          <Box>
-            <Text>{'  '}</Text>
-            <Text>{step}{now.step ?? ''}</Text>
-            <Text color="inactive"> · {count}{eta}</Text>
-          </Box>
+        <Box>
+          <Text color="permission">{SPIN[f % SPIN.length]} </Text>
+          <Text bold>frame-loop </Text>
+          <Text>{said}</Text>
+          <Text color="inactive"> · {when}{spentTokens(now.tokens)}</Text>
         </Box>
       )
     }
@@ -197,7 +190,7 @@ export const register: Register = on => {
           <Text color={color}>{mark} </Text>
           <Text bold>frame-loop </Text>
           {wordColor ? <Text color={wordColor} bold>{said}</Text> : <Text bold>{said}</Text>}
-          <Text color="inactive">{spent} </Text>
+          <Text color="inactive">{spent}{spentTokens(now.tokens)} </Text>
           {detail.length > 0 ? (
             <Button
               key="details"

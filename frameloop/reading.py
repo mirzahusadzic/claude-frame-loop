@@ -20,7 +20,7 @@ from declare import _claimed, _declared, _masked, _without_declaration
 from effort import _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
 from lines import _reader_name, _tell
-from live import _live_step, _on_answers, _ran
+from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
 from procs import within
@@ -58,6 +58,8 @@ def read_step(
     module = sys.modules.get(getattr(run, "__module__", "") or "")
     if module is not None and hasattr(module, "on_progress"):  # the band counts its answers
         module.on_progress = _on_answers if os.environ.get("FRAME_LOOP_LIVE") else None
+    if module is not None and hasattr(module, "on_tokens"):  # and what they spent
+        module.on_tokens = _on_tokens if os.environ.get("FRAME_LOOP_LIVE") else None
     step = {**step, "claim": {"serves": declared}}
     withhold_file()
 
@@ -167,13 +169,11 @@ def _read(
         return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
         return {"decision": gate.RISE, "reason": "no reader configured: not read"}, tier, tier_note
-    state.LIVE["what"] = (
-        "checking "
-        + {"the turn's change": "the change", "a plan": "Claude's plan", "a proposal": "Claude's proposal"}.get(
-            kind, kind
-        )
-        + " against your requirements"
-    )
+    state.LIVE["what"] = "checking " + {
+        "the turn's change": "the change",
+        "a plan": "Claude's plan",
+        "a proposal": "Claude's proposal",
+    }.get(kind, kind)
     if _writer() is not None:
         _live_step("putting the change into plain words", key="label")
     sent, refusal = outgoing(text, kind, tier, frame0)
@@ -420,6 +420,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
     asks = len(frame0["asks"])
     state.LIVE["decision"] = gate.PASS if done == asks else gate.RISE
+    if used.get("total_tokens"):
+        state.LIVE["tokens"] = used["total_tokens"]
     state.LIVE["shorts"] = [
         "frame-loop ✓ every requirement is done"
         if done == asks

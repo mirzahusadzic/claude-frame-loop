@@ -6,7 +6,7 @@ Every line frame-loop prints, what it means, and what to do. The lines appear un
 
 ### While a read runs
 
-The band's first line names what is read and why; the second, the question, the reader's answers so far and the time left, estimated from the last read of the same kind.
+The band is one line that changes in place: what is happening now, the time left, estimated from the last read of the same kind, and the tokens the reader has spent. It says "still asking" when a read runs past that estimate. Nothing prints under the reply while it runs, unless an act needs you, and the line goes when the read ends.
 
 What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 

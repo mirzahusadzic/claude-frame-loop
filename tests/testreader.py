@@ -97,6 +97,29 @@ class ProgressTest(unittest.TestCase):
         self.assertGreaterEqual(len(heard), 3, heard)  # the first count, then heartbeats with no new answer
         self.assertEqual(set(heard), {0})
 
+    def test_the_tokens_of_the_answers_so_far_are_counted(self):
+        """A torn line, a record with no usage or a null total would crash the progress thread."""
+        watch = Path(tempfile.mkdtemp()) / "records.jsonl"
+        watch.write_text(
+            '{"usage": {"total_tokens": 1395}}\n{"usage": {"total_tokens": null}}\n{"trial": "x"}\n'
+            '{"usage": {"total_tokens": 5}}\n{"usage": {"tot',
+            encoding="utf-8",
+        )
+        self.assertEqual(reader._tokens(watch), 1400)
+
+    def test_the_tokens_are_reported_with_the_answers(self):
+        heard = []
+        watch = Path(tempfile.mkdtemp()) / "records.jsonl"
+        watch.write_text('{"usage": {"total_tokens": 7}}\n', encoding="utf-8")
+        sleeper = ([sys.executable, "-c", "import time; time.sleep(1.2)"], None)
+        with (
+            mock.patch.object(reader, "launcher", return_value=sleeper),
+            mock.patch.object(reader, "on_progress", lambda n: None),
+            mock.patch.object(reader, "on_tokens", heard.append),
+        ):
+            reader._gadfly([], watch=watch)
+        self.assertEqual(heard[:1], [7])
+
     def test_an_unchanged_count_is_reported_once_until_the_heartbeat(self):
         """A count sent every half second would rewrite the band's file twice a second for a whole reading."""
         heard = []

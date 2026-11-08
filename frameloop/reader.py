@@ -29,6 +29,7 @@ CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 # Set by the hook for a live view: called with how many of the reader's answers are in
 # so far, while Gadfly runs (it writes each answer to its records as it lands).
 on_progress = None
+on_tokens = None  # the same, for the tokens the answers so far spent
 HEARTBEAT = 30  # seconds between two progress calls with no new answer
 
 
@@ -40,6 +41,25 @@ def _answers(where: Path) -> int:
             total += sum(1 for line in f.read_text(encoding="utf-8").splitlines() if line.strip())
         except OSError:
             pass
+    return total
+
+
+def _tokens(where: Path) -> int:
+    """What the answers so far spent, from Gadfly's records; a line still being written counts
+    for nothing."""
+    files = [where] if where.suffix == ".jsonl" else sorted(where.glob("*.jsonl"))
+    total = 0
+    for f in files:
+        try:
+            lines = f.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                spent = (json.loads(line).get("usage") or {}).get("total_tokens")
+            except (ValueError, AttributeError):
+                continue
+            total += spent if isinstance(spent, int) else 0
     return total
 
 
@@ -97,6 +117,11 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
             # A new answer, or a heartbeat: the band hides a reading it has not heard of in
             # 180 seconds, and a long question can go longer than that between answers.
             if n != seen or time.monotonic() - said >= HEARTBEAT:
+                try:
+                    if on_tokens is not None and n != seen:  # first: the count's write carries them
+                        on_tokens(_tokens(watch))
+                except Exception:  # a live view never fails a reading
+                    pass
                 seen, said = n, time.monotonic()
                 try:
                     on_progress(n)

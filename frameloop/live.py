@@ -96,8 +96,9 @@ def _live(**fields: Any) -> None:
         # per thread, so a write never cuts another short (seen as half a file in the band).
         tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
         pid = {"pid": state.LIVE["background"]} if state.LIVE.get("background") else {}
+        spent = {"tokens": state.LIVE["tokens"]} if state.LIVE.get("tokens") else {}
         tmp.write_text(
-            json.dumps({"session": state.SESSION, "at": time.time(), **pid, **fields}, ensure_ascii=False),
+            json.dumps({"session": state.SESSION, "at": time.time(), **pid, **spent, **fields}, ensure_ascii=False),
             encoding="utf-8",
         )
         _replace(tmp, path)
@@ -133,6 +134,7 @@ def _live_step(what: str, n: int = 0, of: int = 0, key: str | None = None) -> No
     """A reading's step as it starts: what is asked now, which of how many, and what the
     same step took last time, for an estimate of what is left."""
     state.LIVE.setdefault("started", time.time())
+    state.LIVE["tokens_before"] = state.LIVE.get("tokens", 0)  # a reading's tokens add up over its steps
     expected = _history().get(key) if key else None
     state.LIVE["step"] = {
         "what": what,
@@ -174,6 +176,15 @@ def _on_answers(n: int) -> None:
         counts[threading.get_ident()] = n
         state.LIVE["step"]["answers"] = sum(counts.values())
         _live_now()
+
+
+def _on_tokens(total: int) -> None:
+    """What the answers so far spent in this step (reader.on_tokens), summed over the questions
+    running at once. The band hears of it with the next count."""
+    if state.LIVE.get("step"):
+        spent = state.LIVE["step"].setdefault("spent", {})
+        spent[threading.get_ident()] = total
+        state.LIVE["tokens"] = state.LIVE.get("tokens_before", 0) + sum(spent.values())
 
 
 def _history_path() -> Path | None:

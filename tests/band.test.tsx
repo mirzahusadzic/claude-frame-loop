@@ -23,18 +23,37 @@ const seed = (on: any, value: unknown, dismissedAt = 0) => {
   return store
 }
 
-test('a wait says what for, how far along, and how much is left, on every surface', async ($, on) => {
-  seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
+test('a wait is one live line: what is happening, the time left and the tokens, on every surface', async ($, on) => {
+  seed(on, { session: 's', at: 1, state: 'reading', what: 'checking the change',
              why: 'it is a large change', step: 'does it break any of your rules?',
-             n: 2, of: 2, started: 1, step_started: 30, answers: 6, expected: 12 })
+             n: 2, of: 2, started: 1, step_started: 30, answers: 6, expected: 12, tokens: 12400 })
   on('clock.now', () => ({ value: 60000 }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
-    expect((await ui.find({ type: 'Text', text: /because it is a large change/ }))?.text).toContain('0:59')
-    expect((await ui.find({ type: 'Text', text: /step 2 of 2/ }))?.text).toBe('step 2 of 2: does it break any of your rules?')
-    expect((await ui.find({ type: 'Text', text: /answers/ }))?.text).toBe(' · 6 of about 12 answers · about 0:30 left')
+    expect((await ui.find({ type: 'Text', text: /checking the change/ }))?.text).toBe('checking the change')
+    expect((await ui.find({ type: 'Text', text: /tokens/ }))?.text).toBe(' · about 0:30 left · 12k tokens')
+    expect(await ui.find({ type: 'Text', text: /because|step 2 of 2|answers/ })).toBeFalsy()
     await ui.unmount()
   }
+})
+
+test('a wait moves, and shows no tokens before the first is spent', async ($, on) => {
+  seed(on, { session: 's', at: 1, state: 'reading', what: 'checking the change', started: 1 })
+  on('clock.now', () => ({ value: 60000 }))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^[◐◓◑◒] $/ }))?.text).toBeTruthy()
+  expect((await ui.find({ type: 'Text', text: /0:59/ }))?.text).toBe(' · 0:59')
+  await ui.unmount()
+})
+
+test('well past the usual count, the band says still asking and guesses no time left', async ($, on) => {
+  seed(on, { session: 's', at: 1, state: 'reading', what: 'checking the change',
+             started: 1, step_started: 30, answers: 32, expected: 24, tokens: 130000 })
+  on('clock.now', () => ({ value: 94000 }))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /still asking/ }))?.text).toBe('still asking')
+  expect((await ui.find({ type: 'Text', text: /tokens/ }))?.text).toBe(' · 1:33 · 130k tokens')
+  await ui.unmount()
 })
 
 test('a reading that rose says it needs the author, until the next prompt', async ($, on) => {
@@ -129,14 +148,15 @@ test('the switch: /frame-loop writes where the hooks say they read it', async ($
   expect(store.off?.value).toBe(false)
 })
 
-test('past the usual count, the band never says almost done', async ($, on) => {
-  seed(on, { session: 's', at: 1, state: 'reading', what: "checking the change against your requirements",
-             step: 'does it do what you asked?', n: 1, of: 2, started: 1, step_started: 30, answers: 40, expected: 36 })
-  on('clock.now', () => ({ value: 160000 }))
+test('past the usual count, the band claims no disagreement and never almost done', async ($, on) => {
+  seed(on, { session: 's', at: 1, state: 'reading', what: 'checking the change',
+             started: 1, step_started: 30, answers: 40, expected: 36, tokens: 95000 })
+  on('clock.now', () => ({ value: 66000 }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  const line = (await ui.find({ type: 'Text', text: /answers/ }))?.text ?? ''
-  expect(line).toBe(' · 40 answers, more than usual · longer than usual: asked again until the answers agree')
-  expect(line.includes('almost done')).toBe(false)
+  expect((await ui.find({ type: 'Text', text: /still asking/ }))?.text).toBe('still asking')
+  expect(await ui.find({ type: 'Text', text: /disagree/ })).toBeFalsy()
+  expect((await ui.find({ type: 'Text', text: /tokens/ }))?.text).toBe(' · 1:05 · 95k tokens')
+  expect(await ui.find({ type: 'Text', text: /almost done/ })).toBeFalsy()
   await ui.unmount()
 })
 

@@ -2246,9 +2246,7 @@ class CoreTests(unittest.TestCase):
         self.assertTrue(
             all(x["step"] == "does it do what you asked, and does it break any of your rules?" for x in steps), steps
         )
-        self.assertTrue(
-            all(x["what"] == "checking the change against your requirements" and x["started"] for x in steps), steps
-        )
+        self.assertTrue(all(x["what"] == "checking the change" and x["started"] for x in steps), steps)
         self.assertTrue(
             all(x["why"] == "it touches files none of your rules cover" for x in steps), steps
         )  # what the wait is for
@@ -4496,6 +4494,33 @@ class RulesTests(unittest.TestCase):
         self.assertNotIn("show it there", text)
         self.assertIn("in the author's words, as plain sentences", text)
         self.assertIn("Never show the author JSON, ids or inversions", text)
+
+
+def counted_tokens(frame, only=()):
+    """A passing reader that reports what it spent, as Gadfly does."""
+    return {**passing(frame, only), "made": 2, "usage": {"total_tokens": 41000}}
+
+
+class TokensTests(unittest.TestCase):
+    """Asked for: the tokens spent on each line of the band."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+    turn = CoreTests.turn
+
+    def test_a_reading_that_ended_gives_the_band_its_tokens(self):
+        live = WORK / f"live-tokens-{uid(self)}"
+        os.environ.update(FRAME_LOOP_READER="testhook:counted_tokens", FRAME_LOOP_LIVE=str(live))
+        self.turn({f"notes/t-{uid(self)}.py": f"print('{uid(self)}')\n"}, "Serves: A1")
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertEqual(done["tokens"], 82000)  # both questions
+
+    def test_a_turn_with_no_reader_shows_no_tokens(self):
+        live = WORK / f"live-no-tokens-{uid(self)}"
+        os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_LIVE=str(live))
+        self.turn({f"notes/t-{uid(self)}.py": f"print('{uid(self)}')\n"}, "Serves: A1")
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertNotIn("tokens", done)
 
 
 if __name__ == "__main__":

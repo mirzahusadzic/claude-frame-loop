@@ -6,6 +6,7 @@ export type Live = {
   why?: string | null
   step_started?: number | null
   answers?: number
+  tokens?: number // what the reader has spent on this reading
   expected?: number | null
   expected_seconds?: number | null
   step?: string

@@ -184,6 +184,28 @@ class LiveFileTests(unittest.TestCase):
         live._on_answers(2)
         self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["answers"], 7)
 
+    def test_tokens_from_questions_at_once_are_summed_and_shown(self):
+        """Each of two questions running at once would overwrite the other's tokens in the band."""
+        live._live_step("a step", 1, 1)
+        live._on_tokens(100)
+        state.LIVE["step"]["spent"][-1] = 50  # another thread's tokens
+        live._on_tokens(200)
+        live._on_answers(1)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["tokens"], 250)
+
+    def test_tokens_add_up_over_a_readings_steps(self):
+        """A second step would start the count again, showing less than was spent."""
+        live._live_step("a step", 1, 2)
+        live._on_tokens(100)
+        live._live_step("the next", 2, 2)
+        live._on_tokens(30)
+        live._on_answers(1)
+        self.assertEqual(json.loads(self.path.read_text(encoding="utf-8"))["tokens"], 130)
+
+    def test_tokens_before_any_step_write_nothing(self):
+        live._on_tokens(3)
+        self.assertFalse(self.path.exists())
+
     def test_a_torn_history_gives_no_estimate_and_no_error(self):
         """A history file cut short would crash every reading's first step."""
         work = self.tmp / "work"

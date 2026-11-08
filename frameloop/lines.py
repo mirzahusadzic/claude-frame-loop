@@ -245,6 +245,8 @@ def _tell(
     refused = (result.get("reason") or "").startswith("not read") and not result.get("scope")
     state.LIVE["decision"] = gate.BLOCK if refused else result["decision"]  # ■ in the band, as under the reply
     state.LIVE.setdefault("shorts", []).append(_short(result, frame0))
+    if (result.get("usage") or {}).get("total_tokens"):
+        state.LIVE["tokens"] = result["usage"]["total_tokens"]
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
     notes = []
     for note in result.get("effort_notes") or []:
