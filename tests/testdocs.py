@@ -258,7 +258,7 @@ class StatusLineTests(unittest.TestCase):
         section = setup.split("### Status line", 1)[1]
         self.script = re.search(r"```sh\n(.*?)```", section, re.S).group(1)
         self.settings = json.loads(re.search(r"```json\n(.*?)```", section, re.S).group(1))
-        self.home = Path(tempfile.mkdtemp(prefix="frame-loop-statusline-"))
+        self.home = Path(tempfile.mkdtemp(prefix="statusline-"))  # a name the line never prints
         (self.home / ".claude").mkdir()
         self.repo = self.home / "project"
         (self.repo / ".frame-loop").mkdir(parents=True)
@@ -269,7 +269,9 @@ class StatusLineTests(unittest.TestCase):
         (self.home / ".claude" / "settings.json").write_text(json.dumps(user), encoding="utf-8")
         event = json.dumps({"workspace": {"current_dir": str(self.repo)}})
         env = {**os.environ, "HOME": str(self.home)}
-        done = subprocess.run(["sh", "-c", self.script], input=event, capture_output=True, text=True, env=env)
+        done = subprocess.run(
+            ["sh", "-c", self.script], input=event, capture_output=True, text=True, encoding="utf-8", env=env
+        )
         self.assertEqual(done.stderr, "")
         return done.stdout
 
@@ -277,5 +279,5 @@ class StatusLineTests(unittest.TestCase):
         self.assertTrue(self.line(True).endswith(" · frame-loop on"))
         (self.repo / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
         self.assertTrue(self.line(True).endswith(" · frame-loop off"))
-        self.assertNotIn("frame-loop", self.line(False).split("/")[-1])
+        self.assertNotIn("frame-loop", self.line(False))
         self.assertEqual(self.settings["statusLine"]["refreshInterval"], 5)

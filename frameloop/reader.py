@@ -69,7 +69,10 @@ def too_old() -> str | None:
     how = launcher()
     if how is None or how[1] is not None:  # none, or a checkout: the developer's own
         return None
-    said = bounded([*how[0], "--version"], 15, what="gadfly --version").stdout
+    try:
+        said = bounded([*how[0], "--version"], 15, what="gadfly --version").stdout
+    except OSError:  # a gadfly that cannot start: the reading says so, not the session's start
+        return None
     found = re.search(r"(\d+)\.(\d+)\.(\d+)", said)
     if not found:
         return None

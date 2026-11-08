@@ -60,6 +60,12 @@ class LauncherTest(unittest.TestCase):
         ):
             self.assertEqual(reader.launcher(), ([str(tool / "gadfly")], None))
 
+    def test_a_gadfly_that_cannot_start_is_no_version_and_no_error(self):
+        """CI: the session's start ran `gadfly --version` on a launcher whose program is not
+        there, and the hook failed; the reading says so instead."""
+        with mock.patch.object(reader, "launcher", return_value=(["no-such-gadfly-here"], None)):
+            self.assertIsNone(reader.too_old())
+
     def test_not_installed_is_never_a_pass(self):
         with (
             self.nowhere(),
