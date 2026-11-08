@@ -63,7 +63,8 @@ def snapshot(cwd: str) -> str | None:
         elif mine.exists():
             mine.unlink()
         skip = []
-        project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or cwd) / ".frame-loop"
+        named = os.environ.get("CLAUDE_PROJECT_DIR")
+        project = Path(named if named and Path(named).is_dir() else cwd) / ".frame-loop"
         own = [
             os.environ[name]
             for name in (

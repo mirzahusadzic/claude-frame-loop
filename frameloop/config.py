@@ -104,7 +104,7 @@ DATA_SINKS = {"cat", "tee", "head", "tail", "wc", "grep", "sed", "sort"}
 
 def _home() -> Path:
     """The project's own .frame-loop/: frame 0, the rules, the tree, the switch, the record."""
-    project = os.environ.get("CLAUDE_PROJECT_DIR") or state.CWD or os.getcwd()
+    project = project_dir({"cwd": state.CWD})
     return Path(project) / ".frame-loop"
 
 
@@ -294,7 +294,7 @@ def loop_files(event: dict[str, Any]) -> dict[str, str]:
     project's Claude Code settings. Not the record or the work folder: the loop writes them."""
     import hashlib
 
-    project = Path(os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or os.getcwd())
+    project = Path(project_dir(event))
     paths = [Path(os.environ[n]) for n in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES") if os.environ.get(n)]
     tree = os.environ.get("FRAME_LOOP_TREE")
     if tree and Path(tree).is_dir():
@@ -335,7 +335,7 @@ def plugin_defaults(event: dict[str, Any]) -> None:
     the novice profile); the loop's own guard brings every change there to the author."""
     if os.environ.get("FRAME_LOOP_PLUGIN") != "1":
         return
-    project = os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or os.getcwd()
+    project = project_dir(event)
     home = Path(project) / ".frame-loop"
     os.environ.setdefault("FRAME_LOOP_FRAME0", str(home / "frame0.json"))
     os.environ.setdefault("FRAME_LOOP_LOG", str(home / "steps.jsonl"))
@@ -352,10 +352,19 @@ def plugin_defaults(event: dict[str, Any]) -> None:
         pass
 
 
+def project_dir(event: dict[str, Any]) -> str:
+    """The session's project: CLAUDE_PROJECT_DIR when it names a folder that is there, as the
+    band reads it, else the event's directory; a missing one is never used, nor created."""
+    named = os.environ.get("CLAUDE_PROJECT_DIR")
+    if named and Path(named).is_dir():
+        return named
+    return event.get("cwd") or state.CWD or os.getcwd()
+
+
 def switch_path(event: dict[str, Any]) -> Path:
     """The on/off switch for a project: <project>/.frame-loop/switch, written by the
     author's `/frame-loop on|off`; any other writer is the loop's own record and rises."""
-    project = os.environ.get("CLAUDE_PROJECT_DIR") or event.get("cwd") or os.getcwd()
+    project = project_dir(event)
     return Path(project) / ".frame-loop" / "switch"
 
 

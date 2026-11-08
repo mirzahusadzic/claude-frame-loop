@@ -77,8 +77,8 @@ class PluginTests(Isolated):
         blocked = self.project / "a-file"
         blocked.write_text("", encoding="utf-8")
         os.environ.update(FRAME_LOOP_PLUGIN="1", CLAUDE_PROJECT_DIR=str(blocked), FRAME_LOOP_LIVE=str(blocked))
-        config.plugin_defaults({})
-        self.assertEqual(os.environ["FRAME_LOOP_FRAME0"], str(blocked / ".frame-loop" / "frame0.json"))
+        config.plugin_defaults({"cwd": str(self.project)})  # no error, and nothing put under the file
+        self.assertEqual(os.environ["FRAME_LOOP_FRAME0"], str(self.project / ".frame-loop" / "frame0.json"))
 
     def test_without_the_plugin_nothing_is_set(self):
         """A hook installed by hand would have its files moved into the project behind the author's back."""
@@ -275,3 +275,22 @@ class PythonReadTests(unittest.TestCase):
         for command in writes:
             with self.subTest(command):
                 self.assertFalse(config._read_only(command))
+
+
+class ProjectDirTests(unittest.TestCase):
+    """Sparky's third review: a CLAUDE_PROJECT_DIR naming a missing folder was used for the
+    switch, though the band fell back to the session's directory; and the plugin created it."""
+
+    def test_a_project_dir_that_is_not_there_is_never_used_or_made(self):
+        here = Path(tempfile.mkdtemp(prefix="frame-loop-project-"))
+        (here / ".frame-loop").mkdir()
+        (here / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
+        missing = here / "gone"
+        with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(missing), "FRAME_LOOP_PLUGIN": "1"}):
+            for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK"):
+                os.environ.pop(name, None)
+            event = {"cwd": str(here)}
+            self.assertEqual(config.switch_path(event), here / ".frame-loop" / "switch")
+            self.assertTrue(config.loop_off(event))
+            config.plugin_defaults(event)
+            self.assertFalse(missing.exists())
