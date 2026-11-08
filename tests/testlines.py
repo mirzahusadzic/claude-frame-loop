@@ -154,3 +154,18 @@ class ActLineTests(unittest.TestCase):
         self.assertTrue(shown.endswith("…"))
         short = {**record, "command": "echo off > .frame-loop/switch"}
         self.assertEqual(lines.act_words(short)[2], "echo off > .frame-loop/switch")
+
+
+class SeenAfterTests(unittest.TestCase):
+    """Sparky's third review: a change to the loop's files seen after a shell call was told
+    as "it did not go through" when the file was gone, or written over a second before."""
+
+    def test_a_change_seen_after_the_call_went_through(self):
+        gone = {"event": "config", "path": "/nowhere/.frame-loop/switch", "after": True, "at": 1.0}
+        words = lines.act_words(gone)[0]
+        self.assertEqual(words, "Claude removed the switch")
+        self.assertNotIn("did not go through", words)
+        here = Path(__file__)
+        self.assertEqual(
+            lines.act_words({**gone, "path": str(here), "at": 1.0})[0], "Claude changed the loop's own files"
+        )

@@ -95,6 +95,9 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
                 return f"{ASKED.get(key, 'Claude asked for an act')}, and it did not run", False, exact
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
                 words = f"Claude ran a command on {_which(record.get('command') or '')}"
+            elif key == "L1:" and record.get("after"):  # seen after the call: it went through
+                gone = not Path(record.get("path", "")).exists()
+                words = f"Claude {'removed' if gone else 'changed'} {_which(record.get('path', ''))}"
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
                 words = "Claude tried to change the loop's own files, and it did not go through"
             return words, needs, exact
