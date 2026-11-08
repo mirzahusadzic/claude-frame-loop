@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from procs import within
+
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
 INSIDE_WRITER = "FRAME_LOOP_INSIDE_WRITER"  # set in the writer's own `claude -p`
 # A label of part of a change could pass what the rest breaks: a longer change is not
@@ -120,7 +122,7 @@ def haiku(text: str, avoid: list[str] | tuple[str, ...] = ()) -> dict[str, Any]:
             # The nested session loads the user's plugins, frame-loop among them: its hooks
             # see this and stand aside, so a label call reads nothing and logs nothing.
             env={**os.environ, INSIDE_WRITER: "1"},
-            timeout=180,
+            timeout=within(180),  # its own 180 s, or the hook's time left
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         return {"error": f"the writer did not run ({type(error).__name__})"}

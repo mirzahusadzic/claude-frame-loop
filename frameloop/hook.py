@@ -208,9 +208,19 @@ def _rise(mode: str, reason: str, decision: str) -> dict[str, Any]:
 MARKER_IN_CHAIN = re.compile(r"(&&|\|\||;|\|)\s*: frame-loop-(declare|read|node)\b")
 
 
+# The time each hook may take, inside the timeout hooks/hooks.json gives it: the reading hooks
+# 600 s, the others 30 s; what is left over is for answering.
+LONG_HOOKS = {("Stop", None), ("PreToolUse", "Bash"), ("PreToolUse", "ExitPlanMode")}
+
+
 def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     """The hook's stdout object, or None for no opinion. What the human reads
     (systemMessage) speaks in words; what the agent reads keeps the ids."""
+    import procs
+
+    name, tool = event.get("hook_event_name"), event.get("tool_name")
+    long = (name, None if name == "Stop" else tool) in LONG_HOOKS
+    procs.DEADLINE = time.monotonic() + (570 if long else 25)
     state.LIVE.clear()
     plugin_defaults(event)
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once

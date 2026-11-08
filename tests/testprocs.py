@@ -33,6 +33,68 @@ class BoundedTests(unittest.TestCase):
         self.assertEqual((done.returncode, done.stderr), (procs.TIMED_OUT, "the sleeper took longer than 1 s"))
 
 
+class HookDeadlineTests(unittest.TestCase):
+    """Sparky's third review: each run had its own deadline, but not the hook: a plan's writer
+    and reader, or a completion's asks in a row, outran the 600 s Claude Code gives it, which
+    then stopped the hook with no answer and left its Gadfly running."""
+
+    def tearDown(self):
+        procs.DEADLINE = None
+
+    def test_a_run_takes_the_hooks_time_left_when_that_is_shorter(self):
+        procs.DEADLINE = time.monotonic() + 1
+        started = time.monotonic()
+        done = procs.bounded([sys.executable, "-c", "import time; time.sleep(30)"], 540, what="the reader")
+        self.assertLess(time.monotonic() - started, 10)
+        self.assertEqual((done.returncode, done.stderr), (procs.TIMED_OUT, "the reader ran out of the hook's time"))
+
+    def test_each_hook_has_a_deadline_inside_its_timeout(self):
+        import json as _json
+
+        import hook
+
+        timeouts = {}
+        settings = _json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))
+        for name, groups in settings["hooks"].items():
+            for group in groups:
+                for tool in (group.get("matcher") or "").split("|") or [""]:
+                    timeouts[(name, tool or None)] = group["hooks"][0]["timeout"]
+        for (name, tool), limit in timeouts.items():
+            with self.subTest(name=name, tool=tool):
+                with mock.patch.object(hook, "loop_off", return_value=True):
+                    hook.answer({"hook_event_name": name, "tool_name": tool, "session_id": "d", "cwd": str(ROOT)})
+                self.assertLess(procs.DEADLINE - time.monotonic(), limit)
+
+    def test_a_completion_short_of_time_says_which_asks_it_did_not_read(self):
+        import reading
+
+        procs.DEADLINE = time.monotonic() + 30
+        steps = [{"id": "S1", "text": "a step", "claims": ["A1"]}]
+        frame0 = {
+            "id": "f",
+            "asks": [
+                {
+                    "id": "A1",
+                    "text": "the tool reads one file",
+                    "inversion": {"the tool reads one file": "the tool reads no file"},
+                }
+            ],
+            "principles": [],
+            "triggers": [],
+        }
+        with (
+            mock.patch.object(reading, "_records", return_value=steps),
+            mock.patch.object(reading, "kept_diff", return_value="+x\n", create=True),
+            mock.patch.object(reading, "tier_for", return_value=("private", "")),
+            mock.patch.object(
+                reading, "_reader", return_value=lambda frame, only=(): self.fail("read with no time left")
+            ),
+            mock.patch.object(reading, "step_diff", return_value=Path(__file__)),
+        ):
+            said = reading.complete(frame0)
+        self.assertIn("A1 not read (out of time", said)
+
+
 class StopTreeTests(unittest.TestCase):
     def proc(self):
         fake = mock.Mock(pid=4242)

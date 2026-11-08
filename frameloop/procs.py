@@ -9,9 +9,20 @@ import os
 import signal
 import subprocess
 import tempfile
+import time
 from typing import Any
 
 TIMED_OUT = 124  # the exit of a run stopped at its deadline, as `timeout` gives
+# The hook's own deadline, as time.monotonic() reads it: Claude Code stops a hook at its
+# timeout, so every run within it takes the time left, never more (None: no such bound).
+DEADLINE: float | None = None
+
+
+def within(seconds: float) -> float:
+    """A run's deadline: its own, or the hook's time left if that is shorter."""
+    if DEADLINE is None:
+        return seconds
+    return max(0.0, min(seconds, DEADLINE - time.monotonic()))
 
 
 def bounded(command: list[str], seconds: float, *, what: str, **given: Any) -> subprocess.CompletedProcess:
@@ -32,11 +43,15 @@ def bounded(command: list[str], seconds: float, *, what: str, **given: Any) -> s
             ),
             **given,
         )
+        allowed = within(seconds)
         try:
-            proc.wait(timeout=seconds)
+            proc.wait(timeout=allowed)
         except subprocess.TimeoutExpired:
             stop_tree(proc)
-            return subprocess.CompletedProcess(command, TIMED_OUT, "", f"{what} took longer than {seconds:g} s")
+            said = (
+                f"{what} took longer than {seconds:g} s" if allowed >= seconds else f"{what} ran out of the hook's time"
+            )
+            return subprocess.CompletedProcess(command, TIMED_OUT, "", said)
         return subprocess.CompletedProcess(command, proc.returncode, _text(out), _text(err))
 
 

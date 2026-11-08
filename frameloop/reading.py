@@ -23,6 +23,7 @@ from lines import _reader_name, _tell, for_user
 from live import _live_step, _on_answers, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, outgoing, tier_for, withhold_file
+from procs import within
 from record import _log, _records, _records_all, step_diff
 from repo import _git, project_root
 
@@ -308,6 +309,9 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         claimed = [s for s in steps if ask["id"] in s["claims"]]
         if not claimed:
             parts.append(f"{ask['id']}: nothing claims it")
+            continue
+        if within(600) < 90:  # too little of the hook's time is left for one more reading
+            parts.append(f"{ask['id']} not read (out of time: read it again)")
             continue
         refusal = None
         missing = [s["id"] for s in claimed if s["diff"] is None]
