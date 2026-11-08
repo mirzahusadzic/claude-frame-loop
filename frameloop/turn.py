@@ -116,14 +116,17 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     """A turn's free, deterministic label: its files and size, the asks it claims, what
     it owes, and its signals. No model is involved."""
     # A rename is a delete and an add, so the path it left counts for scope and checks.
-    listed = _git(cwd, "diff", "--name-status", "--no-renames", before, after).stdout
+    # git's own diff, never an external tool's view or a textconv's, and a failed one is said
+    runs = [
+        _git(cwd, "diff", "--no-ext-diff", "--no-textconv", *how, "--no-renames", before, after)
+        for how in (["--name-status"], ["--numstat"], ["--patch"])
+    ]
+    listed, counted, diff = (x.stdout for x in runs)
     status = [row.split("\t") for row in listed.splitlines() if "\t" in row]
     paths = [x[-1] for x in status]
-    counted = _git(cwd, "diff", "--numstat", "--no-renames", before, after).stdout
     numstat = [row.split("\t") for row in counted.splitlines() if "\t" in row]
     added = sum(int(x[0]) for x in numstat if x[0].isdigit())
     removed = sum(int(x[1]) for x in numstat if x[1].isdigit())
-    diff = _git(cwd, "diff", "--patch", "--no-renames", before, after).stdout
     root = project_root(cwd)
     owed_line, owed_faults = obligations_line(frame0, root, paths, [], status)
     found = [f.split(" (")[0].replace("owed ", "").replace(" not met", " unmet") for f in owed_faults]
@@ -153,6 +156,8 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
     docs_only = bool(paths) and all(S.DOCS.search(p) or p.endswith(".svg") for p in paths)
     if hit and not (docs_only and not found):  # a large docs edit alone starts no read
         found.append("a rule signal (" + ", ".join(hit) + ")")
+    if any(x.returncode != 0 for x in runs):  # never the free check mark on a diff not read
+        found.append("the change's diff could not be read")
     sid = f"S{len(_records('step')) + 1}"
     where = ", ".join(paths[:2]) + (f" +{len(paths) - 2} more" if len(paths) > 2 else "")
     text = (

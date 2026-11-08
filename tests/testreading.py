@@ -3,6 +3,7 @@ completion reading when the work is presented, at the root and up a tree."""
 
 import json
 import os
+import subprocess
 import sys
 import unittest
 from pathlib import Path
@@ -10,11 +11,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
+import gate  # noqa: E402
 import hook  # noqa: E402
 import reading  # noqa: E402
 import record  # noqa: E402
+import repo  # noqa: E402
 import state  # noqa: E402
 import testhook  # noqa: E402
+import turn  # noqa: E402
 from testhook import FIXTURE, PUBLIC, WORK, env, plan_event, uid  # noqa: E402
 
 FRAME0 = json.loads(FIXTURE.read_text(encoding="utf-8"))
@@ -298,3 +302,50 @@ class CompletionOnceTests(unittest.TestCase):
             ):
                 reading.complete(frame0)
                 self.assertEqual(len(calls), len(steps))
+
+
+class DiffFailureTests(Isolated):
+    """Sparky's third review: a failing diff driver left only a stat line, which was read and
+    passed; and a working external diff tool's view replaced git's own patch."""
+
+    def setUp(self):
+        super().setUp()
+        os.environ["FRAME_LOOP_READER"] = "testhook:passing"
+        self.repo = Path(testhook.make_repo(testhook.WORK / f"diff-fail-{uid(self)}"))
+        (self.repo / "a.txt").write_text("one\n", encoding="utf-8")
+        subprocess.run(["git", "add", "-A"], cwd=self.repo, check=True)
+        subprocess.run(["git", "commit", "-q", "-m", "a"], cwd=self.repo, check=True)
+        self.before = repo.snapshot(str(self.repo))
+        (self.repo / "a.txt").write_text("two\n", encoding="utf-8")
+        self.after = repo.snapshot(str(self.repo))
+
+    def test_an_external_diff_or_textconv_never_stands_in_for_the_patch(self):
+        tool = self.repo / "view.sh"
+        tool.write_text("#!/bin/sh\necho EXTERNAL VIEW\n", encoding="utf-8")
+        tool.chmod(0o755)
+        for key, value in (("diff.external", str(tool)), ("diff.txt.textconv", "false")):
+            subprocess.run(["git", "config", key, value], cwd=self.repo, check=True)
+        (self.repo / ".gitattributes").write_text("*.txt diff=txt\n", encoding="utf-8")
+        step = turn.step_label(
+            str(self.repo), self.before, self.after, json.loads(Path(FIXTURE).read_text(encoding="utf-8")), ["A1"]
+        )
+        self.assertIn("+two", step["diff"])
+        self.assertNotIn("EXTERNAL VIEW", step["diff"])
+        self.assertNotIn("the change's diff could not be read", step["signals"])
+
+    def test_a_diff_that_fails_is_not_read_and_never_free(self):
+        missing = "0" * 40  # no such tree: git diff exits 128
+        read = reading.read_change(
+            str(self.repo),
+            missing,
+            self.after,
+            "Serves: A1",
+            json.loads(Path(FIXTURE).read_text(encoding="utf-8")),
+            "turn",
+        )
+        self.assertEqual(read["result"]["decision"], gate.BLOCK)
+        self.assertIn("git diff failed", read["result"]["reason"])
+        step = turn.step_label(
+            str(self.repo), missing, self.after, json.loads(Path(FIXTURE).read_text(encoding="utf-8")), ["A1"]
+        )
+        self.assertIn("the change's diff could not be read", step["signals"])

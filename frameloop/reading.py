@@ -194,12 +194,15 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     """Read the change between two trees against frame 0: the diff for the reader, the
     agent's lines (`said`) for the declaration and effort only. Logged as `kind`."""
     started = time.time()
-    diff = _git(cwd, "diff", "--stat", "--patch", before, after).stdout
-    status = [
-        line.split("\t")
-        for line in _git(cwd, "diff", "--name-status", "--no-renames", before, after).stdout.splitlines()
-        if "\t" in line
-    ]
+    patch = _git(cwd, "diff", "--no-ext-diff", "--no-textconv", "--stat", "--patch", before, after)
+    named = _git(cwd, "diff", "--no-ext-diff", "--name-status", "--no-renames", before, after)
+    diff = patch.stdout
+    status = [line.split("\t") for line in named.stdout.splitlines() if "\t" in line]
+    if patch.returncode != 0 or named.returncode != 0:  # a failed reading is never a pass
+        why = (patch.stderr or named.stderr or "").strip().splitlines()[:1]
+        result = {"decision": gate.BLOCK, "reason": "not read: git diff failed" + (f" ({why[0][:80]})" if why else "")}
+        _log({"event": kind, "declared": _declared(said, frame0), "from": before, "to": after, **result})
+        return {"result": result, "tier": None, "tell": _tell(kind, result, None, started, frame0)}
     facts = {
         "deleted": [x[-1] for x in status if x[0].startswith("D")],
         "paths": [x[-1] for x in status],
