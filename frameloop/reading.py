@@ -57,6 +57,8 @@ def read_step(
     if run is None:
         return {"decision": gate.RISE, "reason": "no reader configured: not read"}
     module = sys.modules.get(getattr(run, "__module__", "") or "")
+    if module is not None and hasattr(module, "new_reading"):  # its cap counts from here
+        module.new_reading()
     if module is not None and hasattr(module, "on_progress"):  # the band counts its answers
         module.on_progress = _on_answers if os.environ.get("FRAME_LOOP_LIVE") else None
     if module is not None and hasattr(module, "on_tokens"):  # and what they spent

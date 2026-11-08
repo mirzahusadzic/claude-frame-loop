@@ -79,6 +79,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that |
 | `FRAME_LOOP_OUTPUT_TOKENS` | `16000` | the cap on each reader answer |
 | `FRAME_LOOP_READ_TIMEOUT` | `540` | seconds a reading's Gadfly run may take before it is stopped and the change is not read |
+| `FRAME_LOOP_READ_TOKENS` | `150000` | the tokens a reading may spend, for each requirement in a completion, before it is stopped and the change is not read; `0` for no cap. It is checked as answers land, so calls in flight can go over it |
 | `FRAME_LOOP_GIT_TIMEOUT` | `20` | seconds a git call may take; past it there is no snapshot, and the change is not read |
 | `FRAME_LOOP_DIFF_CHARS` | `12000` | where a diff sent with labels off is cut, outside the plugin |
 | `FRAME_LOOP_WRITER_MODEL` | `claude-haiku-5-5` | the model that writes labels |

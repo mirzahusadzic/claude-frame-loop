@@ -193,7 +193,9 @@ class ContractTests(unittest.TestCase):
             mock.patch.object(
                 reader,
                 "_gadfly",
-                lambda args, watch=None: seen.append(args) or subprocess.CompletedProcess(args, 0, "{}", ""),
+                lambda args, watch=None, group="reading": (
+                    seen.append(args) or subprocess.CompletedProcess(args, 0, "{}", "")
+                ),
             ),
             mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": str(ROOT / "tests/.work")}),
         ):

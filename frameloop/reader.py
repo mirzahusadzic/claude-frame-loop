@@ -17,13 +17,31 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from procs import TIMED_OUT, bounded
+from procs import STOPPED, TIMED_OUT, bounded
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
 GADFLY_FLOOR = (0, 13, 1)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
 # 0.13.1: UTF-8 output on Windows, which the hooks read as UTF-8
 MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.13.1', or set GADFLY_CHECKOUT to a checkout"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
+TOKEN_CAP = 150000  # a reading's tokens, what its Gadfly runs have spent together
+READING = "reading"  # the questions of one reading share a cap; each completion frame has its own
+_spent: dict[str, dict[Path, int]] = {}
+
+
+def new_reading() -> None:
+    """A reading starts: what the last one spent no longer counts."""
+    _spent.pop(READING, None)
+
+
+def _token_cap() -> int:
+    """The most tokens a reading may spend, 0 for no cap. Checked as answers land, so what is
+    in flight then can go over it."""
+    try:
+        cap = int(os.environ.get("FRAME_LOOP_READ_TOKENS") or TOKEN_CAP)
+    except ValueError:
+        return TOKEN_CAP
+    return cap if cap >= 0 else TOKEN_CAP
 
 
 # Set by the hook for a live view: called with how many of the reader's answers are in
@@ -124,23 +142,32 @@ def too_old() -> str | None:
     return f"Gadfly {'.'.join(map(str, version))} is older than frame-loop needs ({need}): uv tool upgrade midwife"
 
 
-def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedProcess:
+def _gadfly(args: list[str], watch: Path | None = None, group: str = READING) -> subprocess.CompletedProcess:
     how = launcher()
     if how is None:  # never a pass: the gate reads an error as not read
         return subprocess.CompletedProcess(args, 127, json.dumps({"error": {"message": MISSING}}), "")
     command, where = how[0] + args, how[1]
-    stop = threading.Event()
+    stop, over = threading.Event(), threading.Event()
+    cap = _token_cap()
+    spent = _spent.setdefault(group, {})
 
     def poll() -> None:
         seen, said = -1, time.monotonic()
         while not stop.wait(0.5):
             n = _answers(watch)
+            if n != seen:
+                spent[watch] = _tokens(watch)
+            if cap and sum(spent.values()) >= cap:
+                over.set()
+            if on_progress is None:
+                seen = n
+                continue
             # A new answer, or a heartbeat: the band hides a reading it has not heard of in
             # 180 seconds, and a long question can go longer than that between answers.
             if n != seen or time.monotonic() - said >= HEARTBEAT:
                 try:
                     if on_tokens is not None and n != seen:  # first: the count's write carries them
-                        on_tokens(_tokens(watch))
+                        on_tokens(spent[watch])
                 except Exception:  # a live view never fails a reading
                     pass
                 seen, said = n, time.monotonic()
@@ -149,15 +176,19 @@ def _gadfly(args: list[str], watch: Path | None = None) -> subprocess.CompletedP
                 except Exception:  # a live view never fails a reading
                     pass
 
-    watcher = threading.Thread(target=poll, daemon=True) if on_progress is not None and watch is not None else None
+    watcher = threading.Thread(target=poll, daemon=True) if watch is not None else None
     if watcher:
         watcher.start()
     try:
-        done = bounded(command, _read_timeout(), what="the reader", cwd=where)
+        done = bounded(command, _read_timeout(), what="the reader", cwd=where, until=over.is_set if watcher else None)
     finally:
         stop.set()
         if watcher:
             watcher.join(2)
+    if done.returncode == STOPPED:  # stopped: an error the gate reads as not read
+        said = f"the reader reached its token cap of {cap}, so it was stopped"
+        told = {"error": {"message": said}, "usage": {"total_tokens": _tokens(watch)}}
+        return subprocess.CompletedProcess(command, STOPPED, json.dumps(told), done.stderr)
     if done.returncode == TIMED_OUT and not done.stdout:  # stopped: an error the gate reads as not read
         said = f"the reader gave no answer within {_read_timeout():g} s, so it was stopped"
         return subprocess.CompletedProcess(command, TIMED_OUT, json.dumps({"error": {"message": said}}), done.stderr)
@@ -238,6 +269,8 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
     path = work / "frame.json"
     path.write_text(json.dumps(frame), encoding="utf-8")
     battery = os.environ.get("FRAME_LOOP_BATTERY", "midwife.batteries.unified:Unified")
+    name = str(frame.get("name") or "")
+    group = name if name.startswith("completion-") else READING
     if only:
         out = work / "records.jsonl"
         args = [
@@ -258,7 +291,7 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             args += ["--only", trial]
         if int(os.environ.get("FRAME_LOOP_PARALLEL", "1")) > 1:
             args += ["--parallel", os.environ["FRAME_LOOP_PARALLEL"]]
-        ran = _gadfly(args, watch=out)
+        ran = _gadfly(args, watch=out, group=group)
         if ran.returncode != 0:
             return json.loads(ran.stdout or ran.stderr)
         made = json.loads(ran.stdout)
@@ -287,5 +320,6 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             *(["--parallel", str(parallel)] if parallel > 1 else []),
         ],
         watch=work / "runs",
+        group=group,
     )
     return {**json.loads(ran.stdout or ran.stderr), "reader": {"parallel": parallel}, "split": _split(work / "runs")}

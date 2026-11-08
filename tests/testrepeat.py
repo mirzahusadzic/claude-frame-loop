@@ -232,6 +232,12 @@ class NarrowFirstTests(Repeats):
         self.assertGreater(len(self.loaded.CALLS), self.calls)
 
 
+class NewReadingTests(Repeats):
+    def test_each_reading_starts_its_count_again(self):
+        self.read(self.base, self.final)
+        self.assertEqual(len(self.loaded.NEW_READINGS), 1)
+
+
 class BackgroundTests(Repeats):
     """An on-demand reading that covers a background one still running stops it: both ran, on one tree."""
 

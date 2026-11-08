@@ -1,5 +1,6 @@
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import time
@@ -77,6 +78,96 @@ class LauncherTest(unittest.TestCase):
         result = __import__("json").loads(done.stdout)
         self.assertTrue(gate._failed(result))
         self.assertIn("uv tool install 'midwife>=0.13.1'", gate._failure(result))
+
+
+class TokenCapTest(unittest.TestCase):
+    """A reading stops at its cap. Gadfly's own --token-budget can't hold it: it refuses any run
+    whose calls times each call's limit go over, which at 16,000 a call is every run."""
+
+    def setUp(self):
+        import reader
+
+        self.reader = reader
+        reader.new_reading()
+        self.addCleanup(reader.new_reading)
+        patched = mock.patch.dict(os.environ, {"FRAME_LOOP_READ_TOKENS": "100"})
+        patched.start()
+        self.addCleanup(patched.stop)
+        self.where = Path(tempfile.mkdtemp())
+        self.n = 0
+
+    def gadfly(self, tokens, sleep=60, **given):
+        """A run that spends `tokens`, then waits."""
+        self.n += 1
+        out = self.where / f"records-{self.n}.jsonl"
+        script = (
+            "import json, sys, time\n"
+            f"open(sys.argv[1], 'w').write(json.dumps({{'usage': {{'total_tokens': {tokens}}}}}) + '\\n')\n"
+            f"time.sleep({sleep})\n"
+            "print('{\"exit\": 0}')\n"
+        )
+        with mock.patch.object(self.reader, "launcher", return_value=([sys.executable, "-c", script, str(out)], None)):
+            return self.reader._gadfly([], watch=out, **given)
+
+    def test_a_run_past_the_cap_is_stopped_and_never_a_pass(self):
+        started = time.monotonic()
+        done = self.gadfly(150)
+        self.assertLess(time.monotonic() - started, 15)
+        self.assertEqual(done.returncode, self.reader.STOPPED)
+        result = json.loads(done.stdout)
+        self.assertEqual(result["usage"], {"total_tokens": 150})
+        self.assertEqual(result["error"]["message"], "the reader reached its token cap of 100, so it was stopped")
+        self.assertTrue(gate._failed(result))
+        self.assertEqual(gate.which_ask(result, ["A1"])[0], gate.BLOCK)
+        self.assertEqual(gate.violation_stage_one(result)[0], gate.BLOCK)
+
+    def test_a_run_under_the_cap_is_left_alone(self):
+        done = self.gadfly(50, sleep=1)
+        self.assertEqual((done.returncode, json.loads(done.stdout)), (0, {"exit": 0}))
+
+    def test_the_questions_of_one_reading_share_the_cap(self):
+        self.assertEqual(self.gadfly(60, sleep=1).returncode, 0)
+        self.assertEqual(self.gadfly(60).returncode, self.reader.STOPPED)
+
+    def test_a_new_reading_starts_from_nothing(self):
+        self.assertEqual(self.gadfly(60, sleep=1).returncode, 0)
+        self.reader.new_reading()
+        self.assertEqual(self.gadfly(60, sleep=1).returncode, 0)
+
+    def test_each_requirement_of_a_completion_has_its_own_cap(self):
+        self.assertEqual(self.gadfly(60, sleep=1, group="completion-a").returncode, 0)
+        self.assertEqual(self.gadfly(60, sleep=1, group="completion-b").returncode, 0)
+        self.assertEqual(self.gadfly(60, group="completion-a").returncode, self.reader.STOPPED)
+
+    def test_the_cap_needs_no_live_view(self):
+        with mock.patch.object(self.reader, "on_progress", None), mock.patch.object(self.reader, "on_tokens", None):
+            self.assertEqual(self.gadfly(150).returncode, self.reader.STOPPED)
+
+    def test_the_setting_reads(self):
+        for given, expected in (("0", 0), ("250000", 250000), ("", 150000), ("lots", 150000), ("-5", 150000)):
+            with mock.patch.dict(os.environ, {"FRAME_LOOP_READ_TOKENS": given}):
+                self.assertEqual(self.reader._token_cap(), expected, given)
+
+    def test_zero_means_no_cap(self):
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_READ_TOKENS": "0"}):
+            self.assertEqual(self.gadfly(10**9, sleep=1).returncode, 0)
+
+    def test_a_reading_names_its_group(self):
+        groups = []
+
+        def gadfly(args, watch=None, group="reading"):
+            groups.append(group)
+            return subprocess.CompletedProcess(args, 0, "{}", "")
+
+        os.environ["FRAME_LOOP_WORK"] = str(self.where)
+        self.addCleanup(os.environ.pop, "FRAME_LOOP_WORK", None)
+        with mock.patch.object(self.reader, "_gadfly", gadfly):
+            self.reader.run({"name": "which-ask-x"})
+            self.reader.run({"name": "violation-x"}, only=("baseline",))
+            self.reader.run({"name": "completion-f-A1-diffs"})
+        self.assertEqual(groups[0], "reading")
+        self.assertEqual(groups[1], "reading")  # its report follows, watching nothing
+        self.assertEqual(groups[-1], "completion-f-A1-diffs")
 
 
 class SplitTest(unittest.TestCase):

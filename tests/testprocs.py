@@ -32,6 +32,27 @@ class BoundedTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 15)
         self.assertEqual((done.returncode, done.stderr), (procs.TIMED_OUT, "the sleeper took longer than 1 s"))
 
+    def test_a_run_ends_at_once_when_it_is_told_to_stop(self):
+        started = time.monotonic()
+        done = procs.bounded(
+            [sys.executable, "-c", "import time; time.sleep(60)"],
+            120,
+            what="the sleeper",
+            until=lambda: time.monotonic() - started > 0.3,
+        )
+        self.assertLess(time.monotonic() - started, 15)
+        self.assertEqual(done.returncode, procs.STOPPED)
+
+    def test_a_run_told_never_to_stop_ends_by_itself(self):
+        done = procs.bounded([sys.executable, "-c", "print('done')"], 30, what="python", until=lambda: False)
+        self.assertEqual((done.returncode, done.stdout), (0, "done\n"))
+
+    def test_a_run_with_a_stop_still_has_its_deadline(self):
+        done = procs.bounded(
+            [sys.executable, "-c", "import time; time.sleep(60)"], 1, what="the sleeper", until=lambda: False
+        )
+        self.assertEqual(done.returncode, procs.TIMED_OUT)
+
 
 class HookDeadlineTests(unittest.TestCase):
     """Sparky's third review: each run had its own deadline, but not the hook: a plan's writer

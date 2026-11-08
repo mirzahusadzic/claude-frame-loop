@@ -10,9 +10,11 @@ import signal
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from typing import Any
 
 TIMED_OUT = 124  # the exit of a run stopped at its deadline, as `timeout` gives
+STOPPED = 125  # the exit of a run its caller told to stop
 # The hook's own deadline, as time.monotonic() reads it: Claude Code stops a hook at its
 # timeout, so every run within it takes the time left, never more (None: no such bound).
 DEADLINE: float | None = None
@@ -25,11 +27,14 @@ def within(seconds: float) -> float:
     return max(0.0, min(seconds, DEADLINE - time.monotonic()))
 
 
-def bounded(command: list[str], seconds: float, *, what: str, **given: Any) -> subprocess.CompletedProcess:
+def bounded(
+    command: list[str], seconds: float, *, what: str, until: Callable[[], bool] | None = None, **given: Any
+) -> subprocess.CompletedProcess:
     """A program's run within a deadline, its output as text. Past the deadline the program
-    and every process it started are stopped, and the run ends at once with exit 124. The
-    output goes to files, not pipes: a killed program's child (a git filter) can keep a pipe
-    open, and on Windows even closing one that a reader waits on waits for that child."""
+    and every process it started are stopped, and the run ends at once with exit 124; when
+    `until` says so, likewise with exit 125. The output goes to files, not pipes: a killed
+    program's child (a git filter) can keep a pipe open, and on Windows even closing one that
+    a reader waits on waits for that child."""
     with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
         proc = subprocess.Popen(
             command,
@@ -44,8 +49,17 @@ def bounded(command: list[str], seconds: float, *, what: str, **given: Any) -> s
             **given,
         )
         allowed = within(seconds)
+        ends = time.monotonic() + allowed
         try:
-            proc.wait(timeout=allowed)
+            while until is not None and time.monotonic() < ends:
+                try:
+                    proc.wait(timeout=min(0.25, max(0.0, ends - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    if until():
+                        stop_tree(proc)
+                        return subprocess.CompletedProcess(command, STOPPED, "", f"{what} was told to stop")
+            proc.wait(timeout=max(0.0, ends - time.monotonic()))
         except subprocess.TimeoutExpired:
             stop_tree(proc)
             said = (
