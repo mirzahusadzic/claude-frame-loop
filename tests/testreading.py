@@ -202,6 +202,25 @@ class TreeCompletionTests(Isolated):
         filled = [r for r in rows if r.get("event") == "filled"]
         self.assertEqual([(r["node"], r["ask"], r["routed"]) for r in filled], [("root", "A1", "gadfly walk")])
 
+    def test_a_stopped_climb_is_not_every_requirement_done(self):
+        """Sparky's third review: a requirement read as done whose climb then stopped was
+        counted done, so the headline said every requirement is done."""
+        import testreading as loaded
+
+        loaded.WALKED = {"fits": [], "frontier": []}
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": PUBLIC,
+                "tool_input": {"command": ": frame-loop-read --complete"},
+            }
+        )
+        self.assertIn("climb stopped", out["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("every requirement is done", " ".join(out["systemMessage"].split()))
+        self.assertNotEqual(state.LIVE.get("decision"), "pass")
+
     def test_a_walk_with_no_fit_stops_the_climb_and_fills_nothing(self):
         """A completion the walk cannot place would be filled by a guess and climb."""
         import testreading as loaded

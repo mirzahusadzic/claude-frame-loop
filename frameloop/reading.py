@@ -379,7 +379,8 @@ def complete(frame0: dict[str, Any], said: str = "") -> str:
         if climbed.get("root", {}).get("complete"):
             parts.append("frame 0 complete")
     _log({"event": "completion", "parts": parts, "usage": used})
-    done = sum(1 for x in parts if x.endswith(" ✓"))
+    # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
+    done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
     asks = len(frame0["asks"])
     state.LIVE["decision"] = gate.PASS if done == asks else gate.RISE
     state.LIVE["shorts"] = [
