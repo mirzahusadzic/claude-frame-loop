@@ -183,7 +183,7 @@ class ContractTests(unittest.TestCase):
             env={**os.environ, "PYTHONPATH": str(ROOT / "tests")},
         )
         self.assertEqual(done.returncode, 2, done.stdout + done.stderr)
-        self.assertIn("declares most 2", done.stderr)
+        self.assertIn("declares most 1", done.stderr)
 
     def test_the_reader_leaves_the_most_runs_to_the_frame(self):
         import reader

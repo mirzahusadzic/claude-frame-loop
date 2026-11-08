@@ -213,4 +213,6 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 | what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding; "? not settled" if they disagree |
 | is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it); ▲ only on a firm miss |
 
+A change gets one round of answers, and whether a requirement is done up to three. What a change's round leaves unsettled goes to Claude with the split, not back to the reader: Claude has the diff, and its look never turns the reading into a pass.
+
 A refused or failed reading is "not read", never a fit. Effort rises for risky changes (a deletion, a dependency, the loop's settings, a large diff), never falls below the user's floor.

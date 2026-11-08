@@ -66,8 +66,9 @@ def _output(labels: list[str]) -> dict[str, Any]:
 
 
 # The most runs Gadfly asks a frame until firm reads, by kind; in the frame, so its hash
-# names it (gadfly 2f1b627). A completion frame not firm after two runs gets a third.
-MOST = {"step": 2, "completion": 3}
+# names it (gadfly 2f1b627). A change gets one round: what it leaves unsettled goes to Claude,
+# who has the diff. A completion frame not firm after two runs gets a third.
+MOST = {"step": 1, "completion": 3}
 
 
 def _frame(
