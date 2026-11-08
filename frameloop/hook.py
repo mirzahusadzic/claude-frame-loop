@@ -218,6 +218,9 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if flipped:
             return flipped
         if event.get("hook_event_name") == "SessionStart":
+            # recorded, so that `/frame-loop on` later briefs the next prompt
+            state.SESSION = event.get("session_id")
+            _log({"event": "briefed", "version": _version(), "off": True})
             return {
                 "hookSpecificOutput": {
                     "hookEventName": "SessionStart",

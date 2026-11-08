@@ -4195,6 +4195,26 @@ class RulesTests(unittest.TestCase):
         )
         self.assertNotIn("CLAUDE.md", json.dumps(out or {}, ensure_ascii=False))
 
+    def test_a_session_started_switched_off_is_briefed_at_the_first_prompt_after_on(self):
+        """Sparky's third review: a session that started with the loop off wrote no record, so
+        the first prompt after `/frame-loop on` read as a session's first word, unbriefed."""
+        os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        switch.write_text("off\n", encoding="utf-8")
+        hook.answer(
+            {"hook_event_name": "SessionStart", "source": "startup", "session_id": "offstart", "cwd": str(REPO)}
+        )
+        time.sleep(0.05)
+        switch.write_text("on\n", encoding="utf-8")
+        out = hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": "offstart", "cwd": str(REPO), "prompt": "go"}
+        )
+        self.assertIn(
+            "This project runs frame-loop", ((out or {}).get("hookSpecificOutput") or {}).get("additionalContext", "")
+        )
+
     def test_a_reload_or_the_switch_turned_on_briefs_at_the_next_prompt(self):
         """An agent's report: after `/reload-plugins` the new version's hooks fired, but no
         briefing came, since no session starts; nor after `/frame-loop on`. The next prompt
