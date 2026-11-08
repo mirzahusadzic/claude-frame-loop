@@ -2276,8 +2276,14 @@ class CoreTests(unittest.TestCase):
         second = self.turn({"notes/b.txt": f"another {uid(self)}\n"}, "done")
         self.assertNotIn("frame 0 is not ready", second)
         self.assertIn("frame 0 not written", second)
-        guide = (REPO / "AGENTS.md").read_text(encoding="utf-8")
-        self.addCleanup(lambda: (REPO / "AGENTS.md").write_text(guide, encoding="utf-8"))
+        agents = REPO / "AGENTS.md"
+        guide = agents.read_text(encoding="utf-8") if agents.exists() else ""
+        self.addCleanup(lambda: agents.write_text(guide, encoding="utf-8") if guide else agents.unlink(missing_ok=True))
+        if not guide:  # the guide exists before the turn, as a project's does
+            agents.write_text("# Guide\n", encoding="utf-8")
+            git("add", "AGENTS.md")
+            git("commit", "-q", "-m", "guide")
+            guide = "# Guide\n"
         ruled = self.turn({"AGENTS.md": guide + f"- a new rule {uid(self)}\n"}, "done")
         self.assertIn("a guide's change", ruled)
         self.assertNotIn("frame 0", ruled)

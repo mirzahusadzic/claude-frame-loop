@@ -291,7 +291,7 @@ class StatusLineTests(unittest.TestCase):
         (self.home / ".claude" / "settings.json").write_text(
             json.dumps({"enabledPlugins": {"frame-loop@claude-frame-loop": True}}), encoding="utf-8"
         )
-        command = self.settings["statusLine"]["command"].replace("~", str(self.home), 1)
+        command = self.settings["statusLine"]["command"].replace("~", self.home.as_posix(), 1)
         event = json.dumps({"workspace": {"current_dir": str(self.repo)}})
         env = {**os.environ, "HOME": str(self.home)}
         done = subprocess.run(
