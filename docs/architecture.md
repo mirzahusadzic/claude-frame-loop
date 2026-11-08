@@ -208,9 +208,9 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 | Question | Trials | Rule |
 | --- | --- | --- |
-| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲ |
-| does it break a rule? | baseline, repeat | ✓ if neither names a rule; ▲ naming the rule if both name it; ▲ if they disagree |
-| what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding |
-| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it) |
+| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲; answers that do not settle show as "? not settled" and need nothing of the user |
+| does it break a rule? | baseline, repeat | ✓ if neither names a rule; ▲ naming the rule if both name it; "? not settled" if they disagree |
+| what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding; "? not settled" if they disagree |
+| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it); ▲ only on a firm miss |
 
 A refused or failed reading is "not read", never a fit. Effort rises for risky changes (a deletion, a dependency, the loop's settings, a large diff), never falls below the user's floor.

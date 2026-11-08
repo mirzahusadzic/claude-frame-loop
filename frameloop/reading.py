@@ -19,7 +19,7 @@ import state
 from declare import _claimed, _declared, _masked, _without_declaration
 from effort import _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
-from lines import _reader_name, _tell
+from lines import UNSETTLED_NOTE, _reader_name, _tell
 from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
@@ -119,6 +119,10 @@ def read_step(
         asked, broke = fit_job.result(), rules_job.result()
     _ran({"made": (asked.get("made") or 0) + (broke.get("made") or 0)} if isinstance(asked.get("made"), int) else asked)
     decision, reason = gate.which_ask(asked, declared)
+    if decision == gate.UNSETTLED:  # a firm finding or a failed question beside it is not kept from the author
+        rules, why = gate.violation_stage_one(broke)
+        if rules in (gate.RISE, gate.BLOCK):
+            return {"decision": rules, "reason": f"violation: {why}", "usage": _spent(asked, broke)}
     if decision != gate.PASS:
         return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke)}
     fit = reason
@@ -228,12 +232,12 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     line, faults = obligations_line(frame0, project_root(cwd), facts["paths"], _claimed(said), status)
     scope = outside_scope(frame0, facts["paths"])
     faults += scope
-    if faults and result["decision"] == gate.PASS:
+    if faults and result["decision"] in (gate.PASS, gate.UNSETTLED):  # a check that failed is firm
         result = {**result, "decision": gate.RISE, "reason": "obligations: " + "; ".join(faults)}
     if scope:  # leads the author's line whatever the read found, a refusal included
         result = {
             **result,
-            "decision": gate.RISE if result["decision"] == gate.PASS else result["decision"],
+            "decision": gate.RISE if result["decision"] in (gate.PASS, gate.UNSETTLED) else result["decision"],
             "scope": [f.split(" is outside")[0].replace("not authorized: ", "") for f in scope],
         }
     _log(
@@ -316,6 +320,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     tier, tier_note = tier_for(said)
     frame0 = mask_frame(frame0, tier) if tier else frame0
     parts, used = [], {}
+    not_firm = 0
     checked: dict[str, tuple[str | None, str | None]] = {}
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
@@ -389,6 +394,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             continue
         level = ((result.get("findings") or [{}])[0].get("levels") or {}).get("baseline")
         ok = result.get("firm") and result.get("category") == "carried" and level == "yes"
+        not_firm += not result.get("firm")
         state.LIVE["decision"] = state.LIVE.get("decision", gate.PASS) if ok else gate.RISE
         parts.append(
             f"{ask['id']} ✓"
@@ -419,15 +425,22 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
     done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
     asks = len(frame0["asks"])
-    state.LIVE["decision"] = gate.PASS if done == asks else gate.RISE
+    alone = done < asks and done + not_firm == asks  # all that is left did not settle: Claude's alone
+    state.LIVE["decision"] = gate.PASS if done == asks else gate.UNSETTLED if alone else gate.RISE
+    if alone:
+        state.LIVE["unsettled_why"] = "the reader couldn't settle whether the work is done"
     if used.get("total_tokens"):
         state.LIVE["tokens"] = used["total_tokens"]
-    state.LIVE["shorts"] = [
-        "frame-loop ✓ every requirement is done"
-        if done == asks
-        else f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"
-    ]
-    first = "frame-loop · completion · " + " · ".join(parts)
+    state.LIVE["shorts"] = (
+        []
+        if alone
+        else [
+            "frame-loop ✓ every requirement is done"
+            if done == asks
+            else f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"
+        ]
+    )
+    first = "frame-loop · completion · " + " · ".join(parts) + (f" · {UNSETTLED_NOTE}" if alone else "")
     second = f"  {_reader_name(tier)} · {time.time() - started:.0f}s"
     if "calls" in used:
         second += f" · {used['calls']} calls"

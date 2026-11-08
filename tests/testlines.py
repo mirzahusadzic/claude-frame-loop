@@ -56,12 +56,7 @@ class PlainTests(unittest.TestCase):
         self.assertEqual(self.plain("obligations: owed O1 not met; owed O2 not met"), "2 checks you owe are unmet")
         self.assertEqual(self.plain("obligations: owed O1 not met"), "a check you owe is unmet")
 
-    def test_an_unsettled_rules_reading_says_it_could_not_settle(self):
-        """A split rules reading would reach the author in the gate's own terms."""
-        self.assertEqual(
-            self.plain("violation: not settled (baseline none, repeat P1)"),
-            "the reader couldn't settle whether this breaks one of your rules",
-        )
+    def test_a_rules_reading_that_names_a_rule_says_which(self):
         self.assertEqual(self.plain("violation: names P1: stage 2 confirms"), "it may break your rule P1")
 
     def test_a_fit_read_as_another_purpose_names_it_in_words(self):
@@ -70,7 +65,6 @@ class PlainTests(unittest.TestCase):
             "A2": "the reader sees it serving A2, not the requirement Claude named",
             "other": "the reader sees a purpose none of your requirements has",
             "none": "the reader sees it serving none of your requirements",
-            "unclear": "the reader couldn't settle which of your requirements this serves",
         }
         for named, said in cases.items():
             self.assertEqual(self.plain(f"which-ask: the reader names '{named}', not a declared ask (A1)"), said)

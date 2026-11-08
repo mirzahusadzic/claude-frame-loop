@@ -184,6 +184,12 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
 HEREDOC = re.compile(r"<<(-?)\s*(\\|['\"]?)(\w+)['\"]?")
 
 
+def _reading_said(text: str) -> dict[str, Any]:
+    """A reading's lines: for both, or for Claude alone when it did not settle."""
+    out: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
+    return out if state.LIVE.get("decision") == gate.UNSETTLED else {"systemMessage": text, **out}
+
+
 def _read_on_demand(command: str) -> dict[str, Any]:
     """`: frame-loop-read --serves A1 [--effort high] [--base REV]`, a no-op the hook reads:
     the reading runs here, outside the sandbox, and both the agent and the human see it.
@@ -195,18 +201,18 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     if "--complete" in shlex.split(first):
         frame0 = load_frame0()
         text = complete(frame0, pending=turn_so_far(state.CWD or os.getcwd(), frame0))
-        return {"systemMessage": text, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
+        return _reading_said(text)
     heredoc = HEREDOC.search(first)
     if heredoc:
         first = first[: heredoc.start()] + first[heredoc.end() :]
     try:
         args = ondemand.parser().parse_args(shlex.split(first)[2:])
     except (SystemExit, ValueError):
-        return {
-            "systemMessage": "frame-loop · read · not read: usage: : frame-loop-read "
+        return _reading_said(
+            "frame-loop · read · not read: usage: : frame-loop-read "
             "--serves A1[,A2] [--done O1[,O2]] [--effort high] [--base REV] "
             f"[--touches a.py[,b.py]] [<<'EOF' proposal EOF]; see {_docs('agents.md')}"
-        }
+        )
     if heredoc:
         dash, word = heredoc.group(1), heredoc.group(3)
         body = []
@@ -222,7 +228,7 @@ def _read_on_demand(command: str) -> dict[str, Any]:
             text += f"\n  owes {', '.join(due)} (checked when the change is read)"
     else:
         code, text = ondemand.reading(project_root(state.CWD), args.serves, args.effort, args.base, args.done)
-    return {"systemMessage": text, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": text}}
+    return _reading_said(text)
 
 
 def _marker_only(command: str) -> bool:
@@ -344,6 +350,15 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
                     out = out or None
         elif os.environ.get("FRAME_LOOP_LINES") != "full":
             out = _one_line(event, out, frame0)
+    elif state.LIVE.get("decision") == gate.UNSETTLED:  # nothing under the reply; the band says so
+        why = state.LIVE.get("unsettled_why")
+        _live(
+            state="done",
+            decision=gate.UNSETTLED,
+            started=state.LIVE.get("started"),
+            lines=[],
+            detail=[why] if why else [],
+        )
     return out
 
 
@@ -547,6 +562,8 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         tell = _tell("plan", result, tier, started, frame0)
         if result["decision"] == gate.PASS:
             return {"systemMessage": tell}  # the normal approval dialog appears
+        if result["decision"] == gate.UNSETTLED:
+            return _reading_said(tell)
         # Plan mode stays Claude Code's own: a plan's reading only informs, in every mode.
         return {**_rise("shadow", f"frame-loop: {result['reason']}", "deny"), "systemMessage": tell}
     return None

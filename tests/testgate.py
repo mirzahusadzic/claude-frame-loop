@@ -21,10 +21,10 @@ class WhichAskTests(unittest.TestCase):
             gate.which_ask(result("A1", firm=True, category="carried"), ["A1"]), (gate.PASS, "carried on A1")
         )
 
-    def test_a_reading_that_is_not_firm_rises(self):
+    def test_a_reading_that_is_not_firm_is_unsettled(self):
         """A split reading could pass as a fit, so a step nobody settled would go through."""
         decision, reason = gate.which_ask(result("A1", firm=False, category="carried"), ["A1"])
-        self.assertEqual(decision, gate.RISE)
+        self.assertEqual(decision, gate.UNSETTLED)
         self.assertEqual(reason, "not firm (category carried)")
 
     def test_a_reading_that_does_not_rest_on_its_ask_rises(self):
@@ -67,7 +67,7 @@ class ViolationTests(unittest.TestCase):
         """A split between none and a rule would pass on the one reading of none."""
         self.assertEqual(
             gate.violation_stage_one(result("none", "P1")),
-            (gate.RISE, "not settled (baseline none, repeat P1)"),
+            (gate.UNSETTLED, "not settled (baseline none, repeat P1)"),
         )
 
     def test_a_reading_with_no_findings_is_never_none(self):
@@ -86,12 +86,15 @@ class UndeclaredTests(unittest.TestCase):
             ("A1", "A1"): "the reader reads A1 twice · declare it?",
             ("other", "other"): "the reader reads a purpose frame 0 lacks? · a missing ask is yours to add",
             ("none", "none"): "the reader reads no purpose toward the asks · padding?",
-            ("A1", "A2"): "undeclared, not settled",
-            ("unclear", "unclear"): "undeclared, not settled",
         }
         for (baseline, repeat), reason in cases.items():
             self.assertEqual(gate.undeclared(result(baseline, repeat)), (gate.RISE, reason), (baseline, repeat))
-        self.assertEqual(gate.undeclared({"exit": 0})[1], "undeclared, not settled")
+        for levels in (("A1", "A2"), ("unclear", "unclear")):
+            self.assertEqual(gate.undeclared(result(*levels)), (gate.UNSETTLED, "undeclared, not settled"), levels)
+
+    def test_an_undeclared_reading_with_no_answer_is_not_read(self):
+        """No answer would reach Claude alone as a reading that did not settle, kept from the author."""
+        self.assertEqual(gate.undeclared({"exit": 0}), (gate.BLOCK, "not read: the reader gave no answer"))
 
     def test_a_failed_undeclared_run_blocks(self):
         """A stopped run would be told to the author as a question about what the step is for."""

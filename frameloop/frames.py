@@ -266,7 +266,7 @@ def _rules(frame0: dict[str, Any]) -> tuple[list[dict[str, str]], list[str], lis
 
 def violation(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[str, Any]:
     """Stage 1, every step: the reading alone. Run it with --only baseline --only repeat.
-    It passes when both read none, and a split rises as not settled. Its anchor is
+    It passes when both read none, and a split is not settled. Its anchor is
     declared only so the frame parses; a "none" has no span to cut. The reader's
     sensitivity to a real break is what the planted calibration steps prove, once per
     frame 0 and reader."""
@@ -290,7 +290,7 @@ def violation(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
 def stage_two_anchor(frame0: dict[str, Any], baseline: str, repeat: str) -> str | None:
     """The rule stage 2 tests, or None. It is built only when stage 1's baseline and
     repeat name the same rule, so nobody chooses which one to test. A split, or two
-    different ids, rises to the human as not settled and gets no stage 2."""
+    different ids, is not settled and gets no stage 2."""
     _, rules, _ = _rules(frame0)
     return baseline if baseline == repeat and baseline in rules else None
 

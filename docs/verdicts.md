@@ -16,18 +16,16 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Outcomes
 
-A read that fits or finds nothing to read shows nothing once it ends; the record keeps it. These lines stay:
+A read that fits, finds nothing to read or does not settle shows nothing once it ends; the record keeps it. When a read does not settle, Claude gets how the answers split and looks at the change itself: a real mismatch it tells you about, and either way the work does not count as checked. These lines stay:
 
 | Line | Means | Do |
 | --- | --- | --- |
 | ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: this serves none of your requirements | padding: a change that serves no purpose at all | ask why the change is there |
-| ▲ needs you: the reader couldn't settle which of your requirements this serves | the answers disagreed; often a turn that mixed several things | read the details |
 | ▲ needs you: the reader doesn't see this resting on the requirement Claude named | it still fits with that requirement cut | ask what it is for |
 | ▲ needs you: the reader sees it serving "a requirement", not the requirement Claude named | another requirement carries it | check which requirement it serves |
 | ▲ needs you: it may break your rule "a rule" | both readings named the rule | read the change against it |
-| ▲ needs you: the reader couldn't settle whether this breaks one of your rules | the readings disagreed | read the details |
 | ▲ needs you: a check you owe is unmet | a code check failed, such as tests not run | have it met |
 | ▲ needs you: a change lies outside what you authorized | outside the crossing's scope; "· not checked: a reason" follows when its reading failed too | widen the scope, or undo |
 | ▲ needs you: what this work is for isn't written yet | no frame 0 | state the work |

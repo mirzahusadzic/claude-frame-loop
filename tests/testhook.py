@@ -268,8 +268,6 @@ class HookTests(unittest.TestCase):
             (("A2", "A2"), "declare it?"),
             (("other", "other"), "a purpose frame 0 lacks?"),
             (("none", "none"), "no purpose toward the asks"),
-            (("A2", "A3"), "not settled"),
-            (("unclear", "unclear"), "not settled"),
         ):
             result = {"exit": 0, "findings": [{"levels": {"baseline": levels[0], "repeat": levels[1]}}]}
             decision, reason = hook.gate.undeclared(result)
@@ -2279,11 +2277,6 @@ class CoreTests(unittest.TestCase):
 
     def test_each_reason_has_a_plain_sentence(self):
         cases = {
-            (
-                "rise",
-                "which-ask: not firm (category unresolved)",
-                None,
-            ): "the reader couldn't settle which of your requirements this serves",
             ("rise", "violation: names P1: stage 2 confirms whether it rests on it", None): "it may break your rule P1",
             ("rise", "frame 0 is not ready: frame 0 has no asks yet", None): "what this work is for isn't written yet",
             (
@@ -4524,6 +4517,262 @@ class RulesTests(unittest.TestCase):
         self.assertIn("Never show the author JSON, ids or inversions", text)
 
 
+def not_firm(frame, only=()):
+    """The fit does not settle; the rules read clean."""
+    if only:
+        return {"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}]}
+    return {
+        "exit": 0,
+        "firm": False,
+        "category": "carried",
+        "findings": [{"levels": {"baseline": frame["anchors"][0]}}],
+    }
+
+
+def not_firm_rule_broken(frame, only=()):
+    """The fit does not settle, and both rules readings name the same rule."""
+    if only:
+        return {"exit": 0, "findings": [{"levels": {"baseline": "P1", "repeat": "P1"}}]}
+    return not_firm(frame)
+
+
+def not_firm_rules_unread(frame, only=()):
+    """The fit does not settle, and the rules question failed."""
+    return {"exit": 2} if only else not_firm(frame)
+
+
+def rules_split(frame, only=()):
+    """The fit is firm; the two rules readings disagree."""
+    if only:
+        return {"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "P1"}}]}
+    return passing(frame)
+
+
+def firm_unclear(frame, only=()):
+    """The reader settles on not being able to say."""
+    if only:
+        return not_firm(frame, only)
+    return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "unclear"}}]}
+
+
+def completion_not_firm(frame, only=()):
+    return {"exit": 0, "firm": False, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+
+def completion_a1_firmly_missed(frame, only=()):
+    """A1 is firmly not done; every other requirement does not settle."""
+    if "A1" in frame["name"]:
+        return {"exit": 0, "firm": True, "category": "unresolved", "findings": [{"levels": {"baseline": "no"}}]}
+    return completion_not_firm(frame)
+
+
+class NotFirmTests(unittest.TestCase):
+    """Only a firm mismatch comes to the author: a reading that does not settle reaches Claude
+    alone, is never a pass, and never hides a firm finding beside it."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+    turn = CoreTests.turn
+
+    def prompt(self):
+        return hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "next"}
+        )
+
+    def rows(self, event):
+        return [r for r in record._records_all() if r.get("event") == event and r.get("session") == self.session]
+
+    def marker(self, command):
+        return hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_input": {"command": command},
+            }
+        )
+
+    def change(self):
+        return {f"notes/nf-{uid(self)}.py": f"print('{uid(self)}')\n"}
+
+    def test_a_turn_not_firm_says_nothing_to_the_author_and_reaches_claude(self):
+        for lines_mode in ("full", None):
+            with self.subTest(lines=lines_mode):
+                os.environ.pop("FRAME_LOOP_LINES", None)
+                if lines_mode:
+                    os.environ["FRAME_LOOP_LINES"] = lines_mode
+                os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+                self.session = f"nf-{uid(self)}-{lines_mode}"
+                self.assertEqual(self.turn({**self.change(), "notes/mode.txt": str(lines_mode)}, "Serves: A1"), "")
+                self.assertEqual(self.rows("turn")[-1]["decision"], "unsettled")
+                told = self.prompt()["hookSpecificOutput"]["additionalContext"]
+                self.assertIn("not firm", told)
+                self.assertNotIn("shown to the author", told)
+                self.assertNotIn("Tell the author", told)
+                self.assertIsNone(self.prompt())  # told once
+
+    def test_enforce_mode_does_not_send_claude_back_on_a_reading_not_firm(self):
+        os.environ.update(FRAME_LOOP_READER="testhook:not_firm", FRAME_LOOP_MODE="enforce")
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        (REPO / f"notes/nf-{uid(self)}.py").parent.mkdir(exist_ok=True)
+        (REPO / f"notes/nf-{uid(self)}.py").write_text(f"print('{uid(self)}')\n", encoding="utf-8")
+        out = hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "Serves: A1",
+                "stop_hook_active": False,
+            }
+        )
+        self.assertIsNone(out)
+        git("add", "-A")
+        git("commit", "-q", "-m", "turn")
+
+    def test_a_firm_mismatch_still_comes_to_the_author(self):
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ["FRAME_LOOP_READER"] = "testhook:drifting"
+        self.assertIn("▲ needs you", self.turn(self.change(), "Serves: A1"))
+
+    def test_a_rule_named_twice_is_not_hidden_by_a_fit_not_firm(self):
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm_rule_broken"
+        self.assertIn("▲ needs you: it may break your rule", self.turn(self.change(), "Serves: A1"))
+
+    def test_a_rules_question_that_failed_is_said_beside_a_fit_not_firm(self):
+        """A refused or failed reading is never a pass, and never silence."""
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm_rules_unread"
+        self.assertIn("■", self.turn(self.change(), "Serves: A1"))
+
+    def test_an_unmet_check_is_not_hidden_by_a_reading_not_firm(self):
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        line = self.turn({"hello.py": f"print('{uid(self)}')\n"}, "Serves: A1")
+        self.assertIn("▲ needs you: a check you owe is unmet", line)
+
+    def test_a_split_rules_reading_reaches_claude_alone(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:rules_split"
+        self.assertEqual(self.turn(self.change(), "Serves: A1"), "")
+        self.assertEqual(self.rows("turn")[-1]["decision"], "unsettled")
+
+    def test_a_reader_settled_on_unclear_reaches_claude_alone(self):
+        """The reader can't say which requirement this serves: no mismatch was found."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:firm_unclear"
+        self.assertEqual(self.turn(self.change(), "Serves: A1"), "")
+
+    def test_an_undeclared_change_not_settled_reaches_claude_alone(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:rules_split"  # baseline none, repeat P1: no ask named twice
+        self.assertEqual(self.turn(self.change(), "done"), "")
+        self.assertEqual(self.rows("turn")[-1]["question"], "not-settled")
+
+    def test_the_band_closes_with_no_check_mark_and_no_words(self):
+        live = WORK / f"live-nf-{uid(self)}"
+        os.environ.update(FRAME_LOOP_READER="testhook:not_firm", FRAME_LOOP_LIVE=str(live))
+        self.turn(self.change(), "Serves: A1")
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertEqual(done["state"], "done")
+        self.assertEqual(done["decision"], "unsettled")
+        self.assertEqual(
+            (done.get("lines"), done.get("detail")),
+            ([], ["the reader couldn't settle which of your requirements this serves"]),
+        )
+
+    def test_an_act_in_the_same_turn_prints_nothing_and_is_never_a_check_mark(self):
+        live = WORK / f"live-nf-act-{uid(self)}"
+        os.environ.update(FRAME_LOOP_READER="testhook:not_firm", FRAME_LOOP_LIVE=str(live))
+        os.environ.pop("FRAME_LOOP_LINES")
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+        self.marker("git push origin main")
+        (REPO / "notes").mkdir(exist_ok=True)
+        (REPO / f"notes/nf-{uid(self)}.py").write_text(f"print('{uid(self)}')\n", encoding="utf-8")
+        out = hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "Serves: A1",
+                "stop_hook_active": False,
+            }
+        )
+        self.assertNotIn("systemMessage", out or {})
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertEqual(done["decision"], "noted")
+        git("add", "-A")
+        git("commit", "-q", "-m", "turn")
+
+    def test_a_reading_in_the_background_not_firm_closes_the_band_with_no_words(self):
+        live = WORK / f"live-nf-bg-{uid(self)}"
+        tests = str(ROOT / "tests")
+        os.environ.update(
+            FRAME_LOOP_READER="testhook:not_firm",
+            FRAME_LOOP_BACKGROUND="1",
+            FRAME_LOOP_LIVE=str(live),
+            PYTHONPATH=os.pathsep.join([tests, str(ROOT / "frameloop")]),
+        )
+        self.turn(self.change(), "Serves: A1")
+        deadline, done = time.time() + 20, {}
+        while time.time() < deadline and done.get("state") != "done":
+            time.sleep(0.2)
+            done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            (done.get("decision"), done.get("lines"), done.get("detail")),
+            ("unsettled", [], ["the reader couldn't settle which of your requirements this serves"]),
+        )
+        while any(Path(os.environ["FRAME_LOOP_WORK"]).glob("background-*.json")) and time.time() < deadline:
+            time.sleep(0.2)  # no write after this test
+
+    def test_a_reading_claude_asks_for_not_firm_reaches_claude_alone(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        (REPO / "hello.py").write_text(f"print('{uid(self)}')\n", encoding="utf-8")
+        (REPO / "README.md").write_text(f"{uid(self)}\n", encoding="utf-8")
+        out = self.marker(": frame-loop-read --serves A1")
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("not firm", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_proposal_not_firm_reaches_claude_alone(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        out = self.marker(": frame-loop-read --serves A1 <<'EOF'\nRead the settings from one file.\nEOF")
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("not firm", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_plan_not_firm_reaches_claude_alone(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        out = hook.answer({**plan_event("Serves: A1\nRead the settings from one file."), "session_id": self.session})
+        self.assertNotIn("systemMessage", out)
+        self.assertNotIn("permissionDecision", out["hookSpecificOutput"])
+        self.assertIn("not firm", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_completion_not_firm_reaches_claude_alone_and_is_never_done(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        live = WORK / f"live-nf-done-{uid(self)}"
+        os.environ["FRAME_LOOP_LIVE"] = str(live)
+        self.turn(self.change(), "Serves: A1")
+        os.environ["FRAME_LOOP_READER"] = "testhook:completion_not_firm"
+        out = self.marker(": frame-loop-read --complete")
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("A1 ✗ (carried, not firm)", out["hookSpecificOutput"]["additionalContext"])
+        self.assertFalse(self.rows("filled"))
+        done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            (done["decision"], done["lines"], done["detail"]),
+            ("unsettled", [], ["the reader couldn't settle whether the work is done"]),
+        )
+
+    def test_a_completion_with_a_firm_miss_still_comes_to_the_author(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:not_firm"
+        os.environ.pop("FRAME_LOOP_LINES")
+        self.turn(self.change(), "Serves: A1")
+        os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
+        out = self.marker(": frame-loop-read --complete")
+        self.assertIn("▲ needs you: 0 of 3 requirements read as done", out["systemMessage"])
+
+
 class OneLineTests(unittest.TestCase):
     """Asked for: nothing but the one short line reaches the author. The details go to the
     band's fold and to Claude, on every path: a turn read in the background too."""
@@ -4623,6 +4872,20 @@ class OneLineTests(unittest.TestCase):
         out = self.shell_call("sh s.sh", lambda: frame0.write_text('{"asks": [1]}', encoding="utf-8"), "c1")
         self.assertNotIn("systemMessage", out)
         self.assertIn("changed the loop's own files", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_marker_used_wrongly_tells_claude_not_the_author(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "tool_name": "Bash",
+                "tool_input": {"command": ": frame-loop-read --nonsense"},
+            }
+        )
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("usage", out["hookSpecificOutput"]["additionalContext"])
 
     def test_enforce_mode_still_asks_the_author(self):
         os.environ.pop("FRAME_LOOP_LINES", None)

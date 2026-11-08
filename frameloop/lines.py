@@ -16,6 +16,24 @@ import gate
 import readers
 import state
 
+# What Claude hears with a reading that did not settle, which the author does not hear of.
+UNSETTLED_NOTE = (
+    "the reader did not settle: neither a pass nor a mismatch, and the author is not told. "
+    "Look at what it names in the change yourself. If it is a real mismatch, tell the author in plain "
+    "words and fix it or ask; if not, go on. Either way don't call the work checked, and don't ask for "
+    "another reading of it"
+)
+
+
+def _unsettled_words(reason: str) -> str:
+    """What a reading that did not settle was about, for the band's details."""
+    if reason.startswith("violation: "):
+        return "the reader couldn't settle whether this breaks one of your rules"
+    if reason.startswith("which-ask: "):
+        return "the reader couldn't settle which of your requirements this serves"
+    return "the reader couldn't settle what this is for"
+
+
 # What an act the loop watches means to the author, by its trigger: (words, needs the author).
 ACT_WORDS = (
     ("git push", "Claude pushed", False),
@@ -181,7 +199,6 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         "declare": "Claude didn't say which of your requirements this serves",
         "missing-ask": "this serves a purpose none of your requirements has: add one?",
         "padding": "this serves none of your requirements",
-        "not-settled": "the reader couldn't settle what this is for",
     }
     if question in by_question:
         return by_question[question]
@@ -197,10 +214,6 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     named = re.match(r"violation: names ([^\s:]+)", reason)
     if named:
         return f"it may break your rule {named.group(1)}"
-    if reason.startswith("violation: "):
-        return "the reader couldn't settle whether this breaks one of your rules"
-    if reason.startswith("which-ask: not firm"):
-        return "the reader couldn't settle which of your requirements this serves"
     if "does not rest on its declared ask" in reason:
         return "the reader doesn't see this resting on the requirement Claude named"
     other = re.match(r"which-ask: the reader names '([^']+)'", reason)
@@ -208,7 +221,6 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         return {
             "other": "the reader sees a purpose none of your requirements has",
             "none": "the reader sees it serving none of your requirements",
-            "unclear": "the reader couldn't settle which of your requirements this serves",
         }.get(other.group(1), f"the reader sees it serving {other.group(1)}, not the requirement Claude named")
     return _verdict(result, frame0)
 
@@ -244,10 +256,16 @@ def _tell(
     The author reads one shorter line (`_short`); these two are the details."""
     refused = (result.get("reason") or "").startswith("not read") and not result.get("scope")
     state.LIVE["decision"] = gate.BLOCK if refused else result["decision"]  # ■ in the band, as under the reply
-    state.LIVE.setdefault("shorts", []).append(_short(result, frame0))
+    alone = result["decision"] == gate.UNSETTLED  # no line for the author, and no mark in the band
+    if alone:
+        state.LIVE["unsettled_why"] = _unsettled_words(result.get("reason") or "")
+    else:
+        state.LIVE.setdefault("shorts", []).append(_short(result, frame0))
     if (result.get("usage") or {}).get("total_tokens"):
         state.LIVE["tokens"] = result["usage"]["total_tokens"]
     first = f"frame-loop · {kind} · {result['decision']}: {_verdict(result, frame0)}"  # wrapped, never cut
+    if alone:
+        first += f" · {UNSETTLED_NOTE}"
     notes = []
     for note in result.get("effort_notes") or []:
         notes.append(
@@ -355,7 +373,7 @@ def _short_lines(frame0: dict[str, Any] | None) -> str:
     facts += [_guide_words(x, lost) for x in guides] if lost else []
     if facts:
         state.LIVE["decision"] = gate.RISE  # an act that needs the author, or rules that lost their words
-    elif (acts or guides) and state.LIVE.get("decision", "quiet") == "quiet":
+    elif (acts or guides) and state.LIVE.get("decision", "quiet") in ("quiet", gate.UNSETTLED):
         state.LIVE["decision"] = "noted"  # an act recorded, nothing checked: never a check mark
     if not shorts and not facts:
         return ""

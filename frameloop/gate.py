@@ -4,6 +4,8 @@ The rules are declared in the design note (design 2) before any use:
 - which-ask passes when the reading is firm, carried, and its baseline names a
   declared ask;
 - stage 1 of violation passes when baseline and repeat both read none;
+- a reading that does not settle is unsettled: neither a pass nor a mismatch, so it
+  reaches Claude alone;
 - a run Gadfly stopped (exit 3: a spent budget or a StopRun) is a harness stop, which
   blocks and is never read as a verdict.
 """
@@ -12,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any
 
-PASS, RISE, BLOCK = "pass", "rise", "block"
+PASS, RISE, BLOCK, UNSETTLED = "pass", "rise", "block", "unsettled"
 
 
 def _levels(result: dict[str, Any]) -> dict[str, str]:
@@ -36,7 +38,9 @@ def which_ask(result: dict[str, Any], declared: list[str]) -> tuple[str, str]:
     levels = _levels(result)
     baseline = levels.get("baseline")
     if not result.get("firm"):
-        return RISE, f"not firm (category {result.get('category')})"
+        return UNSETTLED, f"not firm (category {result.get('category')})"
+    if baseline == "unclear":  # settled on being unable to say: no mismatch was found
+        return UNSETTLED, "the reader reads it as unclear"
     if result.get("category") != "carried":
         return RISE, f"{result.get('category')}: the fit does not rest on its declared ask"
     if baseline not in declared:
@@ -55,7 +59,7 @@ def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
         return PASS, "breaks no rule (baseline and repeat read none)"
     if baseline == repeat:
         return RISE, f"names {baseline}: stage 2 confirms whether it rests on it"
-    return RISE, f"not settled (baseline {baseline}, repeat {repeat})"
+    return UNSETTLED, f"not settled (baseline {baseline}, repeat {repeat})"
 
 
 def named_twice(result: dict[str, Any], frame0: dict[str, Any]) -> str | None:
@@ -77,8 +81,10 @@ def undeclared(result: dict[str, Any]) -> tuple[str, str]:
         return BLOCK, f"not read: {_failure(result)}"
     levels = _levels(result)
     baseline, repeat = levels.get("baseline"), levels.get("repeat")
+    if baseline is None and repeat is None:  # no answer is no reading, and never kept from the author
+        return BLOCK, "not read: the reader gave no answer"
     if baseline != repeat or baseline in (None, "unclear"):
-        return RISE, "undeclared, not settled"
+        return UNSETTLED, "undeclared, not settled"
     if baseline == "other":
         return RISE, "the reader reads a purpose frame 0 lacks? · a missing ask is yours to add"
     if baseline == "none":
