@@ -470,6 +470,14 @@ class AttackTests(unittest.TestCase):
         with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
             self.assertNotIn("systemMessage", hook.answer(start) or {})
 
+    def test_the_briefing_says_frame0s_ids_go_to_the_reader(self):
+        """Sparky's third review: the briefing said the reader never sees any id, though frame
+        0's requirements and rules go with their ids, as Privacy says."""
+        os.environ.update(env())
+        said = hook.briefing(framezero.load_frame0(), "shadow")
+        self.assertNotIn("never sees the declaration or any id", said)
+        self.assertIn("frame 0's ids in your change are masked", said)
+
     def test_the_briefing_covers_every_feature_an_agent_meets(self):
         """Mirza: cover the agent's complete posture, depth and nested frames included. The
         briefing named neither the two ways frame 0 is set up, how it changes, the completion

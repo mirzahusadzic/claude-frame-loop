@@ -655,8 +655,8 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "them in parallel only if the human agrees.",
         "Before you present a plan, declare each ask it serves with `: frame-loop-declare "
         "--serves <ids>`; the plan's text, which the human approves, holds no ids. The reader "
-        "never sees the declaration or any id: it judges the content alone, so declare "
-        "honestly. `--reader <tier>` may ask for a stricter reader, never a looser one, and "
+        "never sees the declaration, and frame 0's ids in your change are masked: it judges the "
+        "content alone, so declare honestly. `--reader <tier>` may ask for a stricter reader, never a looser one, and "
         "`--effort high` for a harder reading, never an easier one.",
         *(
             [
