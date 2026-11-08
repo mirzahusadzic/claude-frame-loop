@@ -4085,6 +4085,28 @@ class RulesTests(unittest.TestCase):
         )
         self.assertNotIn("CLAUDE.md", json.dumps(out or {}, ensure_ascii=False))
 
+    def test_a_reload_or_the_switch_turned_on_briefs_at_the_next_prompt(self):
+        """An agent's report: after `/reload-plugins` the new version's hooks fired, but no
+        briefing came, since no session starts; nor after `/frame-loop on`. The next prompt
+        briefs once, and again only when the switch changes."""
+        os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
+
+        def prompt():
+            out = hook.answer(
+                {"hook_event_name": "UserPromptSubmit", "session_id": "reload", "cwd": str(REPO), "prompt": "go"}
+            )
+            return ((out or {}).get("hookSpecificOutput") or {}).get("additionalContext", "")
+
+        prompt()  # a session already running when the plugin was reloaded: its records, no briefing
+        self.assertIn("This project runs frame-loop", prompt())
+        self.assertNotIn("This project runs frame-loop", prompt())
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        time.sleep(0.05)
+        switch.write_text("on\n", encoding="utf-8")  # `/frame-loop on`
+        self.assertIn("This project runs frame-loop", prompt())
+
     def test_a_turn_that_changes_a_guide_says_so_on_its_line(self):
         """Asked for: "transparency is nice"."""
 

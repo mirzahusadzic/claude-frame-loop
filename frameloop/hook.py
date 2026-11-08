@@ -62,7 +62,7 @@ import facts as F  # noqa: E402
 import gate  # noqa: E402
 import readers  # noqa: E402
 import state  # noqa: E402
-from config import loop_files, loop_off, plugin_defaults, shell_touches_config, touches_config  # noqa: E402
+from config import loop_files, loop_off, plugin_defaults, shell_touches_config, switch_path, touches_config  # noqa: E402
 from declare import _declare_lines, _declared, _marks  # noqa: E402
 from framezero import _engaged, _tree_nodes, load_frame0, node_file_faults, project_rules  # noqa: E402
 from lines import _short_lines, _tell, for_user  # noqa: E402
@@ -70,7 +70,7 @@ from live import _live, _live_interrupted  # noqa: E402
 from obligations import owed, ran  # noqa: E402
 from privacy import _short_path, _training_on, _trains, _writer, capture, hold, not_public  # noqa: E402
 from reading import _proposal, _read, complete  # noqa: E402
-from record import _log  # noqa: E402
+from record import _log, _records_all  # noqa: E402
 from repo import _git, project_root  # noqa: E402
 from turn import _background, _last_reading, _read_turn, _turn_start, _turn_summary  # noqa: E402
 
@@ -266,6 +266,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     frame0 = load_frame0()
     if name == "SessionStart":
         said = briefing(frame0, mode)
+        _log({"event": "briefed", "version": _version()})
         missing = _gadfly_missing()
         if missing:  # said at the start, not found at the first reading (an agent's report)
             said += f"\n{missing} Tell the author, with that line; until then nothing is read."
@@ -276,6 +277,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if _training_on() and "<cross-session-message" in prompt:
             hold(prompt, "a message from another session")
         told = _last_reading()
+        if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
+            _log({"event": "briefed", "version": _version()})
+            told = "\n\n".join(x for x in (briefing(frame0, mode), told) if x)
         _turn_start(event)
         return (
             {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
@@ -451,6 +455,39 @@ def _loop_files_at(event: dict[str, Any]) -> Path:
 def _docs(name: str) -> str:
     """A page of frame-loop's docs where the plugin is installed: a user has no source tree."""
     return str(Path(__file__).resolve().parents[1] / "docs" / name)
+
+
+def _version() -> str:
+    """The plugin's own version, from its manifest."""
+    try:
+        return str(
+            json.loads(
+                (Path(__file__).resolve().parents[1] / ".claude-plugin/plugin.json").read_text(encoding="utf-8")
+            )["version"]
+        )
+    except (OSError, ValueError, KeyError):
+        return "unknown"
+
+
+def _briefed(event: dict[str, Any]) -> bool:
+    """Whether this session holds a briefing it can still go by. A reload of the plugins and
+    `/frame-loop on` start no session, so no briefing comes: brief again when the switch
+    changed after the last briefing, or when the session ran an earlier version (its
+    records, but no briefing by this one)."""
+    mine = [r for r in _records_all() if r.get("session") == state.SESSION]
+    if not mine:
+        return True  # a session's first word: its start briefed it, or none is due
+    version = _version()
+    last = max(
+        (float(r.get("at", 0)) for r in mine if r.get("event") == "briefed" and r.get("version") == version),
+        default=None,
+    )
+    if last is None:
+        return False
+    try:
+        return switch_path(event).stat().st_mtime <= last
+    except OSError:
+        return True
 
 
 def _gadfly_missing() -> str | None:
