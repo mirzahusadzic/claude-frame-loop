@@ -200,7 +200,7 @@ flowchart LR
 | `SessionStart`, on startup, resume, clear and compact | briefs Claude: frame 0, the rules, the markers |
 | `UserPromptSubmit` | takes the snapshot; tells Claude what the last turn's check found and which acts it recorded; reminds Claude once of the end-of-work check; briefs again after a reload or `/frame-loop on` |
 | `PreToolUse`, on `ExitPlanMode`, `Bash` and the edit tools | the guard; reads Claude's markers; checks a node file or the rules index before it is written; hashes the loop's files before a shell call; reads a plan on leaving plan mode |
-| `PostToolUse`, on the read tools, `Bash` and MCP tools | for `Bash`, records the commands the rules ask for that passed and the acts that ran, and reports a change to the loop's files; for the others, nothing |
+| `PostToolUse`, on `Bash` | records the commands the rules ask for that passed and the acts that ran, and reports a change to the loop's files |
 | `PostToolUseFailure`, on `Bash` | records the commands the rules ask for that failed, and reports a change to the loop's files |
 | `Stop` | the free checks, then the read on a signal, in the background in shadow mode; a line only for what needs the user |
 

@@ -72,7 +72,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "Read|NotebookRead|Grep|Bash|mcp__.*",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",

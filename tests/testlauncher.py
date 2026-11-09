@@ -37,6 +37,14 @@ class FakePythonTests(unittest.TestCase):
         self.assertEqual(subprocess.run([str(fake), "-I", "-c", "pass"], capture_output=True).stdout, b"")
 
 
+class HooksFileTests(unittest.TestCase):
+    def test_after_a_call_the_hook_is_started_only_for_the_shell(self):
+        """It acts on nothing else: every read and MCP call started a process that returned
+        nothing and recorded nothing, once reads stopped being hashed."""
+        hooks = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))["hooks"]
+        self.assertEqual([g["matcher"] for g in hooks["PostToolUse"]], ["Bash"])
+
+
 class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="frame-loop-launcher-"))
