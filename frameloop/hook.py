@@ -83,7 +83,7 @@ from framezero import (  # noqa: E402
     rules_file_faults,
     rules_path,
 )
-from lines import _short_lines, _tell, for_user  # noqa: E402
+from lines import _authors_own, _short_lines, _tell, for_user  # noqa: E402
 from live import _live, _live_interrupted  # noqa: E402
 from obligations import owed, ran  # noqa: E402
 from privacy import _short_path, _trains, _writer, real_home  # noqa: E402
@@ -442,6 +442,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             _log({"event": "notes-told"})
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": NOTES_TOLD}}
         if path and touches_config(path):
+            if mode == "enforce" and _writes_what_was_approved(path, tool, tool_input):
+                _log({"event": "config", "tool": tool, "path": path})  # the author has said yes, in these words
+                return None
             faults = node_file_faults(path, tool, tool_input, frame0)
             index = rules_file_faults(path, tool, tool_input)
             found = faults + index
@@ -571,6 +574,26 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         # Plan mode stays Claude Code's own: a plan's reading only informs, in every mode.
         return {**_rise("shadow", f"frame-loop: {result['reason']}", "deny"), "systemMessage": tell}
     return None
+
+
+def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str, Any]) -> bool:
+    """Whether a write leaves frame 0 or a node holding what the author approved, and only that."""
+    own = _authors_own(path)
+    if own not in ("frame 0", "the tree"):
+        return False
+    if tool == "Write":
+        text = tool_input.get("content")
+    elif tool == "Edit":
+        try:
+            old, new = tool_input["old_string"], tool_input["new_string"]
+            held = Path(path).read_text(encoding="utf-8")
+        except (KeyError, OSError, UnicodeDecodeError):
+            return False
+        text = held.replace(old, new) if tool_input.get("replace_all") else held.replace(old, new, 1)
+    else:
+        return False
+    frame = framezero.FRAME_0 if own == "frame 0" else Path(path).stem
+    return isinstance(text, str) and framezero.text_in_approved_words(text, frame)
 
 
 def _loop_files_at(event: dict[str, Any]) -> Path:

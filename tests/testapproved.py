@@ -270,6 +270,51 @@ class WriteTests(Approved):
         self.assertEqual(said[:2], ("changed your approvals", True))
 
 
+class EnforceWriteTests(Approved):
+    """Sparky's fourth review: in enforce mode, a write in the words just approved asked again."""
+
+    def write(self, tool="Write", **given):
+        os.environ["FRAME_LOOP_MODE"] = "enforce"
+        event = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "approved",
+            "cwd": str(self.project),
+            "tool_name": tool,
+            "tool_input": {"file_path": str(self.frame), **given},
+        }
+        return ((hook.answer(event) or {}).get("hookSpecificOutput") or {}).get("permissionDecision")
+
+    def test_a_write_in_the_words_approved_asks_nothing(self):
+        self.answer([ONE, TWO])
+        self.assertIsNone(self.write(content=json.dumps(FRAME)))
+
+    def test_an_edit_that_leaves_the_words_approved_asks_nothing(self):
+        self.answer([ONE, "Over the limit it stops."], [TWO])
+        self.assertIsNone(self.write("Edit", old_string=TWO, new_string="Over the limit it stops.", replace_all=True))
+
+    def test_other_words_still_ask(self):
+        self.answer([ONE, TWO])
+        self.assertEqual(self.write(content=json.dumps({**FRAME, "asks": FRAME["asks"][:1]})), "ask")
+        self.assertEqual(self.write("Edit", old_string=TWO, new_string="Another."), "ask")
+        self.assertEqual(self.write("NotebookEdit"), "ask")
+
+    def test_with_no_answer_it_still_asks(self):
+        self.assertEqual(self.write(content=json.dumps(FRAME)), "ask")
+
+    def test_the_record_of_approvals_still_asks(self):
+        self.answer([ONE, TWO])
+        os.environ["FRAME_LOOP_MODE"] = "enforce"
+        os.environ["FRAME_LOOP_PLUGIN"] = "1"
+        event = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "approved",
+            "cwd": str(self.project),
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(self.home / "approved.json"), "content": "{}"},
+        }
+        self.assertEqual(hook.answer(event)["hookSpecificOutput"]["permissionDecision"], "ask")
+
+
 class OnePickerTests(Approved):
     def test_a_frame_with_no_answer_gets_one_picker(self):
         said = turn.approval_owed(FRAME)
