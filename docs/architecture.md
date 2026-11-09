@@ -1,6 +1,6 @@
 # Architecture
 
-frame-loop runs as Claude Code hooks on the user's machine. Each turn's change passes the free checks; a signal sends a label through the privacy gate to the reader; fixed rules turn the reader's answers into one line. What leaves the machine is in [Privacy](privacy.md).
+frame-loop runs as Claude Code hooks on the user's machine. Each turn's change passes the free checks; a signal sends a label through the privacy gate to the reader; fixed rules turn the reader's answers into a verdict, and only what needs the user is printed. What leaves the machine is in [Privacy](privacy.md).
 
 ---
 
@@ -70,8 +70,8 @@ flowchart LR
     NO["<b>Not read</b><br/>nothing sent"]
     CL -->|"each turn"| FC
     FC -->|"on a signal"| PG
-    PG -->|"label and file names"| RD
-    PG --x|"a secret"| NO
+    PG -->|"label and file names,<br/>with frame 0 and the rules"| RD
+    PG --x|"a secret, or no label"| NO
     classDef default fill:#8a96a82e,stroke:#8a96a8,stroke-width:1px
     classDef claude fill:#d977574d,stroke:#d97757,stroke-width:2px
     classDef session fill:#d977570d,stroke:#d97757,stroke-width:1px
@@ -127,7 +127,8 @@ config:
         --ring: #d97757; }
         .label[data-id^="L_PR_"] .labelBkg,
         .label[data-id^="L_FC_"] .labelBkg,
-        .label[data-id^="L_GD_"] .labelBkg {
+        .label[data-id^="L_GD_"] .labelBkg,
+        .label[data-id^="L_GT_"] .labelBkg {
         --ring: #2e9e5b; }
         .label[data-id^="L_PG_RD_"] .labelBkg,
         .label[data-id^="L_RD_"] .labelBkg {
@@ -153,12 +154,15 @@ flowchart LR
         GD["<b>Guard</b><br/>acts that are yours"]
         GT["<b>Gate</b><br/>fixed rules"]
     end
-    OUT["<b>Claude Code</b><br/>a hook message under the reply,<br/>the band above the prompt:<br/>✓ fits · ▲ needs you · ■ not read<br/>· an act reported"]
+    OUT["<b>Claude Code</b><br/>a hook message under the reply,<br/>the band above the prompt:<br/>▲ needs you · ■ not read"]
+    REC["<b>The record</b><br/>kept in the project; Claude hears at the<br/>next prompt what rose, what did not<br/>settle and the acts"]
     CL -->|"push, release, delete,<br/>frame 0 or loop files"| GD
     RD -->|"answers"| GT
-    FC -->|"✓"| OUT
-    GT --> OUT
-    GD --> OUT
+    FC -->|"no reading"| REC
+    GT -->|"▲ ■"| OUT
+    GD -->|"▲"| OUT
+    GT -->|"every verdict"| REC
+    GD -->|"every act"| REC
     classDef default fill:#8a96a82e,stroke:#8a96a8,stroke-width:1px
     classDef claude fill:#d977574d,stroke:#d97757,stroke-width:2px
     classDef session fill:#d977570d,stroke:#d97757,stroke-width:1px
@@ -180,12 +184,12 @@ flowchart LR
 | --- | --- | --- | --- |
 | Snapshot | each prompt | the working tree, tracked and untracked | a git tree, through the loop's own index; your index is never touched |
 | Free checks | each turn's end | the diff between the turn's first snapshot and now | files, size, the checks the rules require, and the signals |
-| Writer | on a signal, with labels on | the change, without the requirements Claude named, ids masked | a plain-words label, by Haiku through `claude -p` on your login |
-| Privacy gate | before any call | the label and file names | refuses secrets; masks private names |
-| Reader | each read | frame 0, the rules, the label | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
-| Gate | after the reader | the answers | ✓, ▲ or ■, by fixed rules |
-| Guard | each tool call | the command or the file | an act that is yours, on the line |
-| Band | while a read runs | `~/.claude/frame-loop/live/<session>.json` | the step, the answers so far, the time left, then the outcome |
+| Writer | before each read, with labels on | the change, Claude's declaration cut and frame 0's ids masked | a plain-words label, by Haiku through `claude -p` on your login |
+| Privacy gate | before any call | the change before the writer; then the label and file names | refuses secrets; masks private names; takes ids and a requirement's words out of the label |
+| Reader | each read | frame 0, the rules, the label and file names | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
+| Gate | after the reader | the answers | ✓, ▲, ■ or not settled, by fixed rules |
+| Guard | each shell or edit call | the command or the file | an act that is yours, in the record; in enforce mode, a question first |
+| Band | while a read runs, then until the next prompt | `~/.claude/frame-loop/live/<session>.json` | one line: what is happening now, the time left, the tokens spent; then a ▲ or a ■, with **details** |
 
 ---
 
@@ -194,11 +198,11 @@ flowchart LR
 | Claude Code event | frame-loop |
 | --- | --- |
 | `SessionStart`, on startup, resume, clear and compact | briefs Claude: frame 0, the rules, the markers |
-| `UserPromptSubmit` | takes the snapshot; tells Claude what the last turn's check found |
-| `PreToolUse`, on `ExitPlanMode`, `Bash` and the edit tools | the guard; reads Claude's markers; checks a node file before it is written; reads a plan on leaving plan mode |
-| `PostToolUse`, on the read tools, `Bash` and MCP tools | records the commands the rules ask for that passed |
-| `PostToolUseFailure`, on `Bash` | records the commands the rules ask for that failed |
-| `Stop` | the free checks, then the read on a signal; the line |
+| `UserPromptSubmit` | takes the snapshot; tells Claude what the last turn's check found and which acts it recorded; reminds Claude once of the end-of-work check; briefs again after a reload or `/frame-loop on` |
+| `PreToolUse`, on `ExitPlanMode`, `Bash` and the edit tools | the guard; reads Claude's markers; checks a node file or the rules index before it is written; hashes the loop's files before a shell call; reads a plan on leaving plan mode |
+| `PostToolUse`, on the read tools, `Bash` and MCP tools | for `Bash`, records the commands the rules ask for that passed and the acts that ran, and reports a change to the loop's files; for the others, nothing |
+| `PostToolUseFailure`, on `Bash` | records the commands the rules ask for that failed, and reports a change to the loop's files |
+| `Stop` | the free checks, then the read on a signal, in the background in shadow mode; a line only for what needs the user |
 
 ---
 
@@ -208,10 +212,10 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 | Question | Trials | Rule |
 | --- | --- | --- |
-| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲; answers that do not settle show as "? not settled" and need nothing of the user |
-| does it break a rule? | baseline, repeat | ✓ if neither names a rule; ▲ naming the rule if both name it; "? not settled" if they disagree |
-| what is it for? (no requirement declared) | baseline, repeat | never ✓: declare it, a missing requirement, or padding; "? not settled" if they disagree |
-| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps | ✓ only if carried (the answer moves when the requirement is removed) and firm (more runs would not change it); ▲ only on a firm miss |
+| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: a fit that holds without it, or names another requirement, is ▲; answers that do not settle show nothing and go to Claude alone |
+| does it break a rule? (with rules indexed) | baseline, repeat | ✓ if both read none; ▲ naming the rule if both name it; not settled if they disagree |
+| what is it for? (no requirement declared) | baseline, repeat | when both name one requirement, the two questions above test it as if declared; otherwise never ✓: a missing requirement or padding is ▲, and a disagreement is not settled |
+| is the requirement done? (completion) | Gadfly's firm runs over the claiming steps, or all of the session's steps when none claims it | ✓ only if carried (the answer moves when those steps are removed) and firm (more runs would not change it); ▲ on a firm miss or a requirement not read; when all that is left did not settle, nothing shows and Claude alone is told |
 
 A change gets one round of answers, and whether a requirement is done up to three. What a change's round leaves unsettled goes to Claude with the split, not back to the reader: Claude has the diff, and its look never turns the reading into a pass.
 

@@ -23,21 +23,22 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 
 - **Frame 0:** your requirements, in your words, on your OK.
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
-- **Reader:** on a signal only, under Gadfly's trials; a fit without your requirement is rejected.
-- **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
-- **Authority:** pushes, releases, recursive deletes, the loop's own files: reported; in enforce mode, wait for your OK.
-- **Live:** a band above the prompt.
+- **Reader:** on a signal, on a plan, or when Claude asks, under Gadfly's trials; a fit without your requirement is rejected.
+- **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names, with frame 0 and the rules; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
+- **Authority:** pushes, releases, publishing, deletes, the loop's own files: recorded, and Claude is told; a delete also reaches you as a ▲; in enforce mode, they wait for your OK.
+- **Live:** a band above the prompt: what is happening now, the time left, the tokens spent.
 
 ---
 
 ### What you see
 
+While a read runs, the band is one line that changes in place. Once it ends, only what needs you stays, until the next prompt; a fit, a read that does not settle and an act with no ▲ show nothing, and the record keeps them.
+
 | Line | Means |
 | --- | --- |
-| `frame-loop ✓ checked: …` | fits; breaks no rule |
-| `frame-loop ▲ needs you: <why>` | a mismatch, an unmet check, or an act of yours |
-| `frame-loop ■ <why>` | not read; never a fit |
-| `frame-loop · <act>` | an act reported; nothing read |
+| `◐ frame-loop checking the change · about 0:12 left · 9k tokens` | a read running |
+| `frame-loop ▲ needs you: <why>` | a mismatch, an unmet check, or an act that needs you |
+| `frame-loop ■ not read: <why>` | refused or failed; never a fit |
 
 ---
 
@@ -80,7 +81,7 @@ Private code: `"FRAME_LOOP_TIER": "private"` instead; keeps no data, costs more.
 | To | Do |
 | --- | --- |
 | switch it off or on | `/frame-loop off`, `/frame-loop on` |
-| see an outcome (shadow mode, the default) | send any prompt; **details** in the band |
+| see an outcome (shadow mode, the default) | read the band: a ▲ or ■ stays until the next prompt, and **details** unfolds it |
 | add a rule | state it; Claude offers the line for `AGENTS.md` |
 | check the work is done | ask Claude |
 | switch to enforce mode | `"FRAME_LOOP_MODE": "enforce"` in the same `env`; new session |

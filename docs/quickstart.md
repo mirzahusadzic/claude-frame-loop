@@ -2,7 +2,7 @@
 
 One Claude Code session with frame-loop, from the first prompt to done. Installation is in the [README](../README.md); every line the loop prints is in [Verdicts](verdicts.md).
 
-Before the first check, allow the reader for the project in its `.claude/settings.local.json`; without it, every check ends "■ not read". For private code, use `"FRAME_LOOP_TIER": "private"` instead:
+Before the first reading, allow the reader for the project in its `.claude/settings.local.json`; without it, each reading is refused with a ▲ that names the missing setting. For private code, use `"FRAME_LOOP_TIER": "private"` instead:
 
 ```json
 {
@@ -33,19 +33,20 @@ Frame 0 can also start from what the project already has: ask Claude to compose 
 
 ### A session
 
-| Moment | The loop | Line |
+| Moment | The loop | What stays once it ends |
 | --- | --- | --- |
-| A turn with no signal | free checks: files, size, what `CLAUDE.md` and `AGENTS.md` require | `frame-loop ✓ checked: nothing in this change needed a closer look` |
-| A turn with a signal | the reader, asked with and without each requirement; the band shows progress | `frame-loop ✓ checked: does what you asked, breaks none of your rules` |
-| A change no requirement covers | the same read | `frame-loop ▲ needs you: this serves none of your requirements` |
-| A request outside frame 0 | Claude proposes a new requirement; frame 0 changes only on confirmation | none |
-| You ask whether the work is done, or Claude presents it as done | a completion read, each requirement against the changes that claim it | `frame-loop ✓ every requirement is done` |
+| A turn with no signal | free checks: files, size, the checks your rules require | nothing |
+| A turn with a signal, and the read fits | the reader, asked with and without each requirement; the band shows progress | nothing |
+| A read that does not settle | the same read; Claude gets how the answers split and looks at the change itself | nothing; the work does not count as checked |
+| A change with a purpose frame 0 lacks | the same read | `frame-loop ▲ needs you: this serves a purpose none of your requirements has: add one?` |
+| A change with no purpose | the same read | `frame-loop ▲ needs you: this serves none of your requirements` |
+| A request outside frame 0 | Claude proposes a new requirement; frame 0 changes only on confirmation | nothing |
+| You ask whether the work is done, or Claude presents it as done | a completion read, each requirement against the changes that claim it, or all of the session's changes when none does | nothing when every requirement reads as done; otherwise `frame-loop ▲ needs you: 2 of 3 requirements read as done` |
 
-A signal is a file no rule covers, a check you owe that is unmet, such as tests not run, a large change, a deleted file, or a changed dependency. While the reader works, the band above the prompt shows the step, the answers so far and the time left:
+A signal is a file no rule covers, a check you owe that is unmet, such as tests not run, a large change, a deleted file, a changed dependency, a change to the loop's settings, a change Claude claimed that has no effect, or a change outside what you authorized. While the reader works, the band above the prompt is one line that changes in place: what is happening now, the time left and the tokens spent.
 
 ```text
-⠹ frame-loop checking the change against your requirements, because it is a large change · 0:41
-  does it do what you asked, and does it break any of your rules? · 9 of about 12 answers · about 0:12 left
+◐ frame-loop checking the change · about 0:12 left · 9k tokens
 ```
 
-Shadow mode is the default: it reports and blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: send any prompt to see its outcome, which arrives with it, and Claude receives the finding then. The reader gets a label and file names, never the session or the code: [Privacy](privacy.md).
+Shadow mode is the default: it blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: a ▲ or ■ stays in the band until the next prompt, **details** unfolds it, and Claude receives the finding with that prompt. The reader gets frame 0, the rules, a label and file names, never the session or the code: [Privacy](privacy.md).
