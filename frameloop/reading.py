@@ -344,6 +344,56 @@ def _cut(text: str, cap: int) -> str:
 
 
 NOTHING_CLAIMED = "frame-loop ▲ needs you: Claude didn't say which of your requirements this work serves"
+DECLARE = (
+    "Declare what it serves with `: frame-loop-declare --serves <ids>` and run this again; `--complete --all` "
+    "reads every requirement, only when the author asks whether the whole frame is done"
+)
+
+
+def _what_for(
+    frame0: dict[str, Any], steps: list[dict[str, Any]], tier: str | None, tier_note: str
+) -> tuple[str | None, str | None]:
+    """Work that claims nothing: the requirement the reader names twice, which is then read as
+    if claimed (naming is no evidence: the check tests it), or what Claude is told, the line for
+    the author already set. So claiming nothing cannot skip the check. A disagreement is not
+    read further: it says Claude named nothing."""
+
+    def tell(short: str, why: str, decision: str = gate.RISE, **logged: Any) -> tuple[None, str]:
+        _log({"event": "completion", "parts": [], "usage": {}, "nothing_claimed": True, **logged})
+        state.LIVE["decision"], state.LIVE["shorts"] = decision, [short]
+        return None, f"frame-loop · completion · {why}"
+
+    run = _reader()
+    if tier is None or run is None:
+        why = tier_note or "no reader configured"
+        return tell(f"frame-loop ■ not read: {why}", f"not read: {why}", gate.BLOCK)
+    text = "\n".join(s["diff"] or "" for s in steps)
+    sent, refusal = outgoing(text, "the turn's change", tier, frame0)
+    if refusal:
+        return tell(f"frame-loop ■ not read: {refusal}", f"not read: {refusal}", gate.BLOCK)
+    summary = _masked(_without_declaration(sent or "", "a completion"), frame0)
+    step = {"id": "completion", "summary": summary, "facts": {"kind": "the session's work"}, "claim": {"serves": []}}
+    withhold_file()
+    _live_step("what is it for? (Claude didn't say)", 1, 1, "undeclared")
+    read = run(frames.undeclared(frame0, step, tier), only=("baseline", "repeat"))
+    _ran(read)
+    named = gate.named_twice(read, frame0)
+    if named:
+        return named, None
+    decision, reason = gate.undeclared(read)
+    used = _spent(read)
+    if decision == gate.BLOCK:
+        return tell(f"frame-loop ■ {reason}", reason, gate.BLOCK, usage=used)
+    if decision == gate.RISE and "lacks" in reason:
+        short, why = "frame-loop ▲ needs you: this serves a purpose none of your requirements has: add one?", reason
+    elif decision == gate.RISE and "no purpose" in reason:
+        short, why = "frame-loop ▲ needs you: this serves none of your requirements", reason
+    else:
+        short, why = (
+            NOTHING_CLAIMED,
+            f"not read: this work claims no requirement, and the reader did not settle on one. {DECLARE}",
+        )
+    return tell(short, why, usage=used)
 
 
 def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | None = None, whole: bool = False) -> str:
@@ -389,17 +439,14 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         return "frame-loop · completion · not read: " + not_approved(drifted)
     claims = {c for s in steps for c in s["claims"]} | set(_declared("\n".join(_marks()), frame0))
     asked = frame0["asks"] if whole else [a for a in frame0["asks"] if a["id"] in claims]
-    if not asked:  # nothing to hold it against: said, and nothing is spent
-        _log({"event": "completion", "parts": [], "usage": {}, "nothing_claimed": True})
-        state.LIVE["decision"], state.LIVE["shorts"] = gate.RISE, [NOTHING_CLAIMED]
-        return (
-            "frame-loop · completion · not read: this work claims no requirement. Declare what it serves "
-            "with `: frame-loop-declare --serves <ids>` and run this again; `--complete --all` reads every "
-            "requirement, only when the author asks whether the whole frame is done"
-        )
     started = time.time()
     tier, tier_note = tier_for(said)
     frame0 = mask_frame(frame0, tier) if tier else frame0
+    if not asked:  # claiming nothing skips nothing: the reader says which, on two answers
+        named, told = _what_for(frame0, steps, tier, tier_note)
+        if told:
+            return told
+        asked = [a for a in frame0["asks"] if a["id"] == named]
     parts, used = [], {}
     not_firm = 0
     checked: dict[str, tuple[str | None, str | None]] = {}

@@ -32,7 +32,7 @@ A read that fits, finds nothing to read or does not settle shows nothing once it
 | ▲ needs you: what this work is for isn't written yet | no frame 0 | state the work |
 | ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker | an item of the frame differs from what you approved in the picker, so nothing was read | ask Claude to open it |
 | ▲ needs you: 2 of 3 claimed requirements read as done | completion found a requirement the work claimed not done, or could not read it; for the whole frame, "2 of 3 requirements" | finish them |
-| ▲ needs you: Claude didn't say which of your requirements this work serves | completion, and the work claims none: nothing was read | ask Claude which |
+| ▲ needs you: Claude didn't say which of your requirements this work serves | completion: the work claims none, and the reader's two answers did not agree on one | ask Claude which |
 | ■ not read: a reason | refused before sending, such as a secret | see [Privacy](privacy.md); never counted as a fit |
 
 ---

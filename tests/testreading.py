@@ -58,6 +58,21 @@ def walk(start, frames):
     return loaded.WALKED
 
 
+WHAT_FOR = {"answers": None, "asked": []}
+
+
+def what_for(frame, only=()):
+    """Answers what the work is for as told; a requirement it is asked about, as done."""
+    if frame["name"].startswith("undeclared-"):
+        WHAT_FOR["asked"].append("undeclared")
+        if WHAT_FOR["answers"] is None:
+            return {"exit": 3, "stopped": "spent"}
+        baseline, repeat = WHAT_FOR["answers"]
+        return {"exit": 0, "made": 2, "findings": [{"levels": {"baseline": baseline, "repeat": repeat}}]}
+    WHAT_FOR["asked"].append(frame["name"].split("-")[-2])
+    return {"exit": 0, "made": 6, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+
+
 class Isolated(unittest.TestCase):
     def setUp(self):
         self.saved = dict(os.environ)
@@ -229,17 +244,61 @@ class CompletionTests(Isolated):
         self.assertEqual(read, ["A2"])
         self.assertIn("A2 ✓", out["hookSpecificOutput"]["additionalContext"])
 
-    def test_work_that_claims_nothing_reads_nothing_and_says_so(self):
-        """Mirza: reading all of them is what caused the 0 of 8, so he is told nothing was
-        claimed, at no cost, and Claude is told how to claim it."""
+    def nothing_claimed(self, answers):
+        """A reader whose two answers about what the work is for are given, and which finds any
+        requirement it is then asked about done."""
         os.environ.pop("FRAME_LOOP_LINES")  # as the plugin runs: the short line
+        os.environ["FRAME_LOOP_READER"] = "testreading:what_for"
+        WHAT_FOR.update(answers=answers, asked=[])
         self.claim("S1", [])
-        out, read = self.asked()
-        self.assertEqual(read, [])
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": PUBLIC,
+                "tool_input": {"command": ": frame-loop-read --complete"},
+            }
+        )
+        return out, WHAT_FOR["asked"]
+
+    def test_claiming_nothing_skips_nothing_the_reader_says_which(self):
+        """Claude could skip the check by claiming nothing. The reader names it, on two answers,
+        and the check tests that one requirement."""
+        out, asked = self.nothing_claimed(("A2", "A2"))
+        self.assertEqual(asked, ["undeclared", "A2"])
+        self.assertIn("A2 ✓", out["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("A1", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_purpose_outside_frame_0_says_so_and_reads_no_further(self):
+        out, asked = self.nothing_claimed(("other", "other"))
+        self.assertEqual(asked, ["undeclared"])
+        self.assertIn("this serves a purpose none of your requirements has: add one?", out["systemMessage"])
+
+    def test_no_purpose_says_so_and_reads_no_further(self):
+        out, asked = self.nothing_claimed(("none", "none"))
+        self.assertEqual(asked, ["undeclared"])
+        self.assertIn("this serves none of your requirements", out["systemMessage"])
+
+    def test_a_disagreement_says_claude_named_nothing_and_reads_no_further(self):
+        out, asked = self.nothing_claimed(("A1", "A2"))
+        self.assertEqual(asked, ["undeclared"])
         self.assertIn("Claude didn't say which of your requirements this work serves", out["systemMessage"])
         self.assertIn("frame-loop-declare --serves", out["hookSpecificOutput"]["additionalContext"])
         rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
         self.assertEqual([r.get("nothing_claimed") for r in rows if r.get("event") == "completion"], [True])
+
+    def test_without_a_reader_it_is_not_read_never_done(self):
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ.pop("FRAME_LOOP_READER")
+        self.claim("S1", [])
+        out, _ = self.asked()
+        self.assertIn("■ not read: no reader configured", out["systemMessage"])
+
+    def test_a_failed_read_is_not_read_never_done(self):
+        out, asked = self.nothing_claimed(None)
+        self.assertEqual(asked, ["undeclared"])
+        self.assertIn("■ not read", out["systemMessage"])
 
     def test_all_reads_every_requirement_when_the_author_asks_about_the_whole_frame(self):
         self.claim("S1", ["A1"])
