@@ -108,6 +108,11 @@ class ActObjectTests(unittest.TestCase):
             ("rm -rf build/", "deleted build/"),
             ("cd x && rm -rf a b", "deleted a/, b/"),
             ("rm -rf a b c d", "deleted a/, b/ +2 more"),
+            ("rm -rf a && rm -rf b", "deleted a/, b/"),
+            (
+                "rm -rf .work/" + " .work/".join(c * 32 for c in "abc") + " && rm -rf tests/.work; ls",
+                "deleted 3 in .work/, tests/.work/",
+            ),
             ("git push origin main", "pushed origin main"),
             ("git push", "pushed"),
             ("gh release create v1.2 --title 'a b'", "released v1.2"),

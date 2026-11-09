@@ -128,12 +128,41 @@ def _named(command: str, *words: str, takes_value: Any = lambda _: False) -> lis
     return []
 
 
+def _named_everywhere(command: str, program: str) -> list[str]:
+    """What every simple command running `program` acts on, across a chain."""
+    found: list[str] = []
+    for part in F._split(F.heredocs(command)[0]):
+        said = F._words(part)
+        for i, word in enumerate(said):
+            if F.program(word) == program:
+                found += _no_flags(said[i + 1 :], lambda _: False)
+                break
+    return found
+
+
+def _deleted(found: list[str]) -> str:
+    """What a delete acted on in one short line. Past what fits, each folder holding several is
+    counted, so no path falls behind a "…" whatever its size: a long name first must not hide
+    the rest (seen: nine hashed folders hid 4.8 GB elsewhere)."""
+    plain = ", ".join(found[:2]) + (f" +{len(found) - 2} more" if len(found) > 2 else "")
+    if len(plain) <= SHOWN:
+        return plain
+    held: dict[str, list[str]] = {}
+    for path in found:
+        held.setdefault(path.rstrip("/").rpartition("/")[0], []).append(path)
+    return _cut(
+        ", ".join(
+            paths[0] if len(paths) == 1 else f"{len(paths)} in {parent or '.'}/" for parent, paths in held.items()
+        )
+    )
+
+
 def _with_object(key: str, words: str, command: str) -> str:
     """An act's line: what it did and what it acted on, no sentence (the guide)."""
     if key == "rm -":
-        found = [x.rstrip("/") + "/" for x in _named(command, "rm")]
+        found = [x.rstrip("/") + "/" for x in _named_everywhere(command, "rm")]
         if found:
-            return "deleted " + _cut(", ".join(found[:2]) + (f" +{len(found) - 2} more" if len(found) > 2 else ""))
+            return "deleted " + _deleted(found)
     elif key == "git push":
         found = _named(command, "git", "push", takes_value=PUSH_VALUED.__contains__)
         return _cut(" ".join(["pushed", *found]))
