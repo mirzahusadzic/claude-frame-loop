@@ -15,6 +15,11 @@ const off = atom({ plugin: 'frame-loop', key: 'off' } as const, false)
 // The picker: what is being approved, until its round closes.
 const proposal = atom({ plugin: 'frame-loop', key: 'proposal' } as const, null as Proposal | null)
 
+// The reading that last started a turn, by its time: one wake a reading, across a reload.
+const woken = atom({ plugin: 'frame-loop', key: 'woken' } as const, 0)
+// What the band starts that turn with; the hooks know a wake by these words (WAKE, turn.py).
+const WAKE = 'frame-loop: a reading of the work landed. Deal with what it found.'
+
 const PICKER = 'approve'
 const APPROVE = /^mcp__frame-loop__approve$/
 const APPROVE_SCHEMA = {
@@ -79,6 +84,7 @@ const outcome = (decision: string | undefined) =>
       : null
 
 let switchPath = ''
+let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
 let liveFolder = ''
 
 // Whose switch the hooks read: what they said for this session. Only they are told the
@@ -177,6 +183,18 @@ export const register: Register = on => {
       }
       if (now.state === 'reading') {
         await update($, frame, f => (f + 1) % 1000) // the spinner and the clock move
+      }
+      // A reading that landed with something to deal with starts a turn, once the session is
+      // free: never over the person's words or Claude's work, and it waits until they are done.
+      // A prompt they sent since has told Claude already.
+      if (
+        now.wake && !busy && now.at > (await read($, dismissedAt)) && now.at !== (await read($, woken))
+        && !(await read($, off)) && (await read($, proposal)) === null
+        && !(await $.prompt.read()).text.trim()
+      ) {
+        const at = now.at
+        await update($, woken, () => at)
+        void $.prompt.submit({ text: WAKE })
       }
     })
 
@@ -280,7 +298,8 @@ export const register: Register = on => {
   on('prompt.submit', async ($, e, next) => {
     try {
       const t = (await $.clock.now()) / 1000
-      await update($, dismissedAt, () => t) // what the last turn found was seen
+      // What the last turn found was seen; a wake is no sign of that, so a ▲ stays in the band.
+      if (e.text !== WAKE) await update($, dismissedAt, () => t)
     } catch {
       // the band never holds up a prompt
     }
@@ -288,6 +307,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e)) // a throw or an overrun, too: the prompt goes on
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    busy = e.props.isWorking || e.props.hasSurvey
     const now = await read($, live)
     if (e.props.hasSurvey || now === null || (await read($, off))) {
       return next(e)

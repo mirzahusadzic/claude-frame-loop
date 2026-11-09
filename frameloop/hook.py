@@ -91,6 +91,8 @@ from reading import _proposal, _read, complete  # noqa: E402
 from record import _log, _records, _records_all  # noqa: E402
 from repo import _git, project_root  # noqa: E402
 from turn import (  # noqa: E402
+    WAKE,
+    WAKE_NOTE,
     _background,
     _last_reading,
     _read_turn,
@@ -406,7 +408,8 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
             _log({"event": "briefed", "version": _version()})
             told = "\n\n".join(x for x in (briefing(frame0, mode), told) if x)
-        told = "\n".join(x for x in (told, approval_owed(frame0), completion_owed(frame0)) if x)
+        woken = event.get("prompt") == WAKE
+        told = "\n".join(x for x in (told, WAKE_NOTE if woken else approval_owed(frame0), completion_owed(frame0)) if x)
         _turn_start(event)
         return (
             {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
@@ -891,7 +894,8 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 + (
                     "in the background: the turn ends at once, the band above the prompt shows the "
                     "reading, about a minute, up to two at high effort, and its outcome reaches you "
-                    "with the next prompt. Do not announce it in your reply. "
+                    "with the next prompt; a ▲ or a reading that did not settle starts that prompt itself "
+                    "once the author is not typing. Do not announce it in your reply. "
                     if mode != "enforce" and os.environ.get("FRAME_LOOP_BACKGROUND") == "1"
                     else "and the turn's end then waits for it: about a minute, up to two at high effort, "
                     "while the status line says so. Do not announce the wait in your reply: the status line "

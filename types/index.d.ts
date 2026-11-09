@@ -17,6 +17,7 @@ export type Live = {
   lines?: string[]
   detail?: string[]
   pid?: number // a background read's process
+  wake?: boolean // this reading starts a turn for Claude, once the session is free
 }
 
 // One item of a decomposition, as the picker shows it.
@@ -35,6 +36,7 @@ declare module 'claude-code' {
       openedAt: number
       off: boolean
       proposal: Proposal | null
+      woken: number
     }
   }
 }

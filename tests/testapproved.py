@@ -3,6 +3,7 @@ whose words are not the ones approved is not read, and a frame with no answer ge
 
 import json
 import os
+import signal
 import sys
 import tempfile
 import time
@@ -15,6 +16,7 @@ sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
 import framezero  # noqa: E402
 import gate  # noqa: E402
+import hook  # noqa: E402
 import lines  # noqa: E402
 import reading  # noqa: E402
 import state  # noqa: E402
@@ -235,6 +237,99 @@ class OnePickerTests(Approved):
 
     def test_nothing_written_gets_none(self):
         self.assertEqual(turn.approval_owed({"asks": []}), "")
+
+
+class WakeTests(Approved):
+    """Mirza: Claude is woken when a reading lands, only for a ▲ or one that did not settle, and
+    a drift that comes back goes to him."""
+
+    def land(self, decision, reason="which-ask: it does not fit", woken=False):
+        """A background read's end, its reading given; what the band is told."""
+        (self.home / "live").mkdir(exist_ok=True)
+        os.environ["FRAME_LOOP_LIVE"] = str(self.home / "live")
+        os.environ["FRAME_LOOP_LOG"] = str(self.home / "steps.jsonl")
+        Path(os.environ["FRAME_LOOP_LOG"]).write_text(
+            json.dumps({"session": "approved", "event": "turn-start", **({"woken": True} if woken else {})}) + "\n",
+            encoding="utf-8",
+        )
+        payload = self.home / "payload.json"
+        event = {"session_id": "approved", "cwd": str(self.project)}
+        given = {
+            "event": event,
+            "cwd": str(self.project),
+            "before": "a",
+            "after": "b",
+            "said": "",
+            "session": "approved",
+        }
+        payload.write_text(json.dumps(given), encoding="utf-8")
+
+        def read(*_):
+            state.LIVE["decision"] = decision
+            short = f"frame-loop ▲ needs you: {reason}" if decision == gate.RISE else None
+            if short:
+                state.LIVE.setdefault("shorts", []).append(short)
+            return {"result": {"decision": decision, "reason": reason}, "tell": "details"}
+
+        saved = signal.getsignal(signal.SIGTERM)
+        self.addCleanup(signal.signal, signal.SIGTERM, saved)
+        with mock.patch.object(turn, "read_change", read), mock.patch.object(turn, "plugin_defaults", lambda _: None):
+            turn._background(str(payload))
+        return json.loads((self.home / "live" / "approved.json").read_text(encoding="utf-8"))
+
+    def test_a_rise_wakes_claude(self):
+        self.assertTrue(self.land(gate.RISE).get("wake"))
+
+    def test_a_reading_that_did_not_settle_wakes_claude_and_shows_nothing(self):
+        shown = self.land(gate.UNSETTLED, "which-ask: not firm")
+        self.assertTrue(shown.get("wake"))
+        self.assertEqual(shown["lines"], [])
+
+    def test_a_pass_never_wakes(self):
+        self.assertNotIn("wake", self.land(gate.PASS, "carried on A1"))
+
+    def test_a_reading_not_read_never_wakes(self):
+        self.assertNotIn("wake", self.land(gate.BLOCK, "not read: it looks like it holds a secret"))
+        self.assertNotIn("wake", self.land(gate.RISE, "not read: it looks like it holds a secret"))
+
+    def test_a_frame_only_the_author_can_answer_for_never_wakes(self):
+        self.assertNotIn("wake", self.land(gate.RISE, lines.not_approved([ONE])))
+
+    def test_a_rise_that_comes_back_goes_to_the_author_alone(self):
+        shown = self.land(gate.RISE, woken=True)
+        self.assertNotIn("wake", shown)
+        self.assertEqual(shown["decision"], gate.RISE)
+        self.assertTrue(shown["lines"])
+
+    def test_a_reading_still_unsettled_after_a_wake_reaches_the_author(self):
+        shown = self.land(gate.UNSETTLED, "which-ask: not firm", woken=True)
+        self.assertNotIn("wake", shown)
+        self.assertEqual(shown["decision"], gate.RISE)
+        self.assertEqual(shown["lines"], [turn.CAME_BACK])
+
+    def prompt(self, text):
+        event = {
+            "hook_event_name": "UserPromptSubmit",
+            "session_id": "approved",
+            "cwd": str(self.project),
+            "prompt": text,
+        }
+        return ((hook.answer(event) or {}).get("hookSpecificOutput") or {}).get("additionalContext") or ""
+
+    def test_a_wake_says_to_correct_the_work_and_never_the_frame(self):
+        said = self.prompt(turn.WAKE)
+        self.assertIn("Never change frame 0", said)
+        self.assertNotIn(turn.APPROVAL_OWED, said)
+        starts = [json.loads(x) for x in (self.home / "steps.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertTrue([r for r in starts if r.get("event") == "turn-start"][-1]["woken"])
+
+    def test_a_prompt_of_the_authors_is_no_wake(self):
+        self.assertNotIn("Never change frame 0", self.prompt("go on"))
+        starts = [json.loads(x) for x in (self.home / "steps.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertNotIn("woken", [r for r in starts if r.get("event") == "turn-start"][-1])
+
+    def test_the_band_sends_the_words_the_hooks_know(self):
+        self.assertIn(f"const WAKE = '{turn.WAKE}'", (ROOT / "hooks/band.tsx").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -190,7 +190,7 @@ flowchart LR
 | Gate | after the reader | the answers | ✓, ▲, ■ or not settled, by fixed rules |
 | Picker | when Claude calls the `approve` tool | the items Claude proposes | each answer added to `.frame-loop/approved.json`; a frame answered for is read only in the words approved |
 | Guard | each shell or edit call | the command or the file | an act that is yours, in the record; in enforce mode, a question first |
-| Band | while a read runs, then until the next prompt | `~/.claude/frame-loop/live/<session>.json` | one line: what is happening now, the time left, the tokens spent; then a ▲ or a ■, with **details** |
+| Band | while a read runs, then until the next prompt | `~/.claude/frame-loop/live/<session>.json` | one line: what is happening now, the time left, the tokens spent; then a ▲ or a ■, with **details**; a turn for Claude when a background read lands with a ▲ or unsettled, once the session is free |
 
 ---
 

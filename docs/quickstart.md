@@ -49,4 +49,4 @@ A signal is a file no rule covers, a check you owe that is unmet, such as tests 
 ◐ frame-loop checking the change · about 0:12 left · 9k tokens
 ```
 
-Shadow mode is the default: it blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: a ▲ or ■ stays in the band until the next prompt, **details** unfolds it, and Claude receives the finding with that prompt. The reader gets frame 0, the rules, a label and file names, never the session or the code: [Privacy](privacy.md).
+Shadow mode is the default: it blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: a ▲ or ■ stays in the band until the next prompt and **details** unfolds it. A ▲ or a read that does not settle also starts a turn for Claude, once you are not typing and it is not working, so it can correct the work; a drift that comes back after that goes to you. The reader gets frame 0, the rules, a label and file names, never the session or the code: [Privacy](privacy.md).

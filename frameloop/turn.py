@@ -25,7 +25,16 @@ from config import plugin_defaults, switch_path
 from declare import _declared, _value
 from effort import _effort_rules, _rule_hits
 from framezero import approved_words, engaged_frame, load_frame0, rules_lost
-from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words, unsettled_note
+from lines import (
+    NOT_APPROVED,
+    _guide_words,
+    _short_lines,
+    _signals_short,
+    act_words,
+    for_user,
+    signal_words,
+    unsettled_note,
+)
 from live import _alive, _live, detached, stop
 from obligations import obligations_line, outside_scope
 from privacy import _hash
@@ -163,11 +172,41 @@ def approval_owed(frame0: dict[str, Any]) -> str:
     return APPROVAL_OWED
 
 
+# The prompt the band starts a turn with when a reading lands; hooks/band.tsx sends these words.
+WAKE = "frame-loop: a reading of the work landed. Deal with what it found."
+WAKE_NOTE = (
+    "A reading woke you, not the author. Correct the work if it is wrong, and say in plain words what "
+    "you found. Never change frame 0, the rules or the tree to make it fit: those are the author's, so "
+    "ask them. If nothing is wrong, say so and stop; start no other work."
+)
+CAME_BACK = "frame-loop ▲ needs you: Claude looked, and the reader still can't settle this"
+
+
+def _woken_turn() -> bool:
+    """Whether the session's last turn began with a wake: what it read came back."""
+    starts = _records("turn-start")
+    return bool(starts) and bool(starts[-1].get("woken"))
+
+
+def wake_for(result: dict[str, Any], came_back: bool) -> bool:
+    """Whether a reading that landed wakes Claude: a ▲ or one that did not settle, never a pass,
+    since a wake spends a turn; never a reading that did not run, or a frame only the author can
+    answer for; and not twice over, as a drift that comes back is the author's."""
+    reason = result.get("reason") or ""
+    return (
+        result.get("decision") in (gate.RISE, gate.UNSETTLED)
+        and state.LIVE.get("decision") in (gate.RISE, gate.UNSETTLED)
+        and not reason.startswith(("not read", NOT_APPROVED))
+        and not came_back
+    )
+
+
 def _turn_start(event: dict[str, Any]) -> None:
     cwd = event.get("cwd") or os.getcwd()
     _log({"event": "guides", "lines": {name: _guide_lines(path) for name, path in guides(cwd).items()}})
     if os.environ.get("FRAME_LOOP_READ_TURNS") == "1":
-        _log({"event": "turn-start", "tree": snapshot(event.get("cwd") or os.getcwd())})
+        woken = {"woken": True} if event.get("prompt") == WAKE else {}
+        _log({"event": "turn-start", "tree": snapshot(event.get("cwd") or os.getcwd()), **woken})
 
 
 def _per_file(diff: str) -> dict[str, str]:
@@ -461,6 +500,11 @@ def _background(payload_path: str) -> int:
         read = read_change(payload["cwd"], payload["before"], payload["after"], payload["said"], frame0, "turn")
         alone = read["result"]["decision"] == gate.UNSETTLED  # its details are its words, not Claude's note
         detail = state.LIVE.get("unsettled_why", "") if alone else for_user(read["tell"], frame0)
+        came_back = _woken_turn()
+        wake = wake_for(read["result"], came_back)
+        if alone and came_back:  # Claude has looked once: it is the author's now
+            state.LIVE["decision"] = gate.RISE
+            state.LIVE.setdefault("shorts", []).append(CAME_BACK)
         short = _short_lines(frame0)
         _live(
             state="done",
@@ -468,6 +512,7 @@ def _background(payload_path: str) -> int:
             started=state.LIVE.get("started"),
             lines=short.split("\n") if short else [],
             detail=detail.split("\n"),
+            **({"wake": True} if wake else {}),
         )
     except Exception as error:  # the band never stays "running" on a crash
         _live(

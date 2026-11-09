@@ -63,6 +63,12 @@ Each answer is added to `.frame-loop/approved.json`, by the picker and never by 
 
 ---
 
+### Woken by a reading
+
+When a background reading lands with a ▲ or does not settle, the band starts a turn with the prompt "frame-loop: a reading of the work landed. Deal with what it found.", once the author is not typing and Claude is not working. The outcome arrives with it. Correct the work and say what was found; never change frame 0, the rules or the tree to make it fit. A reading that was refused, a frame not approved and a pass start no turn, and a reading that lands after such a turn does not start another: it goes to the author.
+
+---
+
 ### What reaches the reader
 
 A requirement's and a rule's words go to the reader word for word on every reading. The private-names check catches names only, never a line whose content is private, such as one describing a private method. On a reader that trains on its inputs, sort these while compiling: raise such a line with the author and leave it out of frame 0 and the index, or keep the project on the `private` tier.

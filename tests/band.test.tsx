@@ -364,3 +364,74 @@ test('an act that needs the author shows as the act, after its mark', async ($, 
   expect((await ui.find({ type: 'Text', text: /deleted/ }))?.text).toBe('deleted build/')
   await ui.unmount()
 })
+
+// A reading that landed starts a turn, once the session is free.
+const LANDED = { session: 's', at: 50, state: 'done', decision: 'rise', started: 10, wake: true,
+                 lines: ['frame-loop ▲ needs you: this serves none of your requirements'], detail: [] }
+
+const waking = async ($: any, on: any, { shown = LANDED as unknown, draft = '', working = false, dismissed = 0, ticks = 2 } = {}) => {
+  const store = seed(on, null, dismissed)
+  store.woken = { value: 0, version: 1 }
+  store.proposal = { value: null, version: 1 }
+  const sent: string[] = []
+  on('prompt.submit', (_: unknown, e: { text: string }) => { sent.push(e.text); return { text: e.text } })
+  on('prompt.read', () => ({ value: { text: draft, cursor: 0 } }))
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    if (posix(e.path).endsWith('/s.json')) return { value: JSON.stringify(shown) }
+    throw new Error('no file')
+  })
+  on('fs.exists', () => ({ value: false }))
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('tool.register', () => ({ value: undefined }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/home/u' : undefined }))
+  on('session.id', () => ({ value: 's' }))
+  on('clock.now', () => ({ value: 60000 }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('ui.render', ($: any, e: any) => { const { Text } = $.ui.resolve(e); return <Text>engine</Text> })
+  // The ticks wait until the band has been drawn once, as it is in a session.
+  let drawn = () => {}
+  const ready = new Promise<void>(r => { drawn = r })
+  let periods = 0
+  on('clock.every', async () => {
+    await ready
+    return periods++ < ticks ? { value: undefined } : { deny: 'enough periods' }
+  })
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, isWorking: working }, surface: 'terminal' })
+  drawn()
+  for (let i = 0; i < 30 && periods <= ticks; i++) await new Promise(r => setTimeout(r, 10))
+  await ui.unmount()
+  return { sent, store }
+}
+
+const WOKEN = 'frame-loop: a reading of the work landed. Deal with what it found.'
+
+test('a reading that landed starts one turn, however often the band looks', async ($, on) => {
+  const { sent, store } = await waking($, on, { ticks: 4 })
+  expect(sent).toEqual([WOKEN])
+  expect(store.woken?.value).toBe(50)
+})
+
+test('a wake waits while the person is typing', async ($, on) => {
+  expect((await waking($, on, { draft: 'half a sent' })).sent).toEqual([])
+})
+
+test('a wake waits while Claude works', async ($, on) => {
+  expect((await waking($, on, { working: true })).sent).toEqual([])
+})
+
+test('a prompt sent since the reading landed has told Claude already', async ($, on) => {
+  expect((await waking($, on, { dismissed: 55 })).sent).toEqual([])
+})
+
+test('a reading with no wake starts no turn', async ($, on) => {
+  expect((await waking($, on, { shown: { ...LANDED, wake: undefined } })).sent).toEqual([])
+})
+
+test('a wake does not clear the ▲ from the band, and the person\'s own prompt does', async ($, on) => {
+  const { store } = await waking($, on, {})
+  await $.prompt.submit({ text: WOKEN })
+  expect(store.dismissedAt?.value).toBe(0)
+  await $.prompt.submit({ text: 'go on' })
+  expect(store.dismissedAt?.value).toBe(60)
+})
