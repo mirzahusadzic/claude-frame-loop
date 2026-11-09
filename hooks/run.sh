@@ -63,6 +63,9 @@ if [ -z "$python" ]; then
   case $event in
     *'"hook_event_name"'*'"SessionStart"'* | *'"hook_event_name"'*'"Stop"'*)
       echo '{"systemMessage": "frame-loop ■ not read: needs Python 3.13, the same as Gadfly"}' ;;
+    *'"command"'*': frame-loop-check"'*) # `/frame-loop check` said it would check, on an install with none too
+      said='frame-loop ▲ install · 1 missing\n  Python 3.13 or later: uv tool install midwife brings its own'
+      printf '{"systemMessage": "%s", "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "%s"}}\n' "$said" "$said" ;;
   esac
   exit 0
 fi

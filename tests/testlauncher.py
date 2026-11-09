@@ -111,6 +111,19 @@ class LauncherTests(unittest.TestCase):
         self.assertEqual(said, "frame-loop ■ not read: needs Python 3.13, the same as Gadfly")
         self.assertEqual(self.run_hook({"hook_event_name": "PreToolUse", "tool_name": "Bash"}, [old]), "")
 
+    def test_the_install_check_is_answered_with_no_python_too(self):
+        """Sparky's eighth review: `/frame-loop check` said "checking", and no answer came."""
+        old = self.tmp / "bin"
+        fake_python(old / "python3", recent=False, says="the old python3")
+        event = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": ": frame-loop-check"},
+        }
+        out = json.loads(self.run_hook(event, [old]))
+        self.assertIn("Python 3.13", out["systemMessage"])
+        self.assertIn("Python 3.13", out["hookSpecificOutput"]["additionalContext"])
+
     def test_every_hook_runs_the_launcher_and_no_inline_interpreter(self):
         """The plugin directory holds a hook that runs an interpreter inline for review."""
         settings = json.loads((ROOT / "hooks/hooks.json").read_text(encoding="utf-8"))
