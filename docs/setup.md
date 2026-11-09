@@ -150,4 +150,4 @@ Then point the status line at it in `~/.claude/settings.json`; `refreshInterval`
 
 ### Verify
 
-Start Claude Code in the project, confirm frame 0, then change a file no rule covers, so the turn is read. The band shows the read; in shadow mode, the default, send any prompt to see its outcome, which arrives with it; `frame-loop ■ not read` with a reason names what is missing, such as the router's token or a tier not allowed for the project.
+Run `/frame-loop check` in a session: it names what a first reading lacks, with what to do about each, at no cost, and says what it cannot show. Then start Claude Code in the project, confirm frame 0, and change a file no rule covers, so the turn is read. The band shows the read; in shadow mode, the default, send any prompt to see its outcome, which arrives with it; `frame-loop ■ not read` with a reason names what is missing, such as the router's token or a tier not allowed for the project.

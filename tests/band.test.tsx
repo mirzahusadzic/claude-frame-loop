@@ -406,7 +406,7 @@ test('an act that needs the author shows as the act, after its mark', async ($, 
 const LANDED = { session: 's', at: 50, state: 'done', decision: 'rise', started: 10, wake: true,
                  lines: ['frame-loop ▲ needs you: this serves none of your requirements'], detail: [] }
 
-const waking = async ($: any, on: any, { shown = LANDED as unknown, draft = '', working = false, dismissed = 0, ticks = 2 } = {}) => {
+const waking = async ($: any, on: any, { shown = LANDED as unknown, draft = '', working = false, dismissed = 0, ticks = 2, command = '' } = {}) => {
   const store = seed(on, null, dismissed)
   store.woken = { value: 0, version: 1 }
   store.proposal = { value: null, version: 1 }
@@ -435,10 +435,11 @@ const waking = async ($: any, on: any, { shown = LANDED as unknown, draft = '', 
   })
   await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, isWorking: working }, surface: 'terminal' })
+  const said = command ? (await $.command.run({ command: 'frame-loop', args: command })).text : ''
   drawn()
   for (let i = 0; i < 30 && periods <= ticks; i++) await new Promise(r => setTimeout(r, 10))
   await ui.unmount()
-  return { sent, store }
+  return { sent, store, said }
 }
 
 const WOKEN = 'frame-loop: a reading of the work landed. Deal with what it found.'
@@ -447,6 +448,19 @@ test('a reading that landed starts one turn, however often the band looks', asyn
   const { sent, store } = await waking($, on, { ticks: 4 })
   expect(sent).toEqual([WOKEN])
   expect(store.woken?.value).toBe(50)
+})
+
+test('/frame-loop check asks Claude once, leaves the switch alone, and works with no reading yet', async ($, on) => {
+  const { sent, store, said } = await waking($, on, { shown: null, command: 'check', ticks: 4 })
+  expect(said).toBe('frame-loop: checking what a first reading needs.')
+  expect(sent.length).toBe(1)
+  expect(sent[0]).toContain(': frame-loop-check')
+  expect(store.off?.value).toBe(false)
+})
+
+test('/frame-loop check waits while the person is typing', async ($, on) => {
+  const { sent } = await waking($, on, { shown: null, command: 'check', draft: 'half a thought', ticks: 4 })
+  expect(sent).toEqual([])
 })
 
 test('a wake that did not go is tried once more, and no more', async ($, on) => {

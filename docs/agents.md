@@ -16,6 +16,7 @@ A marker is a no-op shell command the hook reads, and a command of its own: chai
 | `: frame-loop-read --complete --all` | every requirement, read the same way, only when the author asks whether the whole frame is done |
 | `: frame-loop-declare --serves A1,A2` | says which requirements a plan or a turn serves, without writing ids in the reply |
 | `: frame-loop-node <id>` | engages a node of the tree; with no id, frame 0 |
+| `: frame-loop-check` | names what a first reading lacks, at no cost, on or off; `/frame-loop check` asks for it |
 
 `: frame-loop-read` takes these flags besides `--serves` and `--complete`:
 

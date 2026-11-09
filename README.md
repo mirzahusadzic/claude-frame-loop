@@ -81,6 +81,7 @@ Private code: `"FRAME_LOOP_TIER": "private"` instead; keeps no data, costs more.
 | To | Do |
 | --- | --- |
 | switch it off or on | `/frame-loop off`, `/frame-loop on` |
+| see what the install lacks | `/frame-loop check` |
 | see an outcome (shadow mode, the default) | read the band: a ▲ or ■ stays until the next prompt, and **details** unfolds it |
 | add a rule | state it; Claude offers the line for `AGENTS.md` |
 | check the work is done | ask Claude |

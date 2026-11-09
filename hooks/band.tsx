@@ -19,6 +19,7 @@ const proposal = atom({ plugin: 'frame-loop', key: 'proposal' } as const, null a
 const woken = atom({ plugin: 'frame-loop', key: 'woken' } as const, 0)
 // What the band starts that turn with; the hooks know a wake by these words (WAKE, turn.py).
 const WAKE = 'frame-loop: a reading of the work landed. Deal with what it found.'
+const CHECK = 'Run `: frame-loop-check` as a command of its own, and tell me what it says.'
 const WAKE_WITHIN = 3600 // seconds: a session resumed later is told at its next prompt instead
 
 const PICKER = 'approve'
@@ -94,6 +95,7 @@ const outcome = (decision: string | undefined) =>
 let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
 let waking = false
+let checkWanted = false // `/frame-loop check` was asked, and Claude not yet told
 let closing = false // the picker has an answer on its way, which starts the next turn itself
 let retried = 0
 let liveFolder = ''
@@ -159,7 +161,8 @@ export const register: Register = on => {
     switchPath = `${isThere ? project : e.cwd}/.frame-loop/switch`
     await $.command.register({
       name: 'frame-loop',
-      description: 'Switch frame-loop on or off for this project: /frame-loop, /frame-loop on, /frame-loop off',
+      description:
+        'Switch frame-loop on or off for this project, or check its install: /frame-loop, /frame-loop on, /frame-loop off, /frame-loop check',
     })
     try {
       await $.tool.register({
@@ -177,6 +180,11 @@ export const register: Register = on => {
     let shownFor = ''
     $.clock.every(250, async () => {
       await followTheHooks($)
+      // Before any file is read: an install with no reading yet is who asks this.
+      if (checkWanted && !busy && !closing && !(await $.prompt.read()).text.trim()) {
+        checkWanted = false
+        void Promise.resolve($.prompt.submit({ text: CHECK })).catch(() => {})
+      }
       try {
         const isOff = (await $.fs.read(switchPath)).trim().toLowerCase() === 'off'
         if (isOff !== (await read($, off))) await update($, off, () => isOff)
@@ -235,6 +243,10 @@ export const register: Register = on => {
     await followTheHooks($)
     const now = await read($, off)
     const args = e.args.trim().toLowerCase()
+    if (args === 'check') {
+      checkWanted = true // the tick asks, once the session is free
+      return { text: 'frame-loop: checking what a first reading needs.' }
+    }
     const want = args === 'on' ? false : args === 'off' ? true : !now
     await $.fs.write(switchPath, want ? 'off\n' : 'on\n')
     await update($, off, () => want)

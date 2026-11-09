@@ -33,6 +33,7 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 | acts that are the user's | `frameloop/facts.py` |
 | the tree and the climb | `frameloop/tree.py` |
 | a reading Claude asks for | `frameloop/ondemand.py` |
+| what an install lacks | `frameloop/doctor.py` |
 
 ---
 

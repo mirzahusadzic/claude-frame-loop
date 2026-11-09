@@ -280,6 +280,8 @@ def _rise(mode: str, reason: str, decision: str) -> dict[str, Any]:
     }
 
 
+CHECK = ": frame-loop-check"  # what `/frame-loop check` has Claude run: the band cannot start a program
+
 # A marker after another command in one line (`cd x && : frame-loop-declare …`): not read.
 MARKER_IN_CHAIN = re.compile(r"(&&|\|\||;|\|)\s*: frame-loop-(declare|read|node)\b")
 
@@ -317,6 +319,11 @@ def answer(event: dict[str, Any]) -> dict[str, Any] | None:
     state.LIVE.clear()
     plugin_defaults(event)
     _say_the_project(event)
+    if name == "PreToolUse" and tool == "Bash" and (event.get("tool_input") or {}).get("command", "").strip() == CHECK:
+        import doctor  # asked of an install not yet switched on, too
+
+        said = doctor.report()
+        return {"systemMessage": said, "hookSpecificOutput": {"hookEventName": name, "additionalContext": said}}
     if loop_off(event):  # switched off by the author: every hook passes, Claude is told once
         flipped = _switched_by_a_call(event)  # the author's switch is the band's, never a shell call's
         if flipped:
