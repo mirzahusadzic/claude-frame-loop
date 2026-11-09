@@ -104,6 +104,19 @@ class WriterTests(Isolated):
         self.assertEqual(testhook.WRITTEN, [])
 
 
+class AwsSecretTests(unittest.TestCase):
+    def test_the_other_half_of_an_aws_credential_is_a_secret(self):
+        """Sparky's fifth review: the key's id was refused, and its secret went to the reader."""
+        pattern = dict(privacy.S.SECRET_PATTERNS)["an AWS secret key"]
+        for line in (
+            "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+            'AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
+            '"aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
+        ):
+            self.assertRegex(line, pattern)
+        self.assertNotRegex("aws_secret_access_key = os.environ['KEY']", pattern)
+
+
 if __name__ == "__main__":
     unittest.main()
 

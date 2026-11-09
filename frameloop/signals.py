@@ -21,6 +21,7 @@ DOCS = re.compile(r"\.(md|rst|txt)$|(^|/)docs/")
 SECRET_PATTERNS = [
     ("an API key", r"\b(sk-[A-Za-z0-9_-]{20,}|sk-ant-[A-Za-z0-9_-]{20,})"),
     ("an AWS key", r"\bAKIA[0-9A-Z]{16}\b"),
+    ("an AWS secret key", r"(?i)aws_secret_access_key[\"']?\s*[:=]\s*[\"']?[A-Za-z0-9/+=]{40}"),
     ("a GitHub token", r"\b(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{30,}\b|\bgithub_pat_[A-Za-z0-9_]{30,}"),
     ("a Slack token", r"\bxox[abposr]-[A-Za-z0-9-]{10,}"),
     ("a private key", r"-----BEGIN ([A-Z]+ )?PRIVATE KEY-----|-----BEGIN PGP PRIVATE KEY BLOCK-----"),

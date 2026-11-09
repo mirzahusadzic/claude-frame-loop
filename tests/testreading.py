@@ -337,6 +337,20 @@ class CompletionTests(Isolated):
             self.assertNotIn("FRAME_LOOP", said)
             self.assertNotIn("read as done", said)
 
+    def test_a_link_where_a_step_is_kept_is_not_followed(self):
+        """Sparky's fifth review: a valid id, and a link to a file outside, sent that file."""
+        outside = Path(os.environ["FRAME_LOOP_WORK"]).parent / f"outside-{uid(self)}.txt"
+        outside.write_text("+THE-SECRET-FILE-CONTENT\n", encoding="utf-8")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        self.claim("S1", ["A1"])
+        kept = record.step_diff("S1")
+        kept.unlink()
+        kept.symlink_to(outside)
+        testhook.SEEN.clear()
+        text = self.complete()
+        self.assertNotIn("THE-SECRET-FILE-CONTENT", json.dumps(testhook.SEEN))
+        self.assertIn("not read", text)
+
     def test_with_no_step_there_is_nothing_to_read(self):
         """A session with no step would be read as every ask unfulfilled, or as done."""
         self.assertEqual(

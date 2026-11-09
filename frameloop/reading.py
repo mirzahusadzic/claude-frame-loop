@@ -13,6 +13,7 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 from typing import Any
 
 import frames
@@ -474,6 +475,10 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         if not re.fullmatch(r"S\d+", step_id):  # the loop's own ids: a row cannot name a path
             return None
         path = step_diff(step_id)
+        # What the loop wrote, where it wrote it: a link there could point anywhere.
+        work = Path(os.environ.get("FRAME_LOOP_WORK") or path.parents[2]).resolve()
+        if path.is_symlink() or not path.parent.resolve().is_relative_to(work):
+            return None
         return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
 
     steps = [

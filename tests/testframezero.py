@@ -124,5 +124,20 @@ class TreeTests(unittest.TestCase):
         self.assertEqual(framezero.rules_lost(PUBLIC), [])
 
 
+class GuidePlaceTests(unittest.TestCase):
+    def test_the_rules_guide_is_a_file_of_the_project(self):
+        """Sparky's fifth review: an index could name a guide outside the project."""
+        import tempfile
+
+        base = Path(tempfile.mkdtemp(prefix="guide-")).resolve()
+        project = base / "project"
+        project.mkdir()
+        (base / "outside.md").write_text("a line\n", encoding="utf-8")
+        (project / "AGENTS.md").write_text("a line\n", encoding="utf-8")
+        self.assertIsNone(framezero._guide_words(project, "../outside.md"))
+        self.assertIsNone(framezero._guide_words(project, str(base / "outside.md")))
+        self.assertEqual(framezero._guide_words(project, "AGENTS.md"), "a line")
+
+
 if __name__ == "__main__":
     unittest.main()

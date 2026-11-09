@@ -145,7 +145,7 @@ CHECKS = ("changed", "untouched", "ran", "exists", "present")
 
 def _guide_words(root: Path, name: str) -> str | None:
     guide = root / name
-    if not guide.is_file():
+    if not guide.is_file() or not guide.resolve().is_relative_to(root.resolve()):  # one guide of the project's
         return None
     return " ".join(guide.read_text(encoding="utf-8", errors="replace").split())
 
