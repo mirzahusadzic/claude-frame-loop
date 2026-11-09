@@ -21,7 +21,7 @@ import state
 from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, unapproved, with_semantic
-from lines import UNSETTLED_NOTE, _reader_name, _tell, not_approved
+from lines import UNSETTLED_NOTE, _reader_name, _tell, not_approved, refused_line
 from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
@@ -430,11 +430,11 @@ def _what_for(
     run = _reader()
     if tier is None or run is None:
         why = tier_note or "no reader configured"
-        return tell(f"frame-loop ■ not read: {why}", f"not read: {why}", gate.BLOCK)
+        return tell(refused_line(why), f"not read: {why}", gate.BLOCK)
     text = "\n".join(s["diff"] or "" for s in steps)
     sent, refusal = outgoing(text, "the turn's change", tier, frame0)
     if refusal:
-        return tell(f"frame-loop ■ not read: {refusal}", f"not read: {refusal}", gate.BLOCK)
+        return tell(refused_line(refusal), f"not read: {refusal}", gate.BLOCK)
     summary = _masked(_without_declaration(sent or "", "a completion"), frame0)
     step = {"id": "completion", "summary": summary, "facts": {"kind": "the session's work"}, "claim": {"serves": []}}
     withhold_file()
@@ -641,6 +641,12 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     state.LIVE["decision"] = gate.PASS if done == asks else gate.UNSETTLED if alone else gate.RISE
     if alone:
         state.LIVE["unsettled_why"] = "the reader couldn't settle whether the work is done"
+    unread = [x for x in parts if " not read (" in x]
+    if not read_asks and unread:  # nothing reached the reader: that is no verdict on the work
+        state.LIVE["decision"] = gate.BLOCK
+        state.LIVE["shorts"] = [refused_line(unread[0].split(" not read (", 1)[1].rstrip(")"))]
+        first = "frame-loop · completion · " + " · ".join(parts)
+        return first
     if used.get("total_tokens"):
         state.LIVE["tokens"] = used["total_tokens"]
     state.LIVE["shorts"] = (

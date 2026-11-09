@@ -320,6 +320,11 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     return _verdict(result, frame0)
 
 
+def refused_line(why: str, frame0: dict[str, Any] | None = None) -> str:
+    """What the author reads of a reading refused, in plain words: the setting stays in the details."""
+    return f"frame-loop ■ {_plain({'decision': gate.BLOCK, 'reason': f'not read: {why}'}, frame0)}"
+
+
 def _short(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     """The one line the author reads for a reading, Claude Code's way: a mark and words."""
     if result.get("scope"):  # the author's first; a reading that failed beside it is said too

@@ -325,6 +325,18 @@ class CompletionTests(Isolated):
         self.assertNotIn("THE-SECRET-FILE-CONTENT", json.dumps(testhook.SEEN))
         self.assertIn("not read", text)
 
+    def test_a_reader_not_allowed_says_so_in_plain_words_on_every_path(self):
+        """Sparky's fourth review: the check told the author of a tier and a setting, or that
+        no requirement was done, when nothing had reached a reader at all."""
+        os.environ.pop("FRAME_LOOP_LINES")
+        os.environ.update(FRAME_LOOP_READER="testhook:completing", FRAME_LOOP_TIER="contributor")
+        for claims in (["A1"], []):
+            self.claim(f"S{len(claims) + 1}", claims)
+            said = self.asked()[0]["systemMessage"]
+            self.assertIn("■ not read: this reader trains on what it reads", said)
+            self.assertNotIn("FRAME_LOOP", said)
+            self.assertNotIn("read as done", said)
+
     def test_with_no_step_there_is_nothing_to_read(self):
         """A session with no step would be read as every ask unfulfilled, or as done."""
         self.assertEqual(
