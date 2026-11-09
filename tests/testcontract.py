@@ -245,22 +245,22 @@ class ContractTests(unittest.TestCase):
             )
             self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
 
-    def test_a_reader_that_ignores_the_body_rises(self):
+    def test_a_reader_that_ignores_the_body_never_passes(self):
         code, result = firm(frames.which_ask(FRAME0, STEP, "anthropic"), "Stuck")
         self.assertEqual(code, 0)
         decision, reason = gate.which_ask(result, ["A5"])
-        self.assertEqual(decision, gate.RISE, reason)
+        self.assertEqual(decision, gate.UNSETTLED, reason)
 
     def test_a_broken_harness_blocks_and_is_never_read(self):
         code, result = firm(frames.which_ask(FRAME0, STEP, "anthropic"), "Broken")
         self.assertEqual(code, 3)
         self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.BLOCK)
 
-    def test_a_reader_that_follows_the_label_not_the_sense_rises(self):
+    def test_a_reader_that_follows_the_label_not_the_sense_never_passes(self):
         code, result = firm(frames.which_ask(FRAME0, STEP, "anthropic"), "Literal")
         self.assertEqual(code, 0)
         self.assertEqual(result["category"], "coupled but misaligned")
-        self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.RISE)
+        self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.UNSETTLED)
 
     def test_stage_one_reads_baseline_and_repeat(self):
         code, result = stage_one(frames.violation(FRAME0, STEP, "anthropic"), "Stuck")
@@ -307,7 +307,7 @@ class LiveReaderTests(unittest.TestCase):
         os.environ["FRAME_LOOP_PARALLEL"] = "3"
         for battery, kind, expected in (
             ("Ideal", "fake-ideal", gate.PASS),
-            ("Literal", "fake-literal", gate.RISE),
+            ("Literal", "fake-literal", gate.UNSETTLED),
             ("Broken", "fake-broken", gate.BLOCK),
         ):
             os.environ["FRAME_LOOP_BATTERY"] = f"fakebatteries:{battery}"

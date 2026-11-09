@@ -4,8 +4,9 @@ The rules are declared in the design note (design 2) before any use:
 - which-ask passes when the reading is firm, carried, and its baseline names a
   declared ask;
 - stage 1 of violation passes when baseline and repeat both read none;
-- a reading that does not settle is unsettled: neither a pass nor a mismatch, so it
-  reaches Claude alone;
+- a reading that does not settle, or a firm one whose fit does not rest on its declared
+  ask, is unsettled: neither a pass nor a mismatch, so it reaches Claude first, and the
+  author if it comes back;
 - a run Gadfly stopped (exit 3: a spent budget or a StopRun) is a harness stop, which
   blocks and is never read as a verdict.
 """
@@ -65,8 +66,8 @@ def which_ask(result: dict[str, Any], declared: list[str]) -> tuple[str, str]:
         return UNSETTLED, f"not firm (category {result.get('category')}{_said(result)})"
     if baseline == "unclear":  # settled on being unable to say: no mismatch was found
         return UNSETTLED, "the reader reads it as unclear"
-    if result.get("category") != "carried":
-        return RISE, f"{result.get('category')}: the fit does not rest on its declared ask"
+    if result.get("category") != "carried":  # a doubt about the fit, for Claude to look at first
+        return UNSETTLED, f"{result.get('category')}: the fit does not rest on its declared ask"
     if baseline not in declared:
         return RISE, f"the reader names {baseline!r}, not a declared ask ({', '.join(declared)})"
     return PASS, f"carried on {baseline}"

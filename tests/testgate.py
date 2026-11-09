@@ -62,11 +62,13 @@ class WhichAskTests(unittest.TestCase):
             (gate.UNSETTLED, "not settled (baseline none, repeat P1; answers none 4, P1 2)"),
         )
 
-    def test_a_reading_that_does_not_rest_on_its_ask_rises(self):
-        """A fit read the same with its ask cut would pass, though it rests on nothing the author wrote."""
-        decision, reason = gate.which_ask(result("A1", firm=True, category="cooled"), ["A1"])
-        self.assertEqual(decision, gate.RISE)
-        self.assertIn("does not rest on its declared ask", reason)
+    def test_a_reading_that_does_not_rest_on_its_ask_goes_to_claude_first(self):
+        """Never a pass, since it rests on nothing the author wrote; but a doubt about the fit asks
+        nothing of the author (Mirza: "needs you might be an overstatement"), so Claude looks first."""
+        for category in ("cooled", "unresolved", "coupled but misaligned"):
+            decision, reason = gate.which_ask(result("A1", firm=True, category=category), ["A1"])
+            self.assertEqual(decision, gate.UNSETTLED, category)
+            self.assertIn("does not rest on its declared ask", reason)
 
     def test_a_carried_reading_of_another_ask_rises(self):
         """A step read as serving an ask Claude never declared would pass as the declared one."""

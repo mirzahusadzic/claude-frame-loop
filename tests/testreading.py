@@ -135,7 +135,7 @@ class ReadStepTests(Isolated):
         )
         out = hook.answer(plan_event("Serves: A1\nCount requests per client and reset each minute."))
         context = out["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("which-ask: unresolved: the fit does not rest on its declared ask", context)
+        self.assertIn("which-ask: the reader names 'other'", context)
         rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
         self.assertEqual(rows[-1]["decision"], "rise")
         self.assertNotIn("fit", rows[-1])

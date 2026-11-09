@@ -71,6 +71,7 @@ def read_step(
             frame["battery"]["reasoning"] = effort
         return frame
 
+    whose: dict[str, bool] = {}  # who named the requirement, for the line the author reads
     if not declared:  # what it is for, as the reader reads it, twice alike
         _live_step("what is it for? (Claude didn't say)", 1, 1, "undeclared")
         read = run(at(frames.undeclared(frame0, step, tier)), only=("baseline", "repeat"))
@@ -79,6 +80,7 @@ def read_step(
         if named:  # naming an ask is no evidence: the fit below tests it, as it tests a declaration
             step = {**step, "claim": {"serves": [named]}}
             declared = [named]
+            whose = {"named_by_reader": True}
     if not declared:  # no ask to test: only the question to put to the author; it never passes
         decision, reason = gate.undeclared(read)
         question = (
@@ -108,7 +110,7 @@ def read_step(
         _ran(asked)
         decision, reason = gate.which_ask(asked, declared)
         if decision != gate.PASS:
-            return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked)}
+            return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked), **whose}
         return {
             "decision": decision,
             "reason": "violation: frame 0 states no rules",
@@ -129,7 +131,7 @@ def read_step(
         if rules == gate.UNSETTLED:  # Claude hears of both
             reason = f"{reason} · violation: {why}"
     if decision != gate.PASS:
-        return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke)}
+        return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke), **whose}
     fit = reason
     decision, reason = gate.violation_stage_one(broke)
     return {"decision": decision, "reason": f"violation: {reason}", "fit": fit, "usage": _spent(asked, broke)}

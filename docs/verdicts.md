@@ -16,13 +16,12 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Outcomes
 
-A read that fits, finds nothing to read or does not settle shows nothing once it ends; the record keeps it. When a read does not settle, Claude gets how the answers split and looks at the change itself: a real mismatch it tells you about, and either way the work does not count as checked. A ▲ or a read that does not settle starts a turn for Claude, once you are not typing and it is not working; it corrects the work and never frame 0, and if the same read comes back after that, it is yours: "▲ needs you: Claude looked, and the reader still can't settle this". These lines stay:
+A read that fits, finds nothing to read or does not settle shows nothing once it ends; the record keeps it. A read also counts as not settled when the change fits but does not rest on the requirement: a doubt, not a mismatch. When a read does not settle, Claude gets how the answers split and looks at the change itself: a real mismatch it tells you about, and either way the work does not count as checked. A ▲ or a read that does not settle starts a turn for Claude, once you are not typing and it is not working; it corrects the work and never frame 0, and if the same read comes back after that, it is yours: "▲ needs you: Claude looked, and the reader still can't settle this". These lines stay:
 
 | Line | Means | Do |
 | --- | --- | --- |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: this serves none of your requirements | padding: a change that serves no purpose at all | ask why the change is there |
-| ▲ needs you: the reader doesn't see this resting on the requirement Claude named | it still fits with that requirement cut | ask what it is for |
 | ▲ needs you: the reader sees it serving "a requirement", not the requirement Claude named | another requirement carries it | check which requirement it serves |
 | ▲ needs you: the reader sees a purpose none of your requirements has | Claude named a requirement, and the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: the reader sees it serving none of your requirements | Claude named a requirement, and the reader sees no purpose in the change | ask why the change is there |

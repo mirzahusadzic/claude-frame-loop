@@ -86,7 +86,24 @@ def thinking_less(frame, only=()):
 
 
 def drifting(frame, only=()):
-    return {"exit": 0, "firm": True, "category": "unresolved", "findings": [{"levels": {"baseline": "none"}}]}
+    """A firm reading that the step serves a purpose outside frame 0: a ▲."""
+    return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "other"}}]}
+
+
+def doubting(frame, only=()):
+    """A firm reading whose fit does not rest on its ask; the rules read clean."""
+    if only:
+        return {"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}]}
+    return {"exit": 0, "firm": True, "category": "cooled", "findings": [{"levels": {"baseline": frame["anchors"][0]}}]}
+
+
+def named_then_another(frame, only=()):
+    """Named twice when asked what it is for; then carried on another requirement."""
+    if frame["name"].startswith("undeclared-"):
+        return {"exit": 0, "findings": [{"levels": {"baseline": "A1", "repeat": "A1"}}]}
+    if only:
+        return {"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}]}
+    return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "A2"}}]}
 
 
 def _fake_gh() -> str:
@@ -4844,6 +4861,30 @@ class NotFirmTests(unittest.TestCase):
         os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
         out = self.marker(": frame-loop-read --complete")
         self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
+
+
+class DoubtTests(unittest.TestCase):
+    """Seen in a real session: "▲ needs you: the reader doesn't see this resting on the requirement
+    Claude named", for a requirement Claude never named and nothing for the author to decide."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+
+    def test_a_doubt_about_the_fit_reaches_claude_and_not_the_author(self):
+        os.environ.update(env(FRAME_LOOP_READER="testhook:doubting"))
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        out = hook.answer(plan_event("Serves: A1\nAdd a greeting."))
+        self.assertNotIn("systemMessage", out)
+        told = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("did not settle", told)
+        self.assertIn("don't call the work checked", told)
+
+    def test_a_requirement_the_reader_named_is_not_said_to_be_claudes(self):
+        os.environ.update(env(FRAME_LOOP_READER="testhook:named_then_another"))
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        said = hook.answer(plan_event("Add a greeting."))["systemMessage"]
+        self.assertIn("not the one it named first", said)
+        self.assertNotIn("Claude named", said)
 
 
 class RefusedLineTests(unittest.TestCase):

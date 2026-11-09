@@ -306,14 +306,17 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     named = re.match(r"violation: names ([^\s:]+)", reason)
     if named:
         return f"it may break your rule {named.group(1)}"
-    if "does not rest on its declared ask" in reason:
-        return "the reader doesn't see this resting on the requirement Claude named"
     other = re.match(r"which-ask: the reader names '([^']+)'", reason)
     if other:
         return {
             "other": "the reader sees a purpose none of your requirements has",
             "none": "the reader sees it serving none of your requirements",
-        }.get(other.group(1), f"the reader sees it serving {other.group(1)}, not the requirement Claude named")
+        }.get(
+            other.group(1),
+            f"the reader sees it serving {other.group(1)}, not the one it named first"
+            if result.get("named_by_reader")
+            else f"the reader sees it serving {other.group(1)}, not the requirement Claude named",
+        )
     return _verdict(result, frame0)
 
 
