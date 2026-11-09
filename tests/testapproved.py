@@ -192,21 +192,21 @@ class WriteTests(Approved):
     def test_a_write_in_the_words_approved_needs_no_one(self):
         """Approved in the picker and then written: telling the author again is a false alarm."""
         self.answer([ONE, TWO])
-        self.assertEqual(self.act(), ("Claude changed frame 0", False))
+        self.assertEqual(self.act(), ("changed frame 0", False))
 
     def test_a_write_in_other_words_needs_the_author(self):
         self.answer([ONE])
-        self.assertEqual(self.act(), ("Claude changed frame 0", True))
+        self.assertEqual(self.act(), ("changed frame 0", True))
 
     def test_a_write_with_no_answer_needs_the_author(self):
-        self.assertEqual(self.act(), ("Claude changed frame 0", True))
+        self.assertEqual(self.act(), ("changed frame 0", True))
 
     def test_a_write_to_the_record_of_approvals_needs_the_author(self):
         """Claude writing the approval itself would be its word standing in for the author's."""
         self.answer([ONE, TWO])
         path = self.home / "approved.json"
         said = lines.act_words({"event": "config", "path": str(path), "at": time.time() - 5})
-        self.assertEqual(said[:2], ("Claude changed your approvals", True))
+        self.assertEqual(said[:2], ("changed your approvals", True))
 
 
 class OnePickerTests(Approved):

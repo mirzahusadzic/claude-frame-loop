@@ -41,18 +41,18 @@ A read that fits, finds nothing to read or does not settle shows nothing once it
 
 Acts the loop records. In shadow mode, the default, an act with no ▲ prints nothing and blocks nothing: the record keeps it and Claude is told; in enforce mode the ones a command or an edit makes, pushes, releases, publishing, deletes and changes to the loop's own files, ask you before they run.
 
-| Act | ▲ in shadow mode |
+| Act, its line: what it did and what it acted on, the exact command under details | ▲ in shadow mode |
 | --- | --- |
-| Claude pushed · made a GitHub release · changed something on GitHub · published a package | no |
-| Claude asked to push (or another act), and it did not run: denied, or the command failed | no |
-| Claude changed something people see | no |
-| Claude changed the loop's own files · tried, and it did not go through | no |
-| Claude changed frame 0 · the tree, in words you did not approve | yes |
-| Claude changed frame 0 · the tree, in words you approved | no |
-| Claude changed the rules · the switch · your approvals | yes |
+| pushed origin main · released v1.2 · changed something on GitHub · published a package | no |
+| asked to push (or another act), did not run: denied, or the command failed | no |
+| changed something people see | no |
+| changed the loop's own files · tried to, did not go through | no |
+| changed frame 0 · the tree, in words you did not approve | yes |
+| changed frame 0 · the tree, in words you approved | no |
+| changed the rules · the switch · your approvals | yes |
 | AGENTS.md: 5 lines added, 2 lines removed | no |
-| Claude deleted a folder · deleted untracked files · deleted files | yes |
-| Claude touched a personal file | yes |
+| deleted build/ · deleted untracked files · deleted files | yes |
+| touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 
 An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act, even beside other commands in one call. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled. In shadow mode that comparison is the report, so a command that only reads is no act; a command naming the record, the work folder or the loop's code, which the hashes do not settle, is kept in the record alone. Enforce mode has to ask before the call, so it goes by the command's text and may ask about a script that only reads.

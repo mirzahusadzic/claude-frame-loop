@@ -60,36 +60,63 @@ def _unsettled_words(reason: str) -> str:
 
 # What an act the loop watches means to the author, by its trigger: (words, needs the author).
 ACT_WORDS = (
-    ("git push", "Claude pushed", False),
-    ("gh release", "Claude made a GitHub release", False),
-    ("(gh ", "Claude changed something on GitHub", False),
-    ("npm publish", "Claude published a package", False),
-    ("twine upload", "Claude published a package", False),
-    (" publish", "Claude published a package", False),
-    ("gem push", "Claude published a package", False),
-    ("rm -", "Claude deleted a folder", True),
-    ("git clean", "Claude deleted untracked files", True),
-    ("find -delete", "Claude deleted files", True),
+    ("git push", "pushed", False),
+    ("gh release", "made a GitHub release", False),
+    ("(gh ", "changed something on GitHub", False),
+    ("npm publish", "published a package", False),
+    ("twine upload", "published a package", False),
+    (" publish", "published a package", False),
+    ("gem push", "published a package", False),
+    ("rm -", "deleted a folder", True),
+    ("git clean", "deleted untracked files", True),
+    ("find -delete", "deleted files", True),
     ("T1:", "spending passed what you approved", True),
-    ("T2:", "Claude changed something people see", False),
-    ("T4:", "Claude touched a personal file", True),
-    ("L1:", "Claude changed the loop's own files", False),
+    ("T2:", "changed something people see", False),
+    ("T4:", "touched a personal file", True),
+    ("L1:", "changed the loop's own files", False),
 )
 
 
 # An act asked for that did not run (denied, or the command failed), in the author's words.
 ASKED = {
-    "git push": "Claude asked to push",
-    "gh release": "Claude asked to make a GitHub release",
-    "(gh ": "Claude asked to change something on GitHub",
-    "npm publish": "Claude asked to publish a package",
-    "twine upload": "Claude asked to publish a package",
-    " publish": "Claude asked to publish a package",
-    "gem push": "Claude asked to publish a package",
-    "rm -": "Claude asked to delete a folder",
-    "git clean": "Claude asked to delete untracked files",
-    "find -delete": "Claude asked to delete files",
+    "git push": "asked to push",
+    "gh release": "asked to make a GitHub release",
+    "(gh ": "asked to change something on GitHub",
+    "npm publish": "asked to publish a package",
+    "twine upload": "asked to publish a package",
+    " publish": "asked to publish a package",
+    "gem push": "asked to publish a package",
+    "rm -": "asked to delete a folder",
+    "git clean": "asked to delete untracked files",
+    "find -delete": "asked to delete files",
 }
+
+
+def _named(command: str, *words: str) -> list[str]:
+    """What a command acts on: the words after `words` that are no flag, in the first simple
+    command that runs them; none for one assembled or wrapped, which keeps its plain words."""
+    for part in F._split(F.heredocs(command)[0]):
+        said = F._words(part)
+        for i in range(len(said) - len(words) + 1):
+            if F.program(said[i]) == words[0] and said[i + 1 : i + len(words)] == list(words[1:]):
+                return [x for x in said[i + len(words) :] if not x.startswith("-")]
+    return []
+
+
+def _with_object(key: str, words: str, command: str) -> str:
+    """An act's line: what it did and what it acted on, no sentence (the guide)."""
+    if key == "rm -":
+        found = [x.rstrip("/") + "/" for x in _named(command, "rm")]
+        if found:
+            return "deleted " + _cut(", ".join(found[:2]) + (f" +{len(found) - 2} more" if len(found) > 2 else ""))
+    elif key == "git push":
+        found = _named(command, "git", "push")
+        return _cut(" ".join(["pushed", *found]))
+    elif key == "gh release":
+        found = _named(command, "gh", "release", "create")
+        if found:
+            return f"released {_cut(found[0])}"
+    return words
 
 
 def _landed(record: dict[str, Any]) -> bool:
@@ -166,21 +193,23 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
         if key in said:
             # A command asked for, denied or failed, ran no act: said so, never as done (the cold review, L1).
             if record.get("event") == "outward" and record.get("ran") is False:
-                return f"{ASKED.get(key, 'Claude asked for an act')}, and it did not run", False, exact
+                return f"{ASKED.get(key, 'asked for an act')}, did not run", False, exact
             if key == "L1:" and record.get("event") == "outward":  # a command: it may only read them
-                words = f"Claude ran a command on {_which(record.get('command') or '')}"
+                words = f"ran a command on {_which(record.get('command') or '')}"
             elif key == "L1:" and record.get("after"):  # seen after the call: it went through
                 gone = not Path(record.get("path", "")).exists()
                 own = _authors_own(record.get("path", ""))
-                words = f"Claude {'removed' if gone else 'changed'} {own or _which(record.get('path', ''))}"
+                words = f"{'removed' if gone else 'changed'} {own or _which(record.get('path', ''))}"
                 needs = _needs_the_author(record.get("path", ""), own)
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
-                words = "Claude tried to change the loop's own files, and it did not go through"
+                words = "tried to change the loop's own files, did not go through"
             elif key == "L1:" and record.get("event") == "config" and _authors_own(record.get("path", "")):
                 own = _authors_own(record.get("path", ""))
-                words, needs = f"Claude changed {own}", _needs_the_author(record.get("path", ""), own)
+                words, needs = f"changed {own}", _needs_the_author(record.get("path", ""), own)
+            elif record.get("event") == "outward":
+                words = _with_object(key, words, record.get("command") or "")
             return words, needs, exact
-    return "Claude did something you asked to hear of", False, exact
+    return "did something you asked to hear of", False, exact
 
 
 def _k(n: int) -> str:
@@ -441,6 +470,6 @@ def _short_lines(frame0: dict[str, Any] | None) -> str:
     if not shorts and not facts:
         return ""
     if not shorts:
-        return for_user("frame-loop ▲ needs you: " + " · ".join(facts), frame0)
-    lines = shorts[-1:] + (["  ▲ needs you: " + " · ".join(facts)] if facts else [])
+        return for_user("frame-loop ▲ " + " · ".join(facts), frame0)
+    lines = shorts[-1:] + (["  ▲ " + " · ".join(facts)] if facts else [])
     return for_user("\n".join(lines), frame0)

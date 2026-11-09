@@ -329,9 +329,9 @@ export const register: Register = on => {
     }
     const { mark, color, word, wordColor } = shown
     const spent = now.started ? ` · ${clock(now.at - now.started)}` : ''
-    // The hook's own line, after its mark: "needs you: <why>", in the author's words.
+    // The hook's own line, after its mark: "needs you: <why>" or an act, in the author's words.
     // A rise shows the line that needs the author, which may follow a check mark.
-    const line = (now.decision === 'rise' && now.lines?.find(x => x.includes('needs you'))) || now.lines?.[0]
+    const line = (now.decision === 'rise' && now.lines?.find(x => x.includes('▲'))) || now.lines?.[0]
     const said = line?.trim().replace(/^frame-loop /, '').replace(/^[✓▲■·] ?/, '') || word
     const isOpen = (await read($, openedAt)) === now.at
     const detail = now.detail ?? []

@@ -371,7 +371,7 @@ def _one_line(event: dict[str, Any], out: dict[str, Any], frame0: dict[str, Any]
     if state.LIVE.get("queued"):
         state.LIVE["shorts"] = []
         short = _short_lines(frame0)
-        if "needs you" in short:
+        if "▲" in short:
             return {**out, "systemMessage": short}
     elif answers or event.get("hook_event_name") not in ("PreToolUse", "PostToolUse", "PostToolUseFailure"):
         return out

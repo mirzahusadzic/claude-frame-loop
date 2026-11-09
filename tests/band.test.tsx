@@ -355,3 +355,12 @@ test('no items is refused', async ($, on) => {
   const called = await $.tool.call({ ...PROPOSED, items: [] } as any)
   expect(JSON.stringify(called)).toContain('at least one item')
 })
+
+test('an act that needs the author shows as the act, after its mark', async ($, on) => {
+  seed(on, { session: 's', at: 50, state: 'done', decision: 'rise', started: 10,
+             lines: ['frame-loop ▲ deleted build/'], detail: ['▲ deleted build/: rm -rf build'] })
+  on('clock.now', () => ({ value: 60000 }))
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /deleted/ }))?.text).toBe('deleted build/')
+  await ui.unmount()
+})

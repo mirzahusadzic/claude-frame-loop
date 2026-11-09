@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 import declare  # noqa: E402
 import effort  # noqa: E402
+import facts  # noqa: E402
 import lines  # noqa: E402
 import signals  # noqa: E402
 import state  # noqa: E402
@@ -40,10 +41,10 @@ class AuthorsFilesTests(unittest.TestCase):
 
     def test_a_write_to_what_is_the_authors_needs_them(self):
         for name, words in (
-            ("frame0.json", "Claude changed frame 0"),
-            ("rules.json", "Claude changed the rules"),
-            ("tree/node.json", "Claude changed the tree"),
-            ("switch", "Claude changed the switch"),
+            ("frame0.json", "changed frame 0"),
+            ("rules.json", "changed the rules"),
+            ("tree/node.json", "changed the tree"),
+            ("switch", "changed the switch"),
         ):
             self.assertEqual(self.act(name)[:2], (words, True), name)
             self.assertEqual(self.act(name, after=True)[:2], (words, True), name)
@@ -52,14 +53,14 @@ class AuthorsFilesTests(unittest.TestCase):
         state.LIVE.clear()
         self.addCleanup(state.LIVE.clear)
         state.LIVE["acts"] = [self.act("frame0.json")]
-        self.assertEqual(lines._short_lines(None), "frame-loop ▲ needs you: Claude changed frame 0")
+        self.assertEqual(lines._short_lines(None), "frame-loop ▲ changed frame 0")
 
     def test_a_frame_0_named_by_its_setting_counts(self):
         elsewhere = self.project / "kept-frame.json"
         elsewhere.write_text("{}", encoding="utf-8")
         with mock.patch.dict(os.environ, {"FRAME_LOOP_FRAME0": str(elsewhere)}):
             said = lines.act_words({"event": "config", "path": str(elsewhere), "at": elsewhere.stat().st_mtime})
-        self.assertEqual(said[:2], ("Claude changed frame 0", True))
+        self.assertEqual(said[:2], ("changed frame 0", True))
 
     def test_the_loops_other_files_stay_quiet(self):
         self.assertEqual(self.act("steps.jsonl")[1], False)
@@ -69,9 +70,48 @@ class AuthorsFilesTests(unittest.TestCase):
         path = self.project / ".frame-loop/frame0.json"
         path.write_text("{}", encoding="utf-8")
         words, needs, _ = lines.act_words({"event": "config", "path": str(path), "at": path.stat().st_mtime + 60})
-        self.assertEqual(
-            (words, needs), ("Claude tried to change the loop's own files, and it did not go through", False)
+        self.assertEqual((words, needs), ("tried to change the loop's own files, did not go through", False))
+
+
+class ActObjectTests(unittest.TestCase):
+    """The guide: an act's line is its symbol and what it acted on, no sentence; the exact
+    command stays under details."""
+
+    def act(self, command):
+        return lines.act_words(
+            {"event": "outward", "command": command, "triggers": [f"T5: ({facts.outward(command)})"], "ran": True}
         )
+
+    def test_what_it_did_and_what_it_acted_on(self):
+        for command, words in (
+            ("rm -rf build", "deleted build/"),
+            ("rm -rf build/", "deleted build/"),
+            ("cd x && rm -rf a b", "deleted a/, b/"),
+            ("rm -rf a b c d", "deleted a/, b/ +2 more"),
+            ("git push origin main", "pushed origin main"),
+            ("git push", "pushed"),
+            ("gh release create v1.2 --title 'a b'", "released v1.2"),
+            ("git clean -fd", "deleted untracked files"),
+        ):
+            self.assertEqual(self.act(command)[0], words, command)
+
+    def test_a_command_it_cannot_read_keeps_its_plain_words(self):
+        self.assertEqual(self.act("bash -c 'rm -rf build'")[0], "deleted a folder")
+
+    def test_the_exact_command_stays_under_details(self):
+        self.assertEqual(self.act("rm -rf build")[2], "rm -rf build")
+
+    def test_no_line_is_a_sentence_with_claude_in_it(self):
+        for key, words, _ in lines.ACT_WORDS:
+            self.assertNotIn("Claude", words, key)
+        for words in lines.ASKED.values():
+            self.assertNotIn("Claude", words)
+
+    def test_the_author_reads_the_symbol_and_the_act(self):
+        state.LIVE.clear()
+        self.addCleanup(state.LIVE.clear)
+        state.LIVE["acts"] = [("deleted build/", True, "rm -rf build")]
+        self.assertEqual(lines._short_lines(None), "frame-loop ▲ deleted build/")
 
 
 class AfterwardsTests(unittest.TestCase):
@@ -87,7 +127,7 @@ class AfterwardsTests(unittest.TestCase):
         for live in (
             {"shorts": ["frame-loop ✓ checked: does what you asked, breaks none of your rules"]},
             {"shorts": ["frame-loop · a guide changed: its new lines are offered as rules"]},
-            {"acts": [("Claude pushed", False, "git push origin main")]},
+            {"acts": [("pushed", False, "git push origin main")]},
             {"guides": ["AGENTS.md +1 line"], "lost": []},
         ):
             self.assertEqual(self.shown(**live), "", live)
@@ -95,11 +135,11 @@ class AfterwardsTests(unittest.TestCase):
     def test_what_needs_the_author_still_prints(self):
         rise = "frame-loop ▲ needs you: this serves none of your requirements"
         self.assertEqual(self.shown(shorts=[rise]), rise)
-        self.assertEqual(self.shown(shorts=[rise], acts=[("Claude pushed", False, "git push")]), rise)
+        self.assertEqual(self.shown(shorts=[rise], acts=[("pushed", False, "git push")]), rise)
         unread = "frame-loop ■ not read: it looks like it holds a secret"
         self.assertEqual(self.shown(shorts=[unread]), unread)
-        deleted = self.shown(acts=[("Claude deleted a folder", True, "rm")])
-        self.assertIn("▲ needs you: Claude deleted a folder", deleted)
+        deleted = self.shown(acts=[("deleted build/", True, "rm")])
+        self.assertIn("▲ deleted build/", deleted)
         self.assertIn("lost their wording", self.shown(guides=["AGENTS.md +1 line"], lost=["R1"]))
 
 
@@ -156,7 +196,7 @@ class TellTests(unittest.TestCase):
     def test_an_act_with_no_words_of_its_own_is_still_told(self):
         """An act the table does not name would be dropped from the author's line."""
         record = {"event": "outward", "triggers": ["T7: a hook the author added"], "command": "deploy\n"}
-        self.assertEqual(lines.act_words(record), ("Claude did something you asked to hear of", False, "deploy"))
+        self.assertEqual(lines.act_words(record), ("did something you asked to hear of", False, "deploy"))
 
     def test_an_unknown_tier_is_no_reader(self):
         """An unknown tier would raise in the line, or name a model that never read."""
@@ -229,7 +269,7 @@ class ActLineTests(unittest.TestCase):
             "triggers": ["L1: the loop's own configuration or record is touched"],
         }
         words, _, shown = lines.act_words(record)
-        self.assertEqual(words, "Claude ran a command on the switch")
+        self.assertEqual(words, "ran a command on the switch")
         self.assertLessEqual(len(shown), lines.SHOWN)
         self.assertNotIn("\n", shown)
         self.assertTrue(shown.endswith("…"))
@@ -244,9 +284,7 @@ class SeenAfterTests(unittest.TestCase):
     def test_a_change_seen_after_the_call_went_through(self):
         gone = {"event": "config", "path": "/nowhere/.frame-loop/switch", "after": True, "at": 1.0}
         words = lines.act_words(gone)[0]
-        self.assertEqual(words, "Claude removed the switch")
+        self.assertEqual(words, "removed the switch")
         self.assertNotIn("did not go through", words)
         here = Path(__file__)
-        self.assertEqual(
-            lines.act_words({**gone, "path": str(here), "at": 1.0})[0], "Claude changed the loop's own files"
-        )
+        self.assertEqual(lines.act_words({**gone, "path": str(here), "at": 1.0})[0], "changed the loop's own files")

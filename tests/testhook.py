@@ -2386,7 +2386,7 @@ class CoreTests(unittest.TestCase):
             acts=[],
         )
         shown = lines._short_lines(None)
-        self.assertEqual(shown, "frame-loop ▲ needs you: AGENTS.md: 1 line added; 1 of your rules lost their wording")
+        self.assertEqual(shown, "frame-loop ▲ AGENTS.md: 1 line added; 1 of your rules lost their wording")
         self.assertEqual(state.LIVE["decision"], "rise")
 
     def test_a_command_on_the_loops_files_is_not_called_a_change(self):
@@ -2401,11 +2401,9 @@ class CoreTests(unittest.TestCase):
         landed.write_text("{}", encoding="utf-8")
         wrote = {"event": "config", "path": str(landed), "at": landed.stat().st_mtime}
         refused = {"event": "config", "path": str(WORK / f"never-{uid(self)}.json"), "at": 1}  # Claude Code said no
-        self.assertEqual(lines.act_words(ran)[0], "Claude ran a command on the loop's own files")
-        self.assertEqual(lines.act_words(wrote)[0], "Claude changed the loop's own files")
-        self.assertEqual(
-            lines.act_words(refused)[0], "Claude tried to change the loop's own files, and it did not go through"
-        )
+        self.assertEqual(lines.act_words(ran)[0], "ran a command on the loop's own files")
+        self.assertEqual(lines.act_words(wrote)[0], "changed the loop's own files")
+        self.assertEqual(lines.act_words(refused)[0], "tried to change the loop's own files, did not go through")
 
     def test_a_plugin_keeps_each_projects_files_in_the_project(self):
         """Installed as a plugin, nothing set: the loop's files go to <project>/.frame-loop."""
@@ -2626,7 +2624,7 @@ class CoreTests(unittest.TestCase):
             hook.answer({"hook_event_name": "PreToolUse", **tool})
             hook.answer({"hook_event_name": "PostToolUse", **tool})
         told = hook.answer(prompt)["hookSpecificOutput"]["additionalContext"]
-        self.assertIn("not shown to the author: Claude pushed", told)
+        self.assertIn("not shown to the author: pushed", told)
         self.assertNotIn("shown to the author under your reply", told)
 
     def test_an_act_reported_is_never_shown_as_checked(self):
@@ -2703,9 +2701,9 @@ class CoreTests(unittest.TestCase):
             said = (out or {}).get("systemMessage", "")
             self.assertNotIn("GitHub", said)
             if ran:
-                self.assertIn("Claude pushed: git push origin main", said)
+                self.assertIn("pushed origin main: git push origin main", said)
             else:
-                self.assertIn("Claude asked to push, and it did not run: git push origin main", said)
+                self.assertIn("asked to push, did not run: git push origin main", said)
 
     def test_a_docs_edit_under_a_docs_rule_starts_no_read(self):
         """Seen on the loop's release: every docs edit was read for two minutes, on three
@@ -3032,7 +3030,7 @@ class CoreTests(unittest.TestCase):
         git("add", "-A")
         git("commit", "-q", "-m", "turn")
         # the line under the reply, at once, marks the act too, not only the band's outcome later
-        self.assertIn("▲ needs you: Claude deleted a folder", (said or {}).get("systemMessage", ""))
+        self.assertIn("▲ deleted build/", (said or {}).get("systemMessage", ""))
         deadline, shown = time.time() + 60, {}
         while time.time() < deadline:  # the background read's own outcome carries its pid
             path = live / f"{self.session}.json"
@@ -3044,7 +3042,7 @@ class CoreTests(unittest.TestCase):
                 break
             time.sleep(0.2)
         self.assertEqual(shown.get("decision"), "rise", shown)
-        self.assertTrue(any("deleted a folder" in x for x in shown.get("lines") or []), shown)
+        self.assertTrue(any("deleted build/" in x for x in shown.get("lines") or []), shown)
 
     def test_a_newer_background_read_replaces_one_still_running(self):
         """The first review: each turn started a background read of its own, however many
@@ -4865,7 +4863,7 @@ class OneLineTests(unittest.TestCase):
             }
         )
         self.assertEqual(out["systemMessage"].count("\n"), 0, out["systemMessage"])
-        self.assertIn("▲ needs you: Claude deleted a folder", out["systemMessage"])
+        self.assertIn("▲ deleted notes/gone/", out["systemMessage"])
         self.assertNotIn("this turn", out["systemMessage"])
         self.assertNotIn("in the background", out["systemMessage"])
         git("add", "-A")

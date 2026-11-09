@@ -532,6 +532,6 @@ def _turn_summary() -> dict[str, Any] | None:
     state.LIVE["acts"], state.LIVE["guides"], state.LIVE["lost"] = [act_words(a) for a in acts], changed, lost
     lines = ["frame-loop · this turn" + (": " + " · ".join(parts) if parts else "")]
     # An act that needs the person is marked where it is listed, background or not (the cold review, H3).
-    lines += [f"  {'▲ needs you: ' if needs else ''}{words}: {exact}" for words, needs, exact in state.LIVE["acts"]]
+    lines += [f"  {'▲ ' if needs else ''}{words}: {exact}" for words, needs, exact in state.LIVE["acts"]]
     lines += [f"  {_guide_words(x, lost)}" for x in changed]
     return {"systemMessage": "\n".join(lines)}

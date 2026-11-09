@@ -198,7 +198,7 @@ class GitHubActsTests(unittest.TestCase):
         for command in ("gh pr merge 64 --merge", "gh repo edit me/x --visibility public", "gh api -X POST x"):
             found = facts.triggers([], command=command)
             words, _, shown = lines.act_words({"event": "outward", "triggers": found, "command": command})
-            self.assertEqual(words, "Claude changed something on GitHub", command)
+            self.assertEqual(words, "changed something on GitHub", command)
             self.assertIn(command.split()[1], shown)
 
 
