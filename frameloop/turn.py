@@ -284,6 +284,13 @@ def _keep_step(step: dict[str, Any]) -> None:
     _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"}, "diff_file": str(path)})
 
 
+def _since_on(starts: Any) -> list[dict[str, Any]]:
+    """A turn's starts since the switch last flipped. With the loop off no stop is recorded, so a
+    start from before it went off would count the work of those hours as this turn's change."""
+    flipped = _flipped()
+    return [r for r in starts if float(r.get("at", 0)) >= flipped]
+
+
 def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
     """The step this turn's change will be when the turn ends, with what it has declared so
     far: work presented inside its own turn is the work (an agent's report: "nothing claims
@@ -295,7 +302,7 @@ def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
     records = rows(path) if path and Path(path).exists() else []
     records = [r for r in records if r.get("session") == state.SESSION]
     last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
-    starts = [r for r in records[last_stop + 1 :] if r.get("event") == "turn-start"]
+    starts = _since_on(r for r in records[last_stop + 1 :] if r.get("event") == "turn-start")
     before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
     if before is None or after is None or before == after:
         return None
@@ -313,7 +320,10 @@ def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict
     records = rows(path) if path and Path(path).exists() else []
     records = [r for r in records if r.get("session") == state.SESSION]
     last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
-    starts = [r for r in records[last_stop + 1 :] if r.get("event") == "turn-start"]
+    began = [r for r in records[last_stop + 1 :] if r.get("event") == "turn-start"]
+    starts = _since_on(began)
+    if began and not starts:  # the turn began with the loop off: nothing of it is known
+        return None
     # The turn's first start: a message the author sends mid-turn starts no new turn.
     before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
     if before is None or after is None:
@@ -526,6 +536,14 @@ def _background(payload_path: str) -> int:
     return 0
 
 
+def _flipped() -> float:
+    """When the author last flipped the switch; 0 when it has not been."""
+    try:
+        return switch_path({"cwd": state.CWD}).stat().st_mtime
+    except OSError:
+        return 0.0
+
+
 def _this_turn() -> list[dict[str, Any]]:
     """The session's records since its last stop: the turn so far."""
     path = os.environ.get("FRAME_LOOP_LOG")
@@ -546,11 +564,7 @@ def _turn_acts(turn: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[A
     start = next((r for r in turn if r.get("event") == "guides"), None)
     # With the loop off nothing is recorded, so a turn after `/frame-loop on` would compare the
     # guides with the last baseline before it went off, hours or days old (an agent's report).
-    try:
-        flipped = switch_path({"cwd": state.CWD}).stat().st_mtime
-    except OSError:
-        flipped = 0.0
-    if start and float(start.get("at", 0)) < flipped:
+    if start and float(start.get("at", 0)) < _flipped():
         start = None
     return acts, (guide_changes(start["lines"], state.CWD) if start else [])
 

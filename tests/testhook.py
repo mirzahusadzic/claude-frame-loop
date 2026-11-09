@@ -27,6 +27,7 @@ import readers  # noqa: E402
 import record  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
+import turn  # noqa: E402
 import writer as writer_module  # noqa: E402
 
 SEEN = []
@@ -4350,6 +4351,71 @@ class RulesTests(unittest.TestCase):
             }
         )
         self.assertNotIn("CLAUDE.md", json.dumps(out or {}, ensure_ascii=False))
+
+    def flipped_after_work(self, session):
+        """A prompt, work done with the loop off, then `/frame-loop on`: no stop was recorded."""
+        os.environ["CLAUDE_PROJECT_DIR"] = str(REPO)
+        os.environ["FRAME_LOOP_READER"] = "testhook:passing"
+        switch = REPO / ".frame-loop" / "switch"
+        switch.parent.mkdir(exist_ok=True)
+        self.addCleanup(lambda: switch.unlink(missing_ok=True))
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go"})
+        worked = REPO / f"while-off-{uid(self)}.py"
+        worked.write_text("print('done with the loop off')\n", encoding="utf-8")
+        self.addCleanup(lambda: worked.unlink(missing_ok=True))
+        time.sleep(0.05)
+        switch.write_text("on\n", encoding="utf-8")
+        time.sleep(0.05)
+
+    def stop_of(self, session):
+        return hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": session,
+                "cwd": str(REPO),
+                "last_assistant_message": "hello",
+                "stop_hook_active": False,
+            }
+        )
+
+    def steps_of(self, session):
+        state.SESSION = session
+        return record._records("step")
+
+    def test_a_turn_after_on_is_not_read_as_all_the_work_done_while_off(self):
+        """Seen in a real session: "howdy" after `/frame-loop on` changed nothing, yet its turn was
+        read from a start hours old, with no stop recorded while the loop was off: a large change,
+        a background reading, and a reminder that the last turn changed files."""
+        session = f"off-{uid(self)}"
+        self.flipped_after_work(session)
+        seen = loaded_seen()
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "howdy"})
+        self.stop_of(session)
+        self.assertEqual(self.steps_of(session), [])
+        self.assertEqual([f for f in seen if f["name"].startswith(("which", "undeclared"))], [])
+
+    def test_a_turn_begun_before_on_reads_nothing_and_blames_no_repository(self):
+        session = f"off-{uid(self)}"
+        self.flipped_after_work(session)
+        out = self.stop_of(session)
+        self.assertEqual(self.steps_of(session), [])
+        self.assertNotIn("not a git repository", json.dumps(out or {}, ensure_ascii=False))
+
+    def test_the_work_of_a_turn_after_on_is_still_read(self):
+        session = f"off-{uid(self)}"
+        self.flipped_after_work(session)
+        hook.answer({"hook_event_name": "UserPromptSubmit", "session_id": session, "cwd": str(REPO), "prompt": "go on"})
+        (REPO / f"after-on-{uid(self)}.py").write_text("print('after')\n", encoding="utf-8")
+        self.addCleanup(lambda: (REPO / f"after-on-{uid(self)}.py").unlink(missing_ok=True))
+        self.stop_of(session)
+        (step,) = self.steps_of(session)
+        self.assertEqual(step["paths"], [f"after-on-{uid(self)}.py"])
+
+    def test_the_change_of_a_turn_so_far_does_not_reach_back_either(self):
+        session = f"off-{uid(self)}"
+        self.flipped_after_work(session)
+        state.SESSION, state.CWD = session, str(REPO)
+        self.assertIsNone(turn.turn_so_far(str(REPO), {"asks": [], "obligations": []}))
 
     def test_a_session_started_switched_off_is_briefed_at_the_first_prompt_after_on(self):
         """Sparky's third review: a session that started with the loop off wrote no record, so
