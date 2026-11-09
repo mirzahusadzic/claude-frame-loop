@@ -19,11 +19,22 @@ def fake_python(path: Path, recent: bool, says: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         "#!/bin/sh\n"
-        f'case "$*" in *-c*) exit {0 if recent else 1} ;; esac\n'
+        f'for word in "$@"; do [ "$word" = -c ] && exit {0 if recent else 1}; done\n'
         f"cat <<'EOF'\n{json.dumps({'systemMessage': says})}\nEOF\n",
         encoding="utf-8",
     )
     path.chmod(0o755)
+
+
+class FakePythonTests(unittest.TestCase):
+    def test_a_path_holding_dash_c_is_no_version_check(self):
+        """Seen: run from a checkout whose path held "-c" (.../my-claude/...), the fake python
+        took the hook's path for its version check, and the launcher's tests failed."""
+        fake = Path(tempfile.mkdtemp(prefix="fake-python-")) / "python"
+        fake_python(fake, True, "a hook ran")
+        said = subprocess.run([str(fake), "-I", "/home/me/my-claude/hook.py"], capture_output=True, text=True)
+        self.assertIn("a hook ran", said.stdout)
+        self.assertEqual(subprocess.run([str(fake), "-I", "-c", "pass"], capture_output=True).stdout, b"")
 
 
 class LauncherTests(unittest.TestCase):
