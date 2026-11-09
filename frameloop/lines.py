@@ -33,6 +33,7 @@ SPLIT_NOTE = (
 
 
 NOT_APPROVED = "frame 0 is not approved"
+NOT_DONE = "which-ask: the end-of-work check did not find it done"  # a turn's end, after that check
 
 
 def not_approved(words: list[str]) -> str:

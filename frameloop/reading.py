@@ -22,7 +22,7 @@ import state
 from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, unapproved, with_semantic
-from lines import UNSETTLED_NOTE, _reader_name, _tell, not_approved, refused_line
+from lines import NOT_DONE, UNSETTLED_NOTE, _reader_name, _tell, not_approved, refused_line
 from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
@@ -59,11 +59,12 @@ def read_step(
     declared: list[str],
     tier: str,
     effort: str | None = None,
-    fit_read: bool = False,
+    fit_read: str | None = None,
 ) -> dict[str, Any]:
     """Run the step's frames through the reader and apply the gate's rules. Without a
     reader, nothing is read: the result says so, and never passes by default. `fit_read`: the
-    end-of-work check has asked about the requirements, so only the rules question is asked."""
+    end-of-work check has asked about the requirements, and what it found ("done" or "doubted"),
+    so only the rules question is asked. What it doubted is never a pass here."""
     run = _reader()
     if run is None:
         return {"decision": gate.RISE, "reason": "no reader configured: not read"}
@@ -88,6 +89,8 @@ def read_step(
         broke = run(at(frames.violation(frame0, step, tier)), only=("baseline", "repeat"))
         _ran(broke)
         decision, reason = gate.violation_stage_one(broke)
+        if decision == gate.PASS and fit_read != "done":
+            return {"decision": gate.UNSETTLED, "reason": NOT_DONE, "usage": _spent(broke)}
         return {"decision": decision, "reason": f"violation: {reason}", "fit": FIT_READ, "usage": _spent(broke)}
     if not declared:  # what it is for, as the reader reads it, twice alike
         _live_step("what is it for? (Claude didn't say)", 1, 1, "undeclared")
@@ -179,7 +182,7 @@ def _read(
     step_id: str,
     said: str | None = None,
     facts: dict[str, Any] | None = None,
-    fit_read: bool = False,
+    fit_read: str | None = None,
 ) -> tuple[dict[str, Any], str | None, str]:
     """Read a plan or a turn's change: frame 0 must be ready, an ask declared and the
     tier allowed, or it rises unread. `said` is where the agent's lines are (the reply,
@@ -202,6 +205,8 @@ def _read(
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
         return {"decision": gate.RISE, "reason": "not read: no reader configured"}, tier, tier_note
     if fit_read and not (frame0.get("principles") or frame0.get("triggers")):  # nothing is left to ask
+        if fit_read != "done":
+            return {"decision": gate.UNSETTLED, "reason": NOT_DONE}, tier, tier_note
         return {"decision": gate.PASS, "reason": "violation: frame 0 states no rules", "fit": FIT_READ}, tier, tier_note
     state.LIVE["what"] = "checking " + {
         "the turn's change": "the change",
@@ -244,13 +249,20 @@ def _read_before(
     effort = effort_for(said, facts, tier)[0] if tier else None
     if effort is None:
         return None
-    # A turn that began at this tree after a reading did not grow out of it: the same final tree
-    # reached from elsewhere is another change, though it touches the same files.
-    began = max((float(r.get("at", 0)) for r in _records("turn-start") if r.get("tree") == before), default=0.0)
+    # A reading stands for a turn's change only if it saw all of it: from the turn's own start,
+    # or within the turn from the commit the turn began on. The same final tree reached from
+    # elsewhere, or a reading from a commit made during the turn, is another change.
+    start = next((r for r in reversed(_records("turn-start")) if r.get("tree") == before), None)
+
+    def saw_it(r: dict[str, Any]) -> bool:
+        if r.get("from") == before or start is None:
+            return True
+        return float(r.get("at", 0)) >= float(start.get("at", 0)) and r.get("from") == start.get("head")
+
     for r in reversed(_records_all()):
         if (
             r.get("session") == state.SESSION
-            and (r.get("from") == before or float(r.get("at", 0)) >= began)
+            and saw_it(r)
             and r.get("event") in ("read", "turn", "reused")
             and r.get("verdict")
             and r.get("frame0") == mark
@@ -269,14 +281,17 @@ def _frame_mark(frame0: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(frame0, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def _checked_at_end(before: str, after: str, said: str, mark: str, declared: list[str], facts: dict[str, Any]) -> bool:
-    """Whether this turn's end-of-work check already asked the reader about these requirements,
-    of this very change, on this frame 0 and reader, at least as hard. A requirement it could not
-    read is not covered, and neither is a change made after it."""
+def _checked_at_end(
+    before: str, after: str, said: str, mark: str, declared: list[str], facts: dict[str, Any]
+) -> str | None:
+    """What this turn's end-of-work check found, if it already asked the reader about these
+    requirements, of this very change, on this frame 0 and reader, at least as hard: "done", or
+    "doubted" when any it read did not come out done. A requirement it could not read is not
+    covered, and neither is a change made after it."""
     tier, _ = tier_for(said)
     effort = effort_for(said, facts, tier)[0] if tier else None
     if effort is None:
-        return False
+        return None
     for r in reversed(_records("completion")):
         if (
             r.get("from") == before
@@ -288,8 +303,8 @@ def _checked_at_end(before: str, after: str, said: str, mark: str, declared: lis
             and set(declared) <= set(r["asked"])
             and set(facts["paths"]) <= set(r.get("paths") or [])
         ):
-            return True
-    return False
+            return "done" if set(r["asked"]) <= set(r.get("done") or []) else "doubted"
+    return None
 
 
 def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, Any], kind: str) -> dict[str, Any]:
@@ -319,7 +334,7 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
     prior = _read_before(kind, before, after, said, mark, _declared(said, frame0), facts)
     # The end-of-work check of this very change asked about the requirements: not again.
     fit_read = (
-        not prior and kind == "turn" and _checked_at_end(before, after, said, mark, _declared(said, frame0), facts)
+        None if prior or kind != "turn" else _checked_at_end(before, after, said, mark, _declared(said, frame0), facts)
     )
     if prior:
         result, tier, tier_note = {**prior["verdict"], "effort": prior["effort"]}, prior["tier"], ""
@@ -335,7 +350,7 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
             fit_read=fit_read,
         )
     # Half a reading is kept from any that might lean on it later.
-    answered = (result.get("usage") or {}).get("calls") and result["decision"] != gate.BLOCK and not fit_read
+    answered = (result.get("usage") or {}).get("calls") and result["decision"] != gate.BLOCK and fit_read is None
     verdict = prior["verdict"] if prior else _verdict_kept(result) if answered else None
     line, faults = obligations_line(frame0, project_root(cwd), facts["paths"], _claimed(said), status)
     scope = outside_scope(frame0, facts["paths"])
@@ -521,7 +536,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         asked = [a for a in frame0["asks"] if a["id"] == named]
     parts, used = [], {}
     not_firm = 0
-    effort, read_asks = None, []
+    effort, read_asks, done_asks = None, [], []
     checked: dict[str, tuple[str | None, str | None]] = {}
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
@@ -604,6 +619,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             if ok
             else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'})"
         )
+        if ok:
+            done_asks.append(ask["id"])
         if ok and not os.environ.get("FRAME_LOOP_TREE"):
             _log({"event": "filled", "ask": ask["id"]})
         elif ok:  # Gadfly's walk says which hole it fills; anything but one clear fit stops
@@ -633,6 +650,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             "tier": tier,
             "effort": effort,
             "asked": read_asks,
+            "done": done_asks,
             "paths": pending.get("paths"),
         }
         if pending

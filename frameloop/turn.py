@@ -27,6 +27,7 @@ from effort import _effort_rules, _rule_hits
 from framezero import approved_words, frame_name, load_frame0, rules_lost
 from lines import (
     NOT_APPROVED,
+    NOT_DONE,
     _guide_words,
     _short_lines,
     _signals_short,
@@ -196,7 +197,7 @@ def wake_for(result: dict[str, Any], came_back: bool) -> bool:
     return (
         result.get("decision") in (gate.RISE, gate.UNSETTLED)
         and state.LIVE.get("decision") in (gate.RISE, gate.UNSETTLED)
-        and not reason.startswith(("not read", NOT_APPROVED))
+        and not reason.startswith(("not read", NOT_APPROVED, NOT_DONE))
         and not came_back
     )
 
@@ -206,7 +207,9 @@ def _turn_start(event: dict[str, Any]) -> None:
     _log({"event": "guides", "lines": {name: _guide_lines(path) for name, path in guides(cwd).items()}})
     if os.environ.get("FRAME_LOOP_READ_TURNS") == "1":
         woken = {"woken": True} if event.get("prompt") == WAKE else {}
-        _log({"event": "turn-start", "tree": snapshot(event.get("cwd") or os.getcwd()), **woken})
+        head = _git(cwd, "rev-parse", "--verify", "--quiet", "HEAD^{tree}")  # what a reading from HEAD starts at
+        at = {"head": head.stdout.strip()} if head.returncode == 0 else {}
+        _log({"event": "turn-start", "tree": snapshot(cwd), **at, **woken})
 
 
 def _per_file(diff: str) -> dict[str, str]:

@@ -4872,6 +4872,20 @@ def done_and_clean(frame, only=()):
     return {"exit": 0, "firm": True, "category": "carried", "made": 6, "findings": [{"levels": levels}]}
 
 
+def missed_but_clean(frame, only=()):
+    """A requirement firmly not done; the rules read clean."""
+    if frame["name"].startswith("completion-"):
+        return {"exit": 0, "firm": True, "category": "unresolved", "findings": [{"levels": {"baseline": "no"}}]}
+    return done_and_clean(frame, only)
+
+
+def unsettled_but_clean(frame, only=()):
+    """A requirement not settled; the rules read clean."""
+    if frame["name"].startswith("completion-"):
+        return {"exit": 0, "firm": False, "category": "carried", "findings": [{"levels": {"baseline": "yes"}}]}
+    return done_and_clean(frame, only)
+
+
 def done_but_rule_broken(frame, only=()):
     SEEN.append(frame)
     if only:
@@ -4945,6 +4959,54 @@ class OneReadingOfAChangeTests(unittest.TestCase):
         self.checked("testhook:done_but_failed")
         _, asked = self.stop()
         self.assertIn("which", asked)
+
+    def turn_row(self):
+        rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()]
+        return [r for r in rows if r.get("event") == "turn" and r.get("session") == self.session][-1]
+
+    def test_a_requirement_the_check_did_not_find_done_is_never_a_pass_after_it(self):
+        """Sparky's fifth review: a firm miss, or one not settled, then read "pass" at the turn's
+        end. No reader is asked about it again, and no wake comes of it: Claude has heard."""
+        for fake in ("testhook:missed_but_clean", "testhook:unsettled_but_clean"):
+            self.session = f"{self.session}x"
+            self.checked(fake)
+            _, asked = self.stop()
+            self.assertEqual(asked, ["violation"], fake)
+            row = self.turn_row()
+            self.assertEqual(row["decision"], "unsettled", fake)
+            self.assertFalse(turn.wake_for(row, False), fake)
+
+    def test_a_requirement_the_check_found_done_passes_after_it(self):
+        self.checked()
+        self.stop()
+        self.assertEqual(self.turn_row()["decision"], "pass")
+
+    def test_a_reading_from_a_commit_made_during_the_turn_saw_only_part_of_it(self):
+        """Sparky's fifth review: commit, read from HEAD, and the turn's end reused that reading
+        though the turn's own change began before the commit."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:done_and_clean"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        path = REPO / f"mid-{uid(self)}.py"
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        path.write_text("a = 1\n", encoding="utf-8")
+        git("add", "-A")
+        git("commit", "-q", "-m", "mid-turn")
+        path.write_text("a = 2\n", encoding="utf-8")
+        self.bash(": frame-loop-read --serves A1")
+        self.bash(": frame-loop-declare --serves A1")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
+    def test_a_reading_from_the_commit_the_turn_began_on_still_stands(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:done_and_clean"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        self.work()
+        self.bash(": frame-loop-read --serves A1")
+        self.bash(": frame-loop-declare --serves A1")
+        _, asked = self.stop()
+        self.assertEqual(asked, [])
 
     def test_the_same_final_tree_reached_from_elsewhere_is_read_whole(self):
         """Sparky's fourth review: the turn's end leaned on a check of another change, since it
