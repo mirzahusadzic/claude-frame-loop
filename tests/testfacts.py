@@ -120,6 +120,35 @@ class FactsTests(unittest.TestCase):
             self.assertIsNotNone(facts.outward(command), command)
 
 
+class OtherWrappersTests(unittest.TestCase):
+    def test_a_recursive_delete_behind_another_wrapper_or_windows_shell_is_seen(self):
+        """Sparky's fifth review: these ran a recursive delete with no act and no question."""
+        for command in (
+            "doas rm -rf build",
+            "doas -u root rm -rf build",
+            "run0 rm -rf build",
+            "su -c 'rm -rf build'",
+            "su root -c 'rm -rf build'",
+            "su --command='rm -rf build'",
+            "powershell.exe -NoProfile -Command 'Remove-Item -Recurse -Force build'",
+            "pwsh -c 'rm -r build'",
+            "cmd.exe /c rmdir /s /q build",
+            "cmd /c rd /s build",
+        ):
+            self.assertTrue(facts.outward(command), command)
+
+    def test_what_only_looks_like_one_is_no_act(self):
+        for command in (
+            "doas ls",
+            "su -c 'ls'",
+            "su root",
+            "powershell -Command 'Get-ChildItem -Recurse'",
+            "cmd /c dir /s",
+            "cmd /c rmdir build",
+        ):
+            self.assertFalse(facts.outward(command), command)
+
+
 class EnvSplitTests(unittest.TestCase):
     def test_a_string_env_runs_is_read_as_a_command(self):
         """Sparky's fourth review: `env -S 'rm -rf build'` ran a recursive delete, unseen."""

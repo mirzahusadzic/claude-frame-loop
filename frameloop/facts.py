@@ -39,6 +39,8 @@ SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 WRAPPERS = {
     "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"},
     "env": {"-u", "-C"},
+    "doas": {"-u", "-C", "-a"},
+    "run0": {"-u", "--user", "-g", "--group", "-D", "--chdir", "--setenv"},
     "command": set(),
     "exec": {"-a"},
     "time": set(),
@@ -220,6 +222,11 @@ def _gh_act(args: list[str]) -> str | None:
     return f"gh {group} {sub}" if sub in GH_ACTS.get(group, ()) else None
 
 
+# A recursive delete as Windows' own shells spell it, under Git Bash too.
+POWERSHELL_DELETE = r"\b(remove-item|ri|rm|rmdir|rd|del|erase)\b[^;|]*\s-r(ecurse)?\b"
+CMD_DELETE = r"/[ck]\b.*\b(rmdir|rd|del|erase)\b[^&|]*\s/s\b"
+
+
 def _act(words: list[str], depth: int) -> str | None:
     words = command_words(words)
     if not words:
@@ -276,6 +283,16 @@ def _act(words: list[str], depth: int) -> str | None:
             return outward(after[0], depth + 1) if after else None
     if depth < 3 and name == "eval":
         return outward(" ".join(args), depth + 1)
+    if depth < 3 and name == "su":
+        ran = next((a.split("=", 1)[1] for a in args if a.startswith("--command=")), None)
+        for flag in ("-c", "--command"):
+            if ran is None and flag in args[:-1]:
+                ran = args[args.index(flag) + 1]
+        return outward(ran, depth + 1) if ran else None
+    if name in ("powershell", "pwsh") and re.search(POWERSHELL_DELETE, " ".join(args), re.I):
+        return "rm -r"
+    if name == "cmd" and re.search(CMD_DELETE, " ".join(args), re.I):
+        return "rm -r"
     return None
 
 
