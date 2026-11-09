@@ -494,6 +494,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         work = Path(os.environ.get("FRAME_LOOP_WORK") or path.parents[2]).resolve()
         if path.is_symlink() or not path.parent.resolve().is_relative_to(work):
             return None
+        if path.is_file() and path.stat().st_nlink > 1:  # a hard link is another file's contents too
+            return None
         return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
 
     steps = [

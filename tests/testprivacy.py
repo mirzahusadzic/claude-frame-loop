@@ -112,8 +112,14 @@ class AwsSecretTests(unittest.TestCase):
             "aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             'AWS_SECRET_ACCESS_KEY="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
             '"aws_secret_access_key": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
+            '"SecretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"',
+            "awsSecretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'",
+            "aws-secret-access-key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
         ):
             self.assertRegex(line, pattern)
+        token = dict(privacy.S.SECRET_PATTERNS)["an AWS session token"]
+        self.assertRegex('"SessionToken": "' + "A" * 200 + '"', token)
+        self.assertNotRegex("session_token = get_token()", token)
         self.assertNotRegex("aws_secret_access_key = os.environ['KEY']", pattern)
 
 

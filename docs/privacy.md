@@ -49,7 +49,7 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 
 | Check | On | Effect | By |
 | --- | --- | --- | --- |
-| secrets: API, AWS, GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
+| secrets: API, AWS (a key's id, its secret and a session token), GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
 | no writer, and a repository not confirmed public | a training tier | refused: the change itself would go | frame-loop |
 | private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names, labels and frame 0, as a whole word in any case | frame-loop |
