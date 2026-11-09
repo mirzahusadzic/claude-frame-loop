@@ -203,7 +203,12 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     words = shlex.split(first)
     if "--complete" in words:
         frame0 = load_frame0()
-        text = complete(frame0, pending=turn_so_far(state.CWD or os.getcwd(), frame0), whole="--all" in words)
+        # What the turn declared holds here too: a stricter reader, a harder reading.
+        said = "\n".join(_marks())
+        if "--effort" in words[:-1]:
+            said += f"\nEffort: {words[words.index('--effort') + 1]}"
+        pending = turn_so_far(state.CWD or os.getcwd(), frame0)
+        text = complete(frame0, said=said, pending=pending, whole="--all" in words)
         return _reading_said(text)
     heredoc = HEREDOC.search(first)
     if heredoc:

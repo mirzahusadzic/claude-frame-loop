@@ -277,6 +277,17 @@ def _read_before(
     return None
 
 
+def _diff_facts(diffs: list[str]) -> dict[str, Any]:
+    """The facts of a diff the effort rules read, from the diffs kept of steps already ended."""
+    text = "\n".join(diffs)
+    parts = re.split(r"(?m)^(?=diff --git )", text)
+    paths = [m.group(1) for m in (re.match(r"diff --git a/.*? b/(.*)", x) for x in parts) if m]
+    gone = [
+        m.group(1) for m in (re.match(r"diff --git a/(.*?) b/", x) for x in parts if "\ndeleted file mode" in x) if m
+    ]
+    return {"paths": paths, "deleted": gone, "chars": len(text)}
+
+
 def _frame_mark(frame0: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(frame0, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -579,14 +590,15 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         if refusal:
             planned.append((ask, None, f"{ask['id']} not read ({refusal})"))
             continue
-        # As hard as the turn's end would read this change, so that it need not read it again.
-        effort, _, error = effort_for(said, (pending or {}).get("facts"), tier)
+        # As hard as a turn's end would read these changes, so that it need not read them again.
+        asked_effort, _, error = effort_for(said, _diff_facts([s["diff"] or "" for s in claimed]), tier)
+        effort = asked_effort if effort is None or RANK[asked_effort or effort] < RANK[effort] else effort
         if error:  # an effort floor that cannot be read is never read below, as for a step
             planned.append((ask, None, f"{ask['id']} not read ({error})"))
             continue
         frame = completion_frame(frame0, ask, frame_steps, tier, bool(os.environ.get("FRAME_LOOP_TREE")))
-        if effort:
-            frame["battery"]["reasoning"] = effort
+        if asked_effort:
+            frame["battery"]["reasoning"] = asked_effort
         planned.append((ask, frame, ""))
     # All asks at once: the agent waits on this, and one after another three asks filled the
     # hook's ten minutes and the last went unread (seen in a pilot).

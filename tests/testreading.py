@@ -364,6 +364,36 @@ class CompletionTests(Isolated):
         self.assertIn("not read", self.complete())
         self.assertNotIn("THE-SECRET-FILE-CONTENT", json.dumps(testhook.SEEN))
 
+    def test_the_check_reads_as_hard_and_as_strictly_as_was_asked(self):
+        """Sparky's sixth review: `--effort high` and a declared stricter reader were ignored."""
+        self.claim("S1", ["A1"])
+        testhook.SEEN.clear()
+        self.asked(": frame-loop-read --complete --effort high")
+        self.assertEqual({f["battery"]["reasoning"] for f in testhook.SEEN}, {"high"})
+        os.environ.update(FRAME_LOOP_TIER="contributor", FRAME_LOOP_TRAINING_OK="1")
+        self.asked(": frame-loop-declare --serves A1 --reader private")
+        testhook.SEEN.clear()
+        self.asked(": frame-loop-read --complete")
+        self.assertEqual({f["battery"]["model"] for f in testhook.SEEN}, {"openrouter/meta/muse-spark-1.3"})
+
+    def test_a_risky_step_is_read_hard_after_its_turn_has_ended(self):
+        """Sparky's sixth review: a large or deleting change read at the floor once its turn ended."""
+        large = "diff --git a/x.py b/x.py\n" + "+print('x')\n" * 1200
+        gone = "diff --git a/y.py b/y.py\ndeleted file mode 100644\n--- a/y.py\n+++ /dev/null\n-a\n"
+        for diff in (large, gone):
+            self.session = f"{self.session}x"
+            state.SESSION = self.session
+            self.claim("S1", ["A1"], diff)
+            testhook.SEEN.clear()
+            self.asked()
+            self.assertEqual({f["battery"]["reasoning"] for f in testhook.SEEN}, {"high"}, diff[:30])
+
+    def test_a_plain_step_stays_at_the_floor(self):
+        self.claim("S1", ["A1"])
+        testhook.SEEN.clear()
+        self.asked()
+        self.assertEqual({f["battery"]["reasoning"] for f in testhook.SEEN}, {"low"})
+
     def test_with_no_step_there_is_nothing_to_read(self):
         """A session with no step would be read as every ask unfulfilled, or as done."""
         self.assertEqual(
