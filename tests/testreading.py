@@ -255,6 +255,33 @@ class CompletionTests(Isolated):
         _, read = self.asked()
         self.assertEqual(read, [])  # the earlier honest row stands, the forged one is passed over
 
+    def test_a_missing_change_is_not_read_as_an_empty_one_by_a_later_requirement(self):
+        """Sparky's seventh review: the first requirement's normalising left the second reading
+        an empty change, and the author was told every requirement was done."""
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.claim("S2", ["A2"], self.B_FILE)
+        record.step_diff("S2").unlink()
+        said = self.complete()
+        self.assertIn("A2 not read (the change of S2 is missing)", said)
+        self.assertNotIn("A2 ✓", said)
+
+    def test_the_author_reads_no_step_id_when_no_change_can_be_read(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1"], self.A_FILE)
+        record.step_diff("S1").unlink()
+        out, _ = self.asked()
+        self.assertIn("the change of step 1 is missing", out["systemMessage"])
+        self.assertNotIn("S1", out["systemMessage"])
+
+    def test_a_changed_label_is_read_again(self):
+        """What the reader is shown of a step is part of what the answer rests on."""
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        rows = self.log.read_text(encoding="utf-8").replace('"text": "a step"', '"text": "a step, a check owed"')
+        self.log.write_text(rows, encoding="utf-8")
+        _, read = self.asked()
+        self.assertEqual(read, ["A1"])
+
     def test_requirements_are_read_at_once(self):
         """A pilot: one after another, three requirements filled the hook's ten minutes, the
         fourth went unread, and the agent waited through all of it."""
@@ -567,6 +594,19 @@ class TreeCompletionTests(Isolated):
         self.assertIn("climb stopped", out["hookSpecificOutput"]["additionalContext"])
         self.assertNotIn("every requirement is done", " ".join(out["systemMessage"].split()))
         self.assertNotEqual(state.LIVE.get("decision"), "pass")
+
+    def test_a_stopped_climb_is_not_covered_for_the_turns_end(self):
+        """Sparky's seventh review: its requirement stayed among those read as done, so the turn's
+        end skipped the reading of a change the check had not placed."""
+        import testreading as loaded
+
+        loaded.WALKED = {"fits": [], "frontier": []}
+        pending = {"id": "S9", "claims": [], "diff": "+x\n", "text": "a step", "from": "a", "tree": "b", "paths": []}
+        reading.complete(framezero.load_frame0(), pending=pending)
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        last = [r for r in rows if r.get("event") == "completion"][-1]
+        self.assertIn("A1", last["asked"])
+        self.assertEqual(last["done"], [])
 
     def test_a_walk_with_no_fit_stops_the_climb_and_fills_nothing(self):
         """A completion the walk cannot place would be filled by a guess and climb."""

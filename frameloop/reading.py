@@ -300,7 +300,8 @@ def _evidence(
         paths = set(_diff_facts([step["diff"]])["paths"])
         return step in claimed or not paths or bool(paths & touched)
 
-    said = [ask, tier, effort, frames.COMPLETION_INSTRUCTION, [s["diff"] for s in steps if reaches(s)]]
+    shown = [[s["diff"], s["label"]] for s in steps if reaches(s)]  # a label can name a check owed
+    said = [ask, tier, effort, frames.COMPLETION_INSTRUCTION, shown]
     return hashlib.sha256(json.dumps(said, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
@@ -602,25 +603,29 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         elif tier is None or run is None:
             refusal = tier_note or "no reader configured"
         else:
-            steps = [{**s, "diff": s["diff"] or ""} for s in steps]
+            # A copy: a later requirement must still see a change that is missing as missing.
+            told = [{**s, "diff": s["diff"] or ""} for s in steps]
+            mine = {s["id"] for s in claimed}
             # With a writer every step goes as its label (the free label names paths);
             # without one, the claimed steps' diffs go, each checked.
             write = _writer() is not None
-            for s in steps if write else claimed:  # each step's label or diff once, whatever asks claim it
+            for s in (
+                told if write else [s for s in told if s["id"] in mine]
+            ):  # each step's label or diff once, whatever asks claim it
                 if s["id"] not in checked:
                     checked[s["id"]] = outgoing(
                         s["diff"] if write else _cut(s["diff"], 4000), "the turn's change", tier, frame0
                     )
-            sent = {s["id"]: checked[s["id"]] for s in (steps if write else claimed)}
+            sent = {s["id"]: checked[s["id"]] for s in (told if write else [s for s in told if s["id"] in mine])}
             refusal = next((why for _, why in sent.values() if why), None)
             frame_steps = (
-                [{**s, "label": sent[s["id"]][0], "diff": ""} for s in steps]
+                [{**s, "label": sent[s["id"]][0], "diff": ""} for s in told]
                 if write
                 else [
                     {**s, "diff": _masked(_without_declaration(sent[s["id"]][0], "a completion"), frame0)}
                     if s["id"] in sent
                     else s
-                    for s in steps
+                    for s in told
                 ]
             )  # masked, as every reading is
         if refusal:
@@ -687,6 +692,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         elif ok:  # Gadfly's walk says which hole it fills; anything but one clear fit stops
             node, hole, why = route(frame, frame0)
             if why:
+                done_asks.remove(ask["id"])  # the turn's end must not count it as covered
                 parts.append(f"climb stopped: {why}")
                 _log({"event": "climb-stopped", "ask": ask["id"], "why": why})
             else:
@@ -734,7 +740,9 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         state.LIVE["unsettled_why"] = f"the reader couldn't settle whether the work is done{untold}"
     if not read_asks and unread:  # nothing reached the reader: that is no verdict on the work
         state.LIVE["decision"] = gate.BLOCK
-        state.LIVE["shorts"] = [refused_line(unread[0].split(" not read (", 1)[1].rstrip(")"))]
+        state.LIVE["shorts"] = [
+            refused_line(re.sub(r"\bS(\d+)\b", r"step \1", unread[0].split(" not read (", 1)[1].rstrip(")")))
+        ]
         return "frame-loop · completion · " + " · ".join(parts) + left
     if used.get("total_tokens"):
         state.LIVE["tokens"] = used["total_tokens"]
