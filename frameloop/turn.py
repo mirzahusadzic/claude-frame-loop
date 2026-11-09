@@ -274,14 +274,14 @@ def step_label(cwd: str, before: str, after: str, frame0: dict[str, Any], claims
         + (f" · claims {', '.join(claims)}" if claims else "")
         + (" · " + owed_line.strip() if owed_line else "")
     )
-    return {"id": sid, "paths": paths, "claims": claims, "text": text, "signals": found, "diff": diff}
+    return {"id": sid, "paths": paths, "claims": claims, "text": text, "signals": found, "diff": diff, "facts": facts}
 
 
 def _keep_step(step: dict[str, Any]) -> None:
     path = step_diff(step["id"])
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(step["diff"], encoding="utf-8")
-    _log({"event": "step", **{k: v for k, v in step.items() if k != "diff"}, "diff_file": str(path)})
+    _log({"event": "step", **{k: v for k, v in step.items() if k not in ("diff", "facts")}, "diff_file": str(path)})
 
 
 def _since_on(starts: Any) -> list[dict[str, Any]]:
@@ -308,7 +308,7 @@ def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
         return None
     marked = [x for r in records[last_stop + 1 :] if r.get("event") == "declare" for x in r.get("lines", [])]
     step = step_label(cwd, before, after, frame0, _declared("\n".join(marked), frame0))
-    return step if step["paths"] else None
+    return {**step, "tree": after} if step["paths"] else None
 
 
 def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict[str, Any] | None:

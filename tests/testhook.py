@@ -4863,6 +4863,110 @@ class NotFirmTests(unittest.TestCase):
         self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
 
 
+def done_and_clean(frame, only=()):
+    """Every requirement done; the rules read clean. Each frame asked is seen."""
+    SEEN.append(frame)
+    levels = {"baseline": "none", "repeat": "none"} if only else {"baseline": "yes"}
+    if frame["name"].startswith("which-ask"):
+        levels = {"baseline": frame["anchors"][0]}
+    return {"exit": 0, "firm": True, "category": "carried", "made": 6, "findings": [{"levels": levels}]}
+
+
+def done_but_rule_broken(frame, only=()):
+    SEEN.append(frame)
+    if only:
+        return {"exit": 0, "made": 2, "findings": [{"levels": {"baseline": "P1", "repeat": "P1"}}]}
+    return done_and_clean(frame, only)
+
+
+def done_but_failed(frame, only=()):
+    SEEN.append(frame)
+    if frame["name"].startswith("completion-"):
+        return {"exit": 3, "stopped": "spent"}
+    return done_and_clean(frame, only)
+
+
+class OneReadingOfAChangeTests(unittest.TestCase):
+    """Seen in a real session: a change was read by the end-of-work check and again, whole, at its
+    turn's end, at twice the cost. Only the rules question, which that check never asks, is left."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+
+    def event(self, name, **more):
+        return {"hook_event_name": name, "session_id": self.session, "cwd": str(REPO), **more}
+
+    def bash(self, command):
+        return hook.answer(self.event("PreToolUse", tool_name="Bash", tool_input={"command": command}))
+
+    def work(self, name="once", text=None):
+        path = REPO / f"{name}-{uid(self)}.py"
+        path.write_text(text or f"print('{time.time_ns()}')\n", encoding="utf-8")
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+
+    def stop(self):
+        seen = loaded_seen()
+        out = hook.answer(self.event("Stop", last_assistant_message="done", stop_hook_active=False))
+        return out, [f["name"].split("-")[0] for f in seen]
+
+    def checked(self, reader="testhook:done_and_clean", serves="A1"):
+        os.environ["FRAME_LOOP_READER"] = reader
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        self.work()
+        self.bash(f": frame-loop-declare --serves {serves}")
+        self.bash(": frame-loop-read --complete")
+
+    def test_a_change_the_check_read_is_asked_only_about_the_rules(self):
+        self.checked()
+        _, asked = self.stop()
+        self.assertEqual(asked, ["violation"])
+
+    def test_a_rule_broken_is_still_found(self):
+        self.checked("testhook:done_but_rule_broken")
+        out, asked = self.stop()
+        self.assertEqual(asked, ["violation"])
+        self.assertIn("it may break your rule", out["systemMessage"])
+
+    def test_a_change_made_after_the_check_is_read_whole(self):
+        self.checked()
+        self.work("after")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
+    def test_a_requirement_the_check_did_not_read_is_read_whole(self):
+        self.checked()
+        self.bash(": frame-loop-declare --serves A2")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
+    def test_a_check_that_failed_covers_nothing(self):
+        """A failed reading is never a pass, nor a reason to skip the next one."""
+        self.checked("testhook:done_but_failed")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
+    def test_half_a_reading_is_not_reused_as_a_whole_one(self):
+        self.checked()
+        self.stop()
+        rows = [json.loads(x) for x in Path(os.environ["FRAME_LOOP_LOG"]).read_text(encoding="utf-8").splitlines()]
+        turns = [r for r in rows if r.get("event") == "turn" and r.get("session") == self.session]
+        self.assertIsNone(turns[-1]["verdict"])
+
+    def test_the_check_reads_a_large_change_as_hard_as_the_turns_end_would(self):
+        """Effort rises for a risky change, and this reading now stands for that one."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:done_and_clean"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        self.work("large", "print('x')\n" * 1200)
+        self.bash(": frame-loop-declare --serves A1")
+        seen = loaded_seen()
+        self.bash(": frame-loop-read --complete")
+        self.assertEqual({f["battery"]["reasoning"] for f in seen}, {"high"})
+        _, asked = self.stop()
+        self.assertEqual(asked, ["violation"])
+
+
 class DoubtTests(unittest.TestCase):
     """Seen in a real session: "▲ needs you: the reader doesn't see this resting on the requirement
     Claude named", for a requirement Claude never named and nothing for the author to decide."""
