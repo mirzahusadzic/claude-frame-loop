@@ -288,6 +288,31 @@ def _diff_facts(diffs: list[str]) -> dict[str, Any]:
     return {"paths": paths, "deleted": gone, "chars": len(text)}
 
 
+def _evidence(
+    ask: dict[str, Any], claimed: list[dict[str, Any]], steps: list[dict[str, Any]], tier: str, effort
+) -> str:
+    """What a requirement's answer rests on: its words, how it is asked, the changes that claim
+    it, and any other change to a file they touched or that names none. A change elsewhere does
+    not reopen it: a requirement is read over the changes that claim it."""
+    touched = set(_diff_facts([s["diff"] for s in claimed])["paths"])
+
+    def reaches(step: dict[str, Any]) -> bool:
+        paths = set(_diff_facts([step["diff"]])["paths"])
+        return step in claimed or not paths or bool(paths & touched)
+
+    said = [ask, tier, effort, frames.COMPLETION_INSTRUCTION, [s["diff"] for s in steps if reaches(s)]]
+    return hashlib.sha256(json.dumps(said, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+
+
+def _read_already(key: str, ask: str) -> dict[str, Any] | None:
+    """This session's answer on the same evidence, if the record holds one it can trust."""
+    for r in reversed(_records("completion-read")):
+        if r.get("key") == key and r.get("ask") == ask and isinstance(r.get("part"), str):
+            if r["part"].startswith(f"{ask} ") and r.get("ok") == (r["part"] == f"{ask} ✓"):
+                return r
+    return None
+
+
 def _frame_mark(frame0: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(frame0, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
@@ -552,8 +577,21 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
     planned: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []  # each ask's frame, or why it has none
+    keys: dict[str, str] = {}  # what each requirement's answer rests on
+    before: dict[str, dict[str, Any]] = {}  # the answers already read on that
     for ask in asked:
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
+        if tier and not os.environ.get("FRAME_LOOP_TREE") and all(s["diff"] is not None for s in steps):
+            # Before any label or call. A tree's climb reads its answers again, so it reads them.
+            seen_effort, _, seen_error = effort_for(said, _diff_facts([s["diff"] for s in claimed]), tier)
+            if not seen_error:
+                keys[ask["id"]] = _evidence(ask, claimed, steps, tier, seen_effort)
+                kept = _read_already(keys[ask["id"]], ask["id"])
+                if kept:
+                    effort = seen_effort if effort is None or RANK[seen_effort or effort] < RANK[effort] else effort
+                    before[ask["id"]] = kept
+                    planned.append((ask, None, ""))
+                    continue
         if within(600) < 90:  # too little of the hook's time is left for one more reading
             planned.append((ask, None, f"{ask['id']} not read (out of time: read it again)"))
             continue
@@ -610,6 +648,14 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         with ThreadPoolExecutor(max_workers=min(len(to_read), COMPLETION_AT_ONCE)) as pool:
             results = {id(frame): done for frame, done in zip(to_read, pool.map(run, to_read), strict=True)}
     for ask, frame, why in planned:
+        kept = before.get(ask["id"])
+        if kept:
+            parts.append(kept["part"])
+            read_asks.append(ask["id"])
+            not_firm += not kept.get("firm")
+            if kept["ok"]:
+                done_asks.append(ask["id"])
+            continue
         if frame is None:
             parts.append(why)
             state.LIVE["decision"] = gate.RISE
@@ -633,6 +679,9 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         )
         if ok:
             done_asks.append(ask["id"])
+        if ask["id"] in keys:
+            answer = {"key": keys[ask["id"]], "ask": ask["id"], "part": parts[-1], "ok": bool(ok)}
+            _log({"event": "completion-read", **answer, "firm": bool(result.get("firm"))})
         if ok and not os.environ.get("FRAME_LOOP_TREE"):
             _log({"event": "filled", "ask": ask["id"]})
         elif ok:  # Gadfly's walk says which hole it fills; anything but one clear fit stops
@@ -668,33 +717,41 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         if pending
         else {}
     )
-    _log({"event": "completion", "parts": parts, "usage": used, **covers})
+    # Never silent about the rest (the review; seen: a check read two old claims, and its line
+    # gave no sign the two just declared were not asked).
+    read_ids = {a["id"] for a in asked}
+    unclaimed = [a["id"] for a in frame0["asks"] if a["id"] not in read_ids]
+    left = f" · not read, not claimed: {' · '.join(unclaimed)}" if unclaimed else ""
+    _log({"event": "completion", "parts": parts, "usage": used, "unclaimed": unclaimed, **covers})
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
     done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
     asks = len(asked)
     alone = done < asks and done + not_firm == asks  # all that is left did not settle: Claude's alone
     state.LIVE["decision"] = gate.PASS if done == asks else gate.UNSETTLED if alone else gate.RISE
-    if alone:
-        state.LIVE["unsettled_why"] = "the reader couldn't settle whether the work is done"
     unread = [x for x in parts if " not read (" in x]
+    untold = f" · {len(unclaimed) + len(unread)} not read" if unclaimed or unread else ""
+    if alone:
+        state.LIVE["unsettled_why"] = f"the reader couldn't settle whether the work is done{untold}"
     if not read_asks and unread:  # nothing reached the reader: that is no verdict on the work
         state.LIVE["decision"] = gate.BLOCK
         state.LIVE["shorts"] = [refused_line(unread[0].split(" not read (", 1)[1].rstrip(")"))]
-        first = "frame-loop · completion · " + " · ".join(parts)
-        return first
+        return "frame-loop · completion · " + " · ".join(parts) + left
     if used.get("total_tokens"):
         state.LIVE["tokens"] = used["total_tokens"]
     state.LIVE["shorts"] = (
         []
         if alone
         else [
-            f"frame-loop ✓ every {'' if whole else 'claimed '}requirement is done"
+            f"frame-loop ✓ every {'' if whole else 'claimed '}requirement is done{untold}"
             if done == asks
-            else f"frame-loop ▲ needs you: {done} of {asks} {'' if whole else 'claimed '}requirements read as done"
+            else f"frame-loop ▲ needs you: {done} of {asks} {'' if whole else 'claimed '}"
+            f"requirements read as done{untold}"
         ]
     )
-    first = "frame-loop · completion · " + " · ".join(parts) + (f" · {UNSETTLED_NOTE}" if alone else "")
+    first = "frame-loop · completion · " + " · ".join(parts) + (f" · {UNSETTLED_NOTE}" if alone else "") + left
     second = f"  {_reader_name(tier)} · {time.time() - started:.0f}s"
     if "calls" in used:
         second += f" · {used['calls']} calls"
+    if before:
+        second += f" · {len(before)} read before, unchanged"
     return first + "\n" + second

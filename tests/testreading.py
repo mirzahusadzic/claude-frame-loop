@@ -175,6 +175,86 @@ class CompletionTests(Isolated):
         with self.log.open("a", encoding="utf-8") as out:
             out.write(json.dumps({**row, "diff_file": str(path)}) + "\n")
 
+    A_FILE = "diff --git a/a.py b/a.py\n+one\n"
+    B_FILE = "diff --git a/b.py b/b.py\n+two\n"
+
+    def test_what_was_read_and_has_not_changed_is_not_read_again(self):
+        """Seen: a small change cost 613,000 tokens rereading what the session had claimed."""
+        self.claim("S1", ["A1"], self.A_FILE)
+        first, read = self.asked()
+        self.assertEqual(read, ["A1"])
+        again, read = self.asked()
+        self.assertEqual(read, [])
+        said = again["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✓", said)
+        self.assertIn("1 read before, unchanged", said)
+
+    def test_a_new_change_elsewhere_reads_only_its_own_requirement(self):
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        self.claim("S2", ["A2"], self.B_FILE)
+        out, read = self.asked()
+        self.assertEqual(read, ["A2"])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✓", said)
+        self.assertIn("A2 ✓", said)
+
+    def test_a_later_change_to_the_same_file_reopens_it_though_it_claims_nothing(self):
+        """A later edit can undo the requirement: an answer about the old file no longer stands."""
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        self.claim("S2", [], "diff --git a/a.py b/a.py\n-one\n")
+        _, read = self.asked()
+        self.assertEqual(read, ["A1"])
+
+    def test_a_changed_requirement_is_read_again(self):
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        frame0 = json.loads(Path(os.environ["FRAME_LOOP_FRAME0"]).read_text(encoding="utf-8"))
+        words = frame0["asks"][0]["text"]
+        frame0["asks"][0]["text"] = words + " Soon."
+        frame0["asks"][0]["inversion"] = {words + " Soon.": next(iter(frame0["asks"][0]["inversion"].values()))}
+        changed = WORK / f"frame0-changed-{uid(self)}.json"  # a copy: the fixture is every test's
+        changed.write_text(json.dumps(frame0), encoding="utf-8")
+        os.environ["FRAME_LOOP_FRAME0"] = str(changed)
+        _, read = self.asked()
+        self.assertEqual(read, ["A1"])
+
+    def test_a_harder_reading_is_read_again(self):
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        _, read = self.asked(": frame-loop-read --complete --effort high")
+        self.assertEqual(read, ["A1"])
+
+    def test_an_answer_not_done_stays_not_done(self):
+        """Reuse never turns a miss into a pass, and still comes to the author."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        again, read = self.asked()
+        self.assertEqual(read, [])
+        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", again["systemMessage"])
+
+    def test_a_reading_that_did_not_finish_is_read_again(self):
+        """A failed reading is no answer, so nothing of it may stand."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:cut_short"
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.assertIn("not read", self.complete())
+        os.environ["FRAME_LOOP_READER"] = "testhook:completing"
+        self.assertIn("A1 ✓", self.complete())
+
+    def test_a_forged_answer_on_the_record_is_not_believed(self):
+        """A row whose words and mark disagree is no answer from the reader."""
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        row = next(r for r in rows if r.get("event") == "completion-read")
+        with self.log.open("a", encoding="utf-8") as out:
+            out.write(json.dumps({**row, "part": "A1 ✗ (x)", "ok": True}) + "\n")
+        _, read = self.asked()
+        self.assertEqual(read, [])  # the earlier honest row stands, the forged one is passed over
+
     def test_requirements_are_read_at_once(self):
         """A pilot: one after another, three requirements filled the hook's ten minutes, the
         fourth went unread, and the agent waited through all of it."""
@@ -226,15 +306,23 @@ class CompletionTests(Isolated):
         self.claim("S1", ["A1"])
         out, read = self.asked()
         self.assertEqual(read, ["A1"])
-        self.assertIn("A1 ✓", out["hookSpecificOutput"]["additionalContext"])
-        self.assertNotIn("A2", out["hookSpecificOutput"]["additionalContext"])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✓", said)
+        self.assertNotIn("A2 ✓", said)
+        self.assertIn("not read, not claimed: A2 · A3", said)  # never silent about the rest
 
     def test_a_requirement_claimed_and_missed_says_it_was_claimed(self):
         os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
         os.environ.pop("FRAME_LOOP_LINES")  # as the plugin runs: the short line
         self.claim("S1", ["A1"])
         out, _ = self.asked()
-        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
+        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done · 2 not read", out["systemMessage"])
+
+    def test_the_whole_frame_leaves_nothing_unclaimed(self):
+        self.claim("S1", ["A1"])
+        out, read = self.asked(": frame-loop-read --complete --all")
+        self.assertEqual(sorted(read), ["A1", "A2", "A3"])
+        self.assertNotIn("not claimed", out["hookSpecificOutput"]["additionalContext"])
 
     def test_a_declaration_alone_claims_and_reads_over_the_sessions_steps(self):
         """Seen: real sessions declare as they present, after their steps have ended."""
@@ -268,7 +356,7 @@ class CompletionTests(Isolated):
         out, asked = self.nothing_claimed(("A2", "A2"))
         self.assertEqual(asked, ["undeclared", "A2"])
         self.assertIn("A2 ✓", out["hookSpecificOutput"]["additionalContext"])
-        self.assertNotIn("A1", out["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("A1 ✓", out["hookSpecificOutput"]["additionalContext"])
 
     def test_a_purpose_outside_frame_0_says_so_and_reads_no_further(self):
         out, asked = self.nothing_claimed(("other", "other"))

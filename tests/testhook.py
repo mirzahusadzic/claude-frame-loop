@@ -4852,7 +4852,7 @@ class NotFirmTests(unittest.TestCase):
         done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
         self.assertEqual(
             (done["decision"], done["lines"], done["detail"]),
-            ("unsettled", [], ["the reader couldn't settle whether the work is done"]),
+            ("unsettled", [], ["the reader couldn't settle whether the work is done · 2 not read"]),
         )
 
     def test_a_completion_with_a_firm_miss_still_comes_to_the_author(self):
