@@ -111,6 +111,8 @@ class ActObjectTests(unittest.TestCase):
             ("rm -rf a && rm -rf b", "deleted a/, b/"),
             ("echo rm -rf x && rm -rf a", "deleted a/"),
             ("find . -exec rm -rf {} +", "deleted a folder"),
+            ("find . -name '*.a' -exec rm -rf {} + -o -name '*.b' -exec rm -rf {} +", "deleted a folder"),
+            ("sudo find . -exec rm -rf {} \\;", "deleted a folder"),
             ("rm -rf -- -scratch", "deleted -scratch/"),
             ("rm -rf -- a", "deleted a/"),
             (

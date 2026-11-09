@@ -132,15 +132,17 @@ def _named(command: str, *words: str, takes_value: Any = lambda _: False) -> lis
 
 def _named_everywhere(command: str, program: str) -> list[str]:
     """What every command that runs `program` acts on, across a chain: only a command the loop
-    reads as a delete, so `echo rm` is none, and never `find`'s placeholders."""
+    reads as a delete, so `echo rm` is none, and never what `find` runs it on."""
     found: list[str] = []
     for part in F._split(F.heredocs(command)[0]):
         said = F._words(part)
         if f"{program} -" not in (F.outward(part) or ""):
             continue
         for i, word in enumerate(said):
+            if F.program(word) == "find":  # its actions and tests follow, and its files are not named
+                break
             if F.program(word) == program:
-                found += [x for x in _no_flags(said[i + 1 :], lambda _: False) if x not in ("{}", "+", ";", "\\;")]
+                found += _no_flags(said[i + 1 :], lambda _: False)
                 break
     return found
 
