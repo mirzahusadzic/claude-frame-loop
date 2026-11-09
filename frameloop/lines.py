@@ -228,6 +228,7 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
                 words, needs = f"changed {own}", _needs_the_author(record.get("path", ""), own)
             elif record.get("event") == "outward":
                 words = _with_object(key, words, record.get("command") or "")
+                words += ", may not have run" if record.get("maybe") else ""
             return words, needs, exact
     return "did something you asked to hear of", False, exact
 

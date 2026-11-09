@@ -563,7 +563,11 @@ def _turn_acts(turn: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[A
     # A command's act counts as done only once it ran: PostToolUse records it; a denied or
     # failed command never does.
     ran = [r.get("command") for r in turn if r.get("event") == "act-ran"]
-    acts = [{**r, "ran": r.get("command") in ran} if r.get("event") == "outward" else r for r in acts]
+    maybe = [r.get("command") for r in turn if r.get("event") == "act-ran" and r.get("maybe")]
+    acts = [
+        {**r, "ran": r.get("command") in ran, "maybe": r.get("command") in maybe} if r.get("event") == "outward" else r
+        for r in acts
+    ]
     start = next((r for r in turn if r.get("event") == "guides"), None)
     # With the loop off nothing is recorded, so a turn after `/frame-loop on` would compare the
     # guides with the last baseline before it went off, hours or days old (an agent's report).

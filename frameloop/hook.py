@@ -427,6 +427,9 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         # the act ran, as asked: an outward act, or a command on the loop's own files
         if name == "PostToolUse" and (F.outward(command) or shell_touches_config(command)):
             _log({"event": "act-ran", "command": command})
+        elif name == "PostToolUseFailure" and F.outward(command) and len(F._split(F.heredocs(command)[0])) > 1:
+            # A chain's last status says nothing of what ran before it: `rm -rf x && false`.
+            _log({"event": "act-ran", "command": command, "maybe": True})
     if name in ("PostToolUse", "PostToolUseFailure"):
         if not changed:
             return None
@@ -776,7 +779,8 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
     except (OSError, ValueError):
         before = None
     if not isinstance(before, dict):  # the hashes kept before the call are gone: never "no change"
-        return [str(path)]
+        frame = os.environ.get("FRAME_LOOP_FRAME0")  # the folder went with them, frame 0 too
+        return [frame] if frame and not Path(frame).exists() else [str(path)]
     was = before.pop(RECORD_SIZE, 0)
     after = loop_files(event)
     changed = [p for p in sorted(set(before) | set(after)) if before.get(p, "") != after.get(p, "")]

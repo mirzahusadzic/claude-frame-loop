@@ -26,6 +26,7 @@ def _log(record: dict[str, Any]) -> None:
     if not path:
         return
     node = {"node": state.NODE} if state.NODE and "node" not in record else {}
+    Path(path).parent.mkdir(parents=True, exist_ok=True)  # a shell call may have removed the folder
     with open(path, "a", encoding="utf-8") as log:
         log.write(
             json.dumps({"at": time.time(), "session": state.SESSION, **node, **record}, ensure_ascii=False) + "\n"

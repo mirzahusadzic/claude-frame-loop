@@ -37,8 +37,29 @@ HEREDOC = re.compile(r"<<-?\s*(\\|'|\"|)(\w+)['\"]?[^\n]*\n(.*?)^\s*\2\s*$", re.
 SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 # Wrappers that run the command after them, and their options that take a value.
 WRAPPERS = {
-    "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"},
-    "env": {"-u", "-C"},
+    "sudo": {
+        "-u",
+        "-g",
+        "-h",
+        "-p",
+        "-C",
+        "-D",
+        "-r",
+        "-t",
+        "-U",
+        "-T",
+        "--user",
+        "--group",
+        "--host",
+        "--prompt",
+        "--close-from",
+        "--chdir",
+        "--role",
+        "--type",
+        "--other-user",
+        "--command-timeout",
+    },
+    "env": {"-u", "-C", "--unset", "--chdir"},
     "doas": {"-u", "-C", "-a"},
     "run0": {"-u", "--user", "-g", "--group", "-D", "--chdir", "--setenv"},
     "command": set(),
@@ -46,8 +67,25 @@ WRAPPERS = {
     "time": set(),
     "nice": {"-n"},
     "nohup": set(),
-    "xargs": {"-n", "-I", "-P", "-L", "-s", "-d", "-E", "-a"},
-    "timeout": {"-s", "-k"},
+    "xargs": {
+        "-n",
+        "-I",
+        "-P",
+        "-L",
+        "-s",
+        "-d",
+        "-E",
+        "-a",
+        "--max-args",
+        "--replace",
+        "--max-procs",
+        "--max-lines",
+        "--max-chars",
+        "--delimiter",
+        "--eof",
+        "--arg-file",
+    },
+    "timeout": {"-s", "-k", "--signal", "--kill-after"},
 }
 GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--super-prefix", "--config-env"}
 GH_VALUED = {"-R", "--repo", "--hostname"}
@@ -122,6 +160,8 @@ def _flags(words: list[str], valued: set[str]) -> list[str]:
     """The words after the leading options, skipping an option's value."""
     i = 0
     while i < len(words) and words[i].startswith("-"):
+        if words[i] == "--":  # the end of the options
+            return words[i + 1 :]
         i += 2 if words[i] in valued else 1
     return words[i:]
 
@@ -129,8 +169,8 @@ def _flags(words: list[str], valued: set[str]) -> list[str]:
 def program(word: str) -> str:
     """A command's program by name, however it is spelled: `/usr/bin/git`, `C:\\Git\\git.exe`
     and `Git.EXE` are all `git`."""
-    name = word.replace("\\", "/").rsplit("/", 1)[-1]
-    return name[:-4].lower() if name.lower().endswith(".exe") else name
+    name = word.replace("\\", "/").rsplit("/", 1)[-1].lower()  # Windows and macOS find `PWSH` and `RM` too
+    return name[:-4] if name.endswith(".exe") else name
 
 
 # Shell keywords a command can follow: `if …; then git push; fi`, `for …; do rm -rf …; done`,
@@ -223,8 +263,9 @@ def _gh_act(args: list[str]) -> str | None:
 
 
 # A recursive delete as Windows' own shells spell it, under Git Bash too.
-POWERSHELL_DELETE = r"\b(remove-item|ri|rm|rmdir|rd|del|erase)\b[^;|]*\s-r(ecurse)?\b"
-CMD_DELETE = r"/[ck]\b.*\b(rmdir|rd|del|erase)\b[^&|]*\s/s\b"
+REMOVES = r"(remove-item|ri|rm|rmdir|rd|del|erase)"
+POWERSHELL_DELETE = rf"\b{REMOVES}\b[^;|]*\s-r(ecurse)?\b|-r(ecurse)?\b[^;]*\|\s*(%\s*\{{\s*)?{REMOVES}\b"
+CMD_DELETE = rf"/[ck]\b.*(\b{REMOVES}\b[^&|]*\s/s\b|\bfor\s+/[rd]\b.*\bdo\b.*\b{REMOVES}\b)"
 
 
 def _act(words: list[str], depth: int) -> str | None:

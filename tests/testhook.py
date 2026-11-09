@@ -5065,6 +5065,57 @@ class OneReadingOfAChangeTests(unittest.TestCase):
         self.assertEqual(asked, ["violation"])
 
 
+class ActThatFailedLaterTests(unittest.TestCase):
+    """Sparky's sixth review: `rm -rf build && false` read "did not run", though the delete may
+    have, and asked nothing of the author."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+
+    def ended(self, command):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        base = {"session_id": self.session, "cwd": str(REPO)}
+        call = {**base, "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "c1"}
+        hook.answer({**base, "hook_event_name": "UserPromptSubmit", "prompt": "go"})
+        hook.answer({**call, "hook_event_name": "PreToolUse"})
+        hook.answer({**call, "hook_event_name": "PostToolUseFailure"})
+        out = hook.answer({**base, "hook_event_name": "Stop", "last_assistant_message": "x", "stop_hook_active": False})
+        return (out or {}).get("systemMessage", "")
+
+    def test_an_act_in_a_chain_that_failed_may_have_run(self):
+        self.assertIn("▲ deleted build/, may not have run", self.ended("rm -rf build && false"))
+
+    def test_a_lone_act_that_failed_did_not_run(self):
+        self.assertNotIn("▲", self.ended("rm -rf build"))
+
+
+class FolderGoneTests(unittest.TestCase):
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+
+    def test_a_call_that_removed_the_loops_folder_reaches_the_author(self):
+        """Sparky's sixth review: the hashes went with the folder, and nothing reached the author."""
+        home = Path(tempfile.mkdtemp(prefix="gone-", dir=WORK)).resolve() / ".frame-loop"
+        home.mkdir()
+        frame = home / "frame0.json"
+        frame.write_text(FIXTURE.read_text(encoding="utf-8"), encoding="utf-8")
+        os.environ.update(
+            FRAME_LOOP_FRAME0=str(frame), FRAME_LOOP_WORK=str(home / "work"), FRAME_LOOP_LOG=str(home / "s.jsonl")
+        )
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        base = {"session_id": self.session, "cwd": str(REPO)}
+        command = "python3 -c 'import shutil; shutil.rmtree(\".frame-loop\")'"
+        call = {**base, "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "c2"}
+        hook.answer({**base, "hook_event_name": "UserPromptSubmit", "prompt": "go"})
+        hook.answer({**call, "hook_event_name": "PreToolUse"})
+        for path in sorted(home.rglob("*"), reverse=True):
+            path.rmdir() if path.is_dir() else path.unlink()
+        home.rmdir()
+        hook.answer({**call, "hook_event_name": "PostToolUse"})
+        out = hook.answer({**base, "hook_event_name": "Stop", "last_assistant_message": "x", "stop_hook_active": False})
+        self.assertIn("▲ removed frame 0", (out or {}).get("systemMessage", ""))
+
+
 class DoubtTests(unittest.TestCase):
     """Seen in a real session: "▲ needs you: the reader doesn't see this resting on the requirement
     Claude named", for a requirement Claude never named and nothing for the author to decide."""

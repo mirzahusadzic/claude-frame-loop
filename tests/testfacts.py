@@ -134,6 +134,15 @@ class OtherWrappersTests(unittest.TestCase):
             "pwsh -c 'rm -r build'",
             "cmd.exe /c rmdir /s /q build",
             "cmd /c rd /s build",
+            "env --unset FOO rm -rf build",
+            "timeout --signal KILL 5 rm -rf build",
+            "sudo --user root rm -rf build",
+            "xargs --max-args 1 rm -rf",
+            "env -- rm -rf build",
+            "pwsh -Command 'Get-ChildItem build -Recurse | Remove-Item -Force'",
+            "PowerShell -c 'Remove-Item -Recurse build'",
+            "cmd.exe /c 'for /r %f in (*) do del %f'",
+            "CMD /c rmdir /s build",
         ):
             self.assertTrue(facts.outward(command), command)
 
@@ -145,6 +154,8 @@ class OtherWrappersTests(unittest.TestCase):
             "powershell -Command 'Get-ChildItem -Recurse'",
             "cmd /c dir /s",
             "cmd /c rmdir build",
+            "pwsh -c 'Get-ChildItem -Recurse | Select-Object Name'",
+            "cmd /c for /r %f in (*) do echo %f",
         ):
             self.assertFalse(facts.outward(command), command)
 
