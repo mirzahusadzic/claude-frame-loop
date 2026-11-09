@@ -790,7 +790,8 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "you a task, reflect what this work is for back to the author in the author's words, "
                 "as plain sentences, one per line, easy to copy; ask about anything unclear. Never "
                 "show the author JSON, ids or inversions: they are for agents. Put the sentences to the "
-                "author with the approve tool, one item each, and end your turn: their answer arrives "
+                "author with the approve tool, each requirement, principle and trigger one item, and "
+                "end your turn: their answer arrives "
                 "as their next message. Ask what is wrong with any item not approved, and call it again "
                 "with what you revise. Only when every item is approved or dropped, "
                 "write frame 0 yourself as JSON to "
@@ -914,7 +915,7 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
             else []
         ),
         "Frame 0 changes only with the author: when they ask for something it does not hold, "
-        "propose the requirement with the approve tool, and once they approve add it with its "
+        "propose the requirement, principle or trigger with the approve tool, and once they approve add it with its "
         "inversion, in the words they approved. A frame whose words are not the ones approved is "
         "not read, and they are told. If the picker cannot be shown, ask them in chat. The "
         "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",

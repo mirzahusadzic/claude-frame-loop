@@ -38,7 +38,7 @@ NOT_APPROVED = "frame 0 is not approved"
 def not_approved(words: list[str]) -> str:
     """Why a frame is not read, for Claude; the author reads it in plain words."""
     return (
-        f"{NOT_APPROVED}: {len(words)} of its requirements are not in the words the author approved. "
+        f"{NOT_APPROVED}: {len(words)} of its items are not in the words the author approved. "
         "Call the approve tool with them, in the words you propose, and end your turn"
     )
 

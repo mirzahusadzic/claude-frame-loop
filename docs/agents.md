@@ -57,9 +57,9 @@ An inversion's key is the whole requirement and its value the same claim reverse
 
 ### The approve tool
 
-Claude calls `approve` to put a decomposition to the author item by item: `title`, `items` (each a `text` and an optional `detail`), an optional `leftOut`, and `node`, a node's id, left out for frame 0. Each item is one plain sentence, in the words that will be written. The tool cannot wait: Claude ends its turn when the picker opens, and the answer arrives as the author's next message.
+Claude calls `approve` to put a decomposition to the author item by item: `title`, `items` (each a `text` and an optional `detail`), an optional `leftOut`, and `node`, a node's id, left out for frame 0. Each item is one plain sentence, in the words that will be written: every requirement, principle and trigger of the frame. The tool cannot wait: Claude ends its turn when the picker opens, and the answer arrives as the author's next message.
 
-Each answer is added to `.frame-loop/approved.json`, by the picker and never by Claude; a later answer overrules an earlier one, and frame 0's requirements and a node's are approved apart. Claude writes a frame only when every item is approved or dropped, in the words approved. A frame answered for whose words differ is not read, and the author is told; the write itself is not blocked. A frame with no answer yet is read as before and is offered one picker, once. Rules, principles and triggers are not approved this way.
+Each answer is added to `.frame-loop/approved.json`, by the picker and never by Claude; a later answer overrules an earlier one, and frame 0's requirements and a node's are approved apart. Claude writes a frame only when every item is approved or dropped, in the words approved. A frame answered for whose words differ is not read, and the author is told; the write itself is not blocked. A frame with no answer yet is read as before and is offered its picker once a session until the author answers. A frame's requirements, principles and triggers are all items; the guides' rules are not approved this way.
 
 ---
 

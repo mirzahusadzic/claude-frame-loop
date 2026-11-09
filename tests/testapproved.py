@@ -113,6 +113,43 @@ class WordsTests(Approved):
         self.assertEqual(framezero.unapproved(FRAME), [])
 
 
+class PrinciplesAndTriggersTests(Approved):
+    """Mirza: "approved each of its items" holds for a frame's principles and triggers too; only
+    the guides' rules, which the rules index holds, are left for later."""
+
+    RULES = {
+        **FRAME,
+        "principles": [{"id": "P1", "text": "No new dependency."}],
+        "triggers": [{"id": "T1", "text": "A push asks first."}],
+    }
+
+    def test_they_must_be_approved(self):
+        self.answer([ONE, TWO])
+        self.assertEqual(framezero.unapproved(self.RULES), ["No new dependency.", "A push asks first."])
+        self.answer(["No new dependency.", "A push asks first."])
+        self.assertEqual(framezero.unapproved(self.RULES), [])
+
+    def test_a_rule_from_the_index_is_left_for_later(self):
+        self.answer([ONE, TWO])
+        joined = {**FRAME, "principles": [{"id": "R1", "text": "A rule of the guide."}]}
+        with mock.patch.object(framezero, "project_rules", lambda: {"rules": [{"id": "R1"}]}):
+            self.assertEqual(framezero.unapproved(joined), [])
+
+    def test_a_node_may_rest_on_a_principle_approved_above_it(self):
+        self.answer([ONE, "No new dependency."])
+        self.answer([TWO], frame="greeter")
+        state.NODE = "greeter"
+        node = {"asks": [FRAME["asks"][1]], "principles": [{"id": "P1", "text": "No new dependency."}]}
+        self.assertEqual(framezero.unapproved(node), [])
+
+    def test_a_write_holding_one_not_approved_needs_the_author(self):
+        self.frame.write_text(json.dumps(self.RULES), encoding="utf-8")
+        self.answer([ONE, TWO])
+        self.assertFalse(framezero.file_in_approved_words(str(self.frame), "frame 0"))
+        self.answer(["No new dependency.", "A push asks first."])
+        self.assertTrue(framezero.file_in_approved_words(str(self.frame), "frame 0"))
+
+
 class NotReadTests(Approved):
     def read(self):
         testhook.SEEN.clear()
@@ -178,9 +215,14 @@ class OnePickerTests(Approved):
         self.assertIn("approve tool", said)
         self.assertEqual(turn.approval_owed(FRAME), "")
 
-    def test_once_across_sessions(self):
+    def test_again_each_session_until_it_is_answered(self):
+        """Mirza: passing it over must not leave a frame read unapproved for good."""
         self.assertTrue(turn.approval_owed(FRAME))
+        self.assertEqual(turn.approval_owed(FRAME), "")
         state.SESSION = "the next session"
+        self.assertTrue(turn.approval_owed(FRAME))
+        self.answer([ONE, TWO])
+        state.SESSION = "the one after"
         self.assertEqual(turn.approval_owed(FRAME), "")
 
     def test_a_frame_answered_gets_none(self):

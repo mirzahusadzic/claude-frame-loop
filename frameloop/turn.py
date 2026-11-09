@@ -143,21 +143,21 @@ def completion_owed(frame0: dict[str, Any]) -> str:
 
 APPROVAL_OWED = (
     "frame-loop: this frame was written before its author approved it item by item. Before other "
-    "work, call the approve tool with its requirements, one item each, in their exact words, and end "
-    "your turn: their answer arrives as their next message. It is read as before until they answer. "
-    "You are told this once."
+    "work, call the approve tool with its requirements, principles and triggers, one item each, in "
+    "their exact words, and end your turn: their answer arrives as their next message. It is read as "
+    "before until they answer."
 )
 
 
 def approval_owed(frame0: dict[str, Any]) -> str:
-    """A frame with no answer gets one picker: told once, across sessions, and never again for
-    that frame, so a person who passes it over is not asked at every prompt."""
+    """A frame with no answer gets its picker once a session until the author answers: passing
+    it over must not leave it read unapproved for good, nor ask at every prompt."""
     frame = engaged_frame()
     if os.environ.get("FRAME_LOOP_PLUGIN") != "1":  # the picker comes with the plugin
         return ""
     if not frame0.get("asks") or approved_words(frame) is not None:
         return ""
-    if any(r.get("event") == "approval-offered" and r.get("frame") == frame for r in _records_all()):
+    if any(r.get("event") == "approval-offered" and r.get("frame") == frame for r in _records("approval-offered")):
         return ""
     _log({"event": "approval-offered", "frame": frame})
     return APPROVAL_OWED

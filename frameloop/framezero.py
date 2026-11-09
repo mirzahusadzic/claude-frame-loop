@@ -43,10 +43,11 @@ def _words(text: str) -> str:
     return " ".join(text.split())
 
 
-def approved_words(frame: str) -> set[str] | None:
-    """The words the author approved for a frame, as the picker recorded them round by round,
-    a later round overruling an earlier one. None when the frame has had no answer yet; an
-    empty set when the record cannot be read, so that nothing passes on a broken record."""
+def approved_words(frame: str | None) -> set[str] | None:
+    """The words the author approved for a frame, or for any frame when none is named, as the
+    picker recorded them round by round, a later round overruling an earlier one. None when the
+    frame has had no answer yet; an empty set when the record cannot be read, so that nothing
+    passes on a broken record."""
     from config import project_dir
 
     path = Path(project_dir({"cwd": state.CWD})) / ".frame-loop" / "approved.json"
@@ -54,7 +55,7 @@ def approved_words(frame: str) -> set[str] | None:
         return None
     try:
         rounds = json.loads(path.read_text(encoding="utf-8"))["rounds"]
-        mine = [r for r in rounds if r["frame"] == frame]
+        mine = [r for r in rounds if frame is None or r["frame"] == frame]
         words: set[str] = set()
         for answer in mine:
             words |= {_words(x) for x in answer["approved"]}
@@ -69,21 +70,33 @@ def engaged_frame() -> str:
 
 
 def unapproved(frame0: dict[str, Any]) -> list[str]:
-    """The requirements of a frame the author has answered for that are not in the words they
-    approved. A frame with no answer yet has none: it is read as before, until they answer."""
+    """The items of a frame the author has answered for that are not in the words they approved.
+    A frame with no answer yet has none: it is read as before, until they answer. A node's
+    principles and triggers may be approved at the frame above it that added them; the guides'
+    rules, joined in by load_frame0, are not approved this way."""
     words = approved_words(engaged_frame())
     if words is None:
         return []
-    return [a["text"] for a in frame0.get("asks") or [] if _words(a["text"]) not in words]
+    late = [a["text"] for a in frame0.get("asks") or [] if _words(a["text"]) not in words]
+    rules = project_rules()
+    indexed = {r.get("id") for r in _rule_list(rules)} if rules else set()
+    anywhere = approved_words(None) or set()
+    return late + [
+        x["text"]
+        for part in ("principles", "triggers")
+        for x in frame0.get(part) or []
+        if x.get("id") not in indexed and _words(x["text"]) not in anywhere
+    ]
 
 
 def file_in_approved_words(path: str, frame: str) -> bool:
     """Whether a frame's file, as it stands, holds only words the author approved."""
     words = approved_words(frame)
     try:
-        asks = json.loads(Path(path).read_text(encoding="utf-8"))["asks"]
-        return bool(words) and bool(asks) and all(_words(a["text"]) in words for a in asks)
-    except (OSError, ValueError, KeyError, TypeError):
+        held = json.loads(Path(path).read_text(encoding="utf-8"))
+        items = [x["text"] for part in ("asks", "principles", "triggers") for x in held.get(part) or []]
+        return bool(words) and bool(items) and all(_words(x) in words for x in items)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
 
 
