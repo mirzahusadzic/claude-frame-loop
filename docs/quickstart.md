@@ -41,7 +41,7 @@ Frame 0 can also start from what the project already has: ask Claude to compose 
 | A change with a purpose frame 0 lacks | the same read | `frame-loop ▲ needs you: this serves a purpose none of your requirements has: add one?` |
 | A change with no purpose | the same read | `frame-loop ▲ needs you: this serves none of your requirements` |
 | A request outside frame 0 | Claude proposes a new requirement; frame 0 changes only on confirmation | nothing |
-| You ask whether the work is done, or Claude presents it as done | a completion read of the requirements the work claimed, each against the changes that claim it; all of them only when you ask about the whole frame | nothing when each reads as done; otherwise `frame-loop ▲ needs you: 2 of 3 claimed requirements read as done` |
+| You ask whether the work is done, or Claude presents it as done | a completion read of the requirements the work claimed, each against the changes that claim it; all of them only when you ask about the whole frame | nothing when each reads as done; on a firm "not done", `frame-loop ▲ needs you: 2 of 3 claimed requirements read as done`; what did not settle goes to Claude first |
 
 A signal is a file no rule covers, a check you owe that is unmet, such as tests not run, a large change, a deleted file, a changed dependency, a change to the loop's settings, a change Claude claimed that has no effect, or a change outside what you authorized. While the reader works, the band above the prompt is one line that changes in place: what is happening now, the time left and the tokens spent.
 

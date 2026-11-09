@@ -473,6 +473,24 @@ def _guide_words(change: str, lost: list[str]) -> str:
 BUILT_IN = re.compile(r"\b[LT]\d+: ")  # the loop's own guards and triggers, as "T5: <what>"
 
 
+# A requirement's result as the author reads it: the reader's categories are the loop's own terms.
+RESULT_WORDS = (
+    ("coupled but misaligned", "its answer moved in a way that does not fit"),
+    ("cooled", "its answer did not rest on these words"),
+    ("unresolved", "its answers did not agree"),
+    ("carried", "its answer rests on these words"),
+    (", not firm", ", not yet steady"),
+    (", stopped after a whole run", ", and it stopped at its limit after one whole run"),
+)
+
+
+def _result_words(match: re.Match[str]) -> str:
+    said = match.group(1)
+    for term, words in RESULT_WORDS:
+        said = said.replace(term, words)
+    return f"✗ ({said})"
+
+
 def for_user(text: str, frame0: dict[str, Any] | None) -> str:
     """A line the human reads: every id of frame 0 or the rules in its own words, cut
     short and quoted; no built-in guard's id; a step by its number. Ids stay for agents
@@ -485,6 +503,10 @@ def for_user(text: str, frame0: dict[str, Any] | None) -> str:
     }
     text = BUILT_IN.sub("", text)
     text = re.sub(r"· S(\d+) ·", r"· step \1 ·", text)
+    text = re.sub(r"✗ \(([^)]*)\)", _result_words, text)
+    text = re.sub(
+        r"the reader reached its token cap of (\d+), so it was stopped", r"stopped at its limit of \1 tokens", text
+    )
     if words:
         short = words  # in full: never cut, never "…" (the author)
         ids = re.compile(

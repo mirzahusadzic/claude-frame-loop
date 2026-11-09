@@ -162,6 +162,29 @@ def cut_short(frame, only=()):
     return {"error": {"message": "the reader gave no answer within 300 s, so it was stopped"}}
 
 
+def firm_but_doubted(frame, only=()):
+    """Firm, and the answer rests on nothing: a doubt, no mismatch."""
+    return {"exit": 0, "firm": True, "category": "cooled", "findings": [{"levels": {"baseline": "yes"}}]}
+
+
+def stopped_after_a_whole_run(frame, only=()):
+    """As the reader gives a reading stopped at its cap in its second run."""
+    testhook.SEEN.append(frame)
+    return {
+        "exit": 0,
+        "firm": False,
+        "cut": True,
+        "category": "unresolved",
+        "findings": [{"levels": {"baseline": "no"}}],
+        "made": 22,
+        "usage": {"total_tokens": 150000},
+    }
+
+
+def a1_cut_short_a2_doubted(frame, only=()):
+    return cut_short(frame) if "-A1-" in frame["name"] else firm_but_doubted(frame)
+
+
 class CompletionTests(Isolated):
     def setUp(self):
         super().setUp()
@@ -254,6 +277,51 @@ class CompletionTests(Isolated):
             out.write(json.dumps({**row, "part": "A1 ✗ (x)", "ok": True}) + "\n")
         _, read = self.asked()
         self.assertEqual(read, [])  # the earlier honest row stands, the forged one is passed over
+
+    def test_a_doubt_goes_to_claude_and_never_says_needs_you(self):
+        """Seen: 1 of 9 read as done said "needs you" with no mismatch among them."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:firm_but_doubted"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1"], self.A_FILE)
+        out, _ = self.asked()
+        self.assertNotIn("systemMessage", out)
+        self.assertIn("A1 ✗ (cooled)", out["hookSpecificOutput"]["additionalContext"])
+        self.assertEqual(state.LIVE["decision"], gate.UNSETTLED)
+
+    def test_a_reading_that_did_not_finish_beside_a_doubt_goes_to_claude_too(self):
+        os.environ["FRAME_LOOP_READER"] = "testreading:a1_cut_short_a2_doubted"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1", "A2"], self.A_FILE)
+        out, _ = self.asked()
+        self.assertNotIn("systemMessage", out)
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 not read", said)
+        self.assertNotIn("A1 ✓", said)
+        self.assertEqual(state.LIVE["decision"], gate.UNSETTLED)
+        self.assertIn("2 not read", state.LIVE["unsettled_why"])  # the one cut off, the one never claimed
+
+    def test_what_only_the_author_can_clear_still_reaches_them(self):
+        os.environ["FRAME_LOOP_READER"] = "testreading:firm_but_doubted"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.claim("S2", ["A2"], self.B_FILE)
+        record.step_diff("S2").unlink()
+        out, _ = self.asked()
+        self.assertIn("▲ needs you: 0 of 2 claimed", out["systemMessage"])
+
+    def test_a_reading_stopped_after_a_whole_run_says_what_it_found_and_is_kept(self):
+        """Seen: four readings were called "not read" with a whole run in hand, then read again."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:stopped_after_a_whole_run"
+        self.claim("S1", ["A1"], self.A_FILE)
+        out, read = self.asked()
+        self.assertEqual(read, ["A1"])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✗ (unresolved, not firm, stopped after a whole run)", said)
+        self.assertNotIn("A1 not read", said)
+        self.assertIn("22 calls", said)
+        self.assertEqual(state.LIVE["decision"], gate.UNSETTLED)  # not firm, so no mismatch and no pass
+        _, read = self.asked()
+        self.assertEqual(read, [])
 
     def test_a_missing_change_is_not_read_as_an_empty_one_by_a_later_requirement(self):
         """Sparky's seventh review: the first requirement's normalising left the second reading

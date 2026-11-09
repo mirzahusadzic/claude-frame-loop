@@ -572,7 +572,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             return told
         asked = [a for a in frame0["asks"] if a["id"] == named]
     parts, used = [], {}
-    not_firm = 0
+    not_firm = missed = refused = 0
     effort, read_asks, done_asks = None, [], []
     checked: dict[str, tuple[str | None, str | None]] = {}
     run = _reader()
@@ -658,16 +658,16 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             parts.append(kept["part"])
             read_asks.append(ask["id"])
             not_firm += not kept.get("firm")
+            missed += bool(kept.get("missed"))
             if kept["ok"]:
                 done_asks.append(ask["id"])
             continue
         if frame is None:
             parts.append(why)
-            state.LIVE["decision"] = gate.RISE
+            refused += 1
             continue
         result = results[id(frame)]
         if gate._failed(result):  # a reading that did not finish says so: it is no verdict
-            state.LIVE["decision"] = gate.RISE
             parts.append(f"{ask['id']} not read ({gate._failure(result)})")
             for k, v in _spent(result).items():
                 used[k] = used.get(k, 0) + v
@@ -676,16 +676,18 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         level = ((result.get("findings") or [{}])[0].get("levels") or {}).get("baseline")
         ok = result.get("firm") and result.get("category") == "carried" and level == "yes"
         not_firm += not result.get("firm")
-        state.LIVE["decision"] = state.LIVE.get("decision", gate.PASS) if ok else gate.RISE
+        firm_no = bool(result.get("firm")) and level == "no"  # all else is a doubt, for Claude to look at
+        missed += firm_no
+        stopped = ", stopped after a whole run" if result.get("cut") else ""
         parts.append(
             f"{ask['id']} ✓"
             if ok
-            else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'})"
+            else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'}{stopped})"
         )
         if ok:
             done_asks.append(ask["id"])
         if ask["id"] in keys:
-            answer = {"key": keys[ask["id"]], "ask": ask["id"], "part": parts[-1], "ok": bool(ok)}
+            answer = {"key": keys[ask["id"]], "ask": ask["id"], "part": parts[-1], "ok": bool(ok), "missed": firm_no}
             _log({"event": "completion-read", **answer, "firm": bool(result.get("firm"))})
         if ok and not os.environ.get("FRAME_LOOP_TREE"):
             _log({"event": "filled", "ask": ask["id"]})
@@ -732,7 +734,10 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
     done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
     asks = len(asked)
-    alone = done < asks and done + not_firm == asks  # all that is left did not settle: Claude's alone
+    # Only a firm "not done", or what only the author can clear, reaches them: all else did not
+    # settle, and Claude looks first (seen: 1 of 9 read as done said "needs you", with no mismatch).
+    stopped_climbs = sum(1 for x in parts if x.startswith("climb stopped"))
+    alone = done < asks and not (missed or refused or stopped_climbs)
     state.LIVE["decision"] = gate.PASS if done == asks else gate.UNSETTLED if alone else gate.RISE
     unread = [x for x in parts if " not read (" in x]
     untold = f" · {len(unclaimed) + len(unread)} not read" if unclaimed or unread else ""

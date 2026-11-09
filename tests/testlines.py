@@ -206,6 +206,24 @@ class PlainTests(unittest.TestCase):
         self.assertEqual(self.plain("obligations: owed O1 not met; owed O2 not met"), "2 checks you owe are unmet")
         self.assertEqual(self.plain("obligations: owed O1 not met"), "a check you owe is unmet")
 
+    def test_a_requirements_result_reads_in_plain_words(self):
+        """Seen in the band's details: "cooled", "not firm", "token cap"."""
+        for said, words in (
+            ("A1 ✗ (cooled)", "✗ (its answer did not rest on these words)"),
+            ("A1 ✗ (unresolved, not firm)", "✗ (its answers did not agree, not yet steady)"),
+            ("A1 ✗ (coupled but misaligned)", "✗ (its answer moved in a way that does not fit)"),
+            ("A1 ✗ (carried, not firm)", "✗ (its answer rests on these words, not yet steady)"),
+            (
+                "A1 ✗ (unresolved, not firm, stopped after a whole run)",
+                "and it stopped at its limit after one whole run",
+            ),
+            ("A1 not read (the reader reached its token cap of 150000, so it was stopped)", "limit of 150000 tokens"),
+        ):
+            shown = lines.for_user(said, None)
+            self.assertIn(words, shown)
+            for term in ("cooled", "firm", "misaligned", "token cap", "carried", "unresolved"):
+                self.assertNotIn(term, shown)
+
     def test_a_rules_reading_that_names_a_rule_says_which(self):
         self.assertEqual(self.plain("violation: names P1: both readings named it"), "it may break your rule P1")
         # an older record holds the reason as it was
