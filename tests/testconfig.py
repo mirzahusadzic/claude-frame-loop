@@ -326,6 +326,13 @@ class PythonReadTests(unittest.TestCase):
                 self.assertFalse(config._read_only(command))
 
 
+class UserSettingsTests(unittest.TestCase):
+    def test_the_users_own_settings_are_hashed_around_a_call(self):
+        """Sparky's fourth review: a shell write to ~/.claude/settings.json went unseen."""
+        files = config.loop_files({"cwd": os.getcwd()})
+        self.assertIn(str(Path(config.real_home()) / ".claude" / "settings.json"), files)
+
+
 class ClaudeFolderTests(unittest.TestCase):
     def test_only_a_claude_folders_own_settings_and_hooks_are_the_loops(self):
         """Seen: a plugin under development in ~/.claude/dev-mods/<x>/hooks/ was told as the

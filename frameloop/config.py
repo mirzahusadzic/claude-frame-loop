@@ -369,6 +369,7 @@ def loop_files(event: dict[str, Any]) -> dict[str, str]:
         project / ".frame-loop" / "approved.json",
         project / ".claude" / "settings.json",
         project / ".claude" / "settings.local.json",
+        Path(real_home()) / ".claude" / "settings.json",
     ]
     hooks = project / ".claude" / "hooks"
     if hooks.is_dir():

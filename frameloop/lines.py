@@ -92,14 +92,32 @@ ASKED = {
 }
 
 
-def _named(command: str, *words: str) -> list[str]:
-    """What a command acts on: the words after `words` that are no flag, in the first simple
-    command that runs them; none for one assembled or wrapped, which keeps its plain words."""
+# Options that take a value, so the word after them is no object: of `git push`, and every one
+# of `gh release create` but its switches.
+PUSH_VALUED = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+RELEASE_SWITCHES = {"-d", "--draft", "-p", "--prerelease", "--generate-notes", "--verify-tag", "--fail-on-no-commits"}
+
+
+def _no_flags(words: list[str], takes_value: Any) -> list[str]:
+    found, i = [], 0
+    while i < len(words):
+        if not words[i].startswith("-"):
+            found.append(words[i])
+        elif "=" not in words[i] and takes_value(words[i]):
+            i += 1
+        i += 1
+    return found
+
+
+def _named(command: str, *words: str, takes_value: Any = lambda _: False) -> list[str]:
+    """What a command acts on: the words after `words` that are no flag or a flag's value, in the
+    first simple command that runs them; none for one assembled or wrapped, which keeps its
+    plain words."""
     for part in F._split(F.heredocs(command)[0]):
         said = F._words(part)
         for i in range(len(said) - len(words) + 1):
             if F.program(said[i]) == words[0] and said[i + 1 : i + len(words)] == list(words[1:]):
-                return [x for x in said[i + len(words) :] if not x.startswith("-")]
+                return _no_flags(said[i + len(words) :], takes_value)
     return []
 
 
@@ -110,10 +128,10 @@ def _with_object(key: str, words: str, command: str) -> str:
         if found:
             return "deleted " + _cut(", ".join(found[:2]) + (f" +{len(found) - 2} more" if len(found) > 2 else ""))
     elif key == "git push":
-        found = _named(command, "git", "push")
+        found = _named(command, "git", "push", takes_value=PUSH_VALUED.__contains__)
         return _cut(" ".join(["pushed", *found]))
     elif key == "gh release":
-        found = _named(command, "gh", "release", "create")
+        found = _named(command, "gh", "release", "create", takes_value=lambda x: x not in RELEASE_SWITCHES)
         if found:
             return f"released {_cut(found[0])}"
     return words
@@ -128,7 +146,8 @@ def _landed(record: dict[str, Any]) -> bool:
         return False
 
 
-SHOWN = 60  # an act's command or path, as the details show it: one line, cut
+SHOWN = 60  # what an act's line names
+DETAILS = 2000  # an act's exact command under details: one line, and a bound only against a huge one
 LOOP_FILES = (
     ("switch", "the switch"),
     ("frame0", "frame 0"),
@@ -184,11 +203,11 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     the exact command or path, for the details."""
     said = " ".join(record.get("triggers") or []) if record.get("event") == "outward" else "L1:"
     # The command as it ran, its heredocs' text left out, so a line after one still shows.
-    exact = _cut(
+    exact = (
         " ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
         if record.get("event") == "outward"
         else record.get("path", "")
-    )
+    )[:DETAILS]
     for key, words, needs in ACT_WORDS:
         if key in said:
             # A command asked for, denied or failed, ran no act: said so, never as done (the cold review, L1).

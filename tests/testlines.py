@@ -95,6 +95,23 @@ class ActObjectTests(unittest.TestCase):
         ):
             self.assertEqual(self.act(command)[0], words, command)
 
+    def test_a_flags_value_is_not_what_it_acted_on(self):
+        """Sparky's fourth review: `--repo owner/repo v1.2` read as "released owner/repo"."""
+        for command, words in (
+            ("gh release create --repo owner/repo v1.2", "released v1.2"),
+            ("gh release create --title 'a b' v1.2", "released v1.2"),
+            ("gh release create --draft v1.2", "released v1.2"),
+            ("gh release create --title='a b' v1.2", "released v1.2"),
+            ("git push -o ci.skip origin main", "pushed origin main"),
+            ("git push -u origin main", "pushed origin main"),
+        ):
+            self.assertEqual(self.act(command)[0], words, command)
+
+    def test_the_details_keep_a_long_command_whole(self):
+        """The guide: the exact command stays under details."""
+        command = "git push origin " + "a-very-long-branch-name-" * 8
+        self.assertEqual(self.act(command)[2], command.strip())
+
     def test_a_command_it_cannot_read_keeps_its_plain_words(self):
         self.assertEqual(self.act("bash -c 'rm -rf build'")[0], "deleted a folder")
 
@@ -258,7 +275,7 @@ class ActLineTests(unittest.TestCase):
     """An agent's report: an act's line printed its whole command, wrapped over four lines,
     in the band and again for the agent; name the act in a few words, the command one cut line."""
 
-    def test_an_act_shows_its_command_on_one_cut_line_and_names_its_files(self):
+    def test_an_act_shows_its_command_on_one_line_and_names_its_files(self):
         command = (
             'ls ~/.claude/plugins/cache/claude-frame-loop/frame-loop; python3 -c "import json; '
             "print(json.load(open('/x/installed_plugins.json')))\"; cat .frame-loop/switch\nwc -l notes"
@@ -270,9 +287,8 @@ class ActLineTests(unittest.TestCase):
         }
         words, _, shown = lines.act_words(record)
         self.assertEqual(words, "ran a command on the switch")
-        self.assertLessEqual(len(shown), lines.SHOWN)
         self.assertNotIn("\n", shown)
-        self.assertTrue(shown.endswith("…"))
+        self.assertTrue(shown.endswith("⏎ wc -l notes"), shown)
         short = {**record, "command": "echo off > .frame-loop/switch"}
         self.assertEqual(lines.act_words(short)[2], "echo off > .frame-loop/switch")
 
