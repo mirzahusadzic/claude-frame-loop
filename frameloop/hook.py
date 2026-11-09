@@ -410,11 +410,15 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     if name == "SessionStart":
         said = briefing(frame0, mode)
         _log({"event": "briefed", "version": _version()})
-        missing = _gadfly_missing()
+        upgraded, missing = _gadfly_missing()
         if missing:  # said at the start, not found at the first reading (an agent's report)
             said += f"\n{missing} Tell the author, with that line; until then nothing is read."
+        elif upgraded:
+            said += f"\n{upgraded}."
         out: dict[str, Any] = {"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": said}}
-        return {**out, "systemMessage": f"frame-loop ■ not read: {missing}"} if missing else out
+        if missing:
+            return {**out, "systemMessage": f"frame-loop ■ not read: {missing}"}
+        return {**out, "systemMessage": f"frame-loop · {upgraded}"} if upgraded else out
     if name == "UserPromptSubmit":
         told = _last_reading()
         if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
@@ -654,14 +658,15 @@ def _briefed(event: dict[str, Any]) -> bool:
         return True
 
 
-def _gadfly_missing() -> str | None:
-    """With the live reader (reader:run), the install line when Gadfly cannot be started, or
-    the upgrade line when the installed one is older than frame-loop needs."""
+def _gadfly_missing() -> tuple[str | None, str | None]:
+    """With the live reader (reader:run): an installed Gadfly older than frame-loop needs is
+    upgraded, and said; the install line when Gadfly cannot be started, or one that could not
+    be upgraded, is what keeps a reading from running."""
     if (os.environ.get("FRAME_LOOP_READER") or "").split(":")[0] != "reader":
-        return None
+        return None, None
     import reader
 
-    return reader.MISSING if reader.launcher() is None else reader.too_old()
+    return (None, reader.MISSING) if reader.launcher() is None else reader.brought_up()
 
 
 def _written_node_faults(path: str, frame0: dict[str, Any]) -> list[str]:

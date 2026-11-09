@@ -498,7 +498,7 @@ class AttackTests(unittest.TestCase):
         with unittest.mock.patch.object(reader, "launcher", return_value=None):
             out = hook.answer(start)
         self.assertEqual(" ".join(out["systemMessage"].split()), f"frame-loop ■ not read: {reader.MISSING}")
-        self.assertIn("uv tool install 'midwife>=0.13.1'", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("uv tool install 'midwife>=0.13.2'", out["hookSpecificOutput"]["additionalContext"])
         with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
             self.assertNotIn("systemMessage", hook.answer(start) or {})
 
@@ -581,7 +581,11 @@ class AttackTests(unittest.TestCase):
         floor = ".".join(map(str, reader.GADFLY_FLOOR))
         for printed, told in (("gadfly 0.12.4", True), (f"gadfly {floor}", False), ("no version here", False)):
             fake = [sys.executable, "-c", f"print({printed!r})"]
-            with self.subTest(printed), unittest.mock.patch.object(reader, "launcher", return_value=(fake, None)):
+            with (
+                self.subTest(printed),
+                unittest.mock.patch.object(reader, "launcher", return_value=(fake, None)),
+                unittest.mock.patch.object(reader, "_uv_owns", return_value=None),  # not uv's: told
+            ):
                 out = hook.answer(start) or {}
                 said = " ".join(out.get("systemMessage", "").split())
                 if told:
@@ -590,6 +594,39 @@ class AttackTests(unittest.TestCase):
                     )
                 else:
                     self.assertNotIn("systemMessage", out)
+
+    def test_an_old_gadfly_uv_keeps_is_upgraded_at_the_start(self):
+        """Mirza, on being told to upgrade it himself: "this is your job". A Gadfly that uv keeps
+        and is older than the floor is upgraded at the session's start and said, and the session
+        reads; one whose upgrade fails is told with why, and nothing is read."""
+        import reader
+
+        os.environ.update(env(FRAME_LOOP_READER="reader:run"))
+        start = {"hook_event_name": "SessionStart", "source": "startup", "session_id": "g", "cwd": str(REPO)}
+        floor = ".".join(map(str, reader.GADFLY_FLOOR))
+        for code, versions, told in (
+            (0, ["gadfly 0.12.4", f"gadfly {floor}"], f"frame-loop · Gadfly upgraded to {floor} or later"),
+            (1, ["gadfly 0.12.4", "gadfly 0.12.4"], "frame-loop ■ not read: Gadfly 0.12.4 is older"),
+        ):
+            ran = []
+
+            def run(command, seconds, *, what, ran=ran, versions=versions, code=code, **given):
+                ran.append(command)
+                if "--version" in command:
+                    return subprocess.CompletedProcess(command, 0, versions.pop(0), "")
+                return subprocess.CompletedProcess(command, code, "", "error: no network")
+
+            with (
+                self.subTest(code),
+                unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)),
+                unittest.mock.patch.object(reader, "_uv_owns", return_value="uv"),
+                unittest.mock.patch.object(reader, "bounded", side_effect=run),
+            ):
+                out = hook.answer(start) or {}
+            self.assertIn(["uv", "tool", "install", f"midwife>={floor}"], ran)
+            self.assertTrue(out["systemMessage"].startswith(told), out["systemMessage"])
+            if code:
+                self.assertIn("upgrading it failed: error: no network", out["systemMessage"])
 
     def test_the_briefing_says_what_makes_a_line_a_rule(self):
         """An agent's report: asked to compile a project's rules, it offered the author's

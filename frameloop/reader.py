@@ -1,4 +1,4 @@
-"""The live reader: runs a frame through the gadfly CLI (0.13.1 or later) and returns
+"""The live reader: runs a frame through the gadfly CLI (0.13.2 or later) and returns
 Gadfly's JSON. Each call gets its own fresh folder under FRAME_LOOP_WORK; nothing is
 deleted. Gadfly reserves the calls itself (--calls auto, 9aa8a4a); only the per-call
 output cap binds."""
@@ -20,9 +20,10 @@ from typing import Any
 from procs import STOPPED, TIMED_OUT, bounded
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
-GADFLY_FLOOR = (0, 13, 1)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
+GADFLY_FLOOR = (0, 13, 2)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
 # 0.13.1: UTF-8 output on Windows, which the hooks read as UTF-8
-MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.13.1', or set GADFLY_CHECKOUT to a checkout"
+# 0.13.2: settling with calls at once sends a trial only the calls that could fix its level
+MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.13.2', or set GADFLY_CHECKOUT to a checkout"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 TOKEN_CAP = 150000  # a reading's tokens, what its Gadfly runs have spent together
 READING = "reading"  # the questions of one reading share a cap; each completion frame has its own
@@ -211,6 +212,43 @@ def too_old() -> str | None:
         return None
     need = ".".join(map(str, GADFLY_FLOOR))
     return f"Gadfly {'.'.join(map(str, version))} is older than frame-loop needs ({need}): uv tool upgrade midwife"
+
+
+def _uv_owns(command: str) -> str | None:
+    """uv, when the installed `gadfly` is one `uv tool install` keeps: only that one is upgraded."""
+    uv = shutil.which("uv")
+    found = shutil.which(command) or command
+    if not uv:
+        return None
+    try:
+        tools = bounded([uv, "tool", "dir"], 10, what="uv tool dir").stdout.strip()
+    except OSError:
+        return None
+    if not tools:
+        return None
+    return uv if Path(tools).resolve() in Path(found).resolve().parents else None
+
+
+def brought_up() -> tuple[str | None, str | None]:
+    """Keep the installed Gadfly at the floor (Mirza: "this is your job"): a `gadfly` that uv
+    keeps and is too old is upgraded, within the hook's time. Returns what was done, for the
+    author to see, and what still keeps a reading from running, if anything."""
+    old = too_old()
+    if old is None:
+        return None, None
+    how = launcher()
+    uv = _uv_owns(how[0][0]) if how else None
+    if uv is None:  # installed some other way: not ours to change
+        return None, old
+    need = ".".join(map(str, GADFLY_FLOOR))
+    try:
+        done = bounded([uv, "tool", "install", f"midwife>={need}"], 25, what="uv tool install")
+    except OSError as e:
+        done = subprocess.CompletedProcess([], 1, "", str(e))
+    if done.returncode == 0 and too_old() is None:
+        return f"Gadfly upgraded to {need} or later, as frame-loop needs", None
+    why = (done.stderr or "").strip().splitlines()[-1:] or ["it did not take"]
+    return None, f"{old} (upgrading it failed: {why[0][:200]})"
 
 
 def _gadfly(args: list[str], watch: Path | None = None, group: str = READING) -> subprocess.CompletedProcess:

@@ -26,7 +26,7 @@ def _router_answers() -> bool:
 def missing() -> list[str]:
     """Each thing a first reading needs that is not here, with what to do about it."""
     said = []
-    gadfly = reader.MISSING if reader.launcher() is None else reader.too_old()
+    gadfly = reader.MISSING if reader.launcher() is None else reader.brought_up()[1]
     if gadfly:
         said.append(gadfly)
     if not shutil.which("git"):

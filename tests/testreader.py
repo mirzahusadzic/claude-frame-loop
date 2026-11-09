@@ -67,6 +67,21 @@ class LauncherTest(unittest.TestCase):
         with mock.patch.object(reader, "launcher", return_value=(["no-such-gadfly-here"], None)):
             self.assertIsNone(reader.too_old())
 
+    def test_only_a_gadfly_uv_keeps_is_ours_to_upgrade(self):
+        """A pip install or a copy elsewhere is the user's own: only uv's tool folder is upgraded."""
+        tools = Path(tempfile.mkdtemp(prefix="frame-loop-uv-")).resolve()
+        (tools / "midwife" / "bin").mkdir(parents=True)
+        kept, elsewhere = tools / "midwife" / "bin" / "gadfly", tools.parent / "gadfly"
+        said = subprocess.CompletedProcess([], 0, f"{tools}\n", "")
+        with (
+            mock.patch.object(reader.shutil, "which", side_effect=lambda c: "/bin/uv" if c == "uv" else None),
+            mock.patch.object(reader, "bounded", return_value=said),
+        ):
+            self.assertEqual(reader._uv_owns(str(kept)), "/bin/uv")
+            self.assertIsNone(reader._uv_owns(str(elsewhere)))
+        with mock.patch.object(reader.shutil, "which", return_value=None):
+            self.assertIsNone(reader._uv_owns(str(kept)))
+
     def test_not_installed_is_never_a_pass(self):
         with (
             self.nowhere(),
@@ -77,7 +92,7 @@ class LauncherTest(unittest.TestCase):
         ran.assert_not_called()
         result = __import__("json").loads(done.stdout)
         self.assertTrue(gate._failed(result))
-        self.assertIn("uv tool install 'midwife>=0.13.1'", gate._failure(result))
+        self.assertIn("uv tool install 'midwife>=0.13.2'", gate._failure(result))
 
 
 class TokenCapTest(unittest.TestCase):

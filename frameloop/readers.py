@@ -10,7 +10,7 @@ from typing import Any
 # Readers by the material's tier. The tier follows the repository's visibility,
 # as in reviews: private code never reaches a training tier. "private" (Muse
 # non-training) and "ultra-spark-private" need Gadfly 0.12.0 or later: 0.11.0's
-# name-based checks refused both. frame-loop itself needs 0.13.1 (reader.GADFLY_FLOOR).
+# name-based checks refused both. frame-loop itself needs 0.13.2 (reader.GADFLY_FLOOR).
 READERS: dict[str, dict[str, Any]] = {
     "private": {"kind": "unified", "model": "openrouter/meta/muse-spark-1.3", "reasoning": "low"},
     "ultra-spark-private": {

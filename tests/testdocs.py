@@ -76,7 +76,7 @@ class DocsTests(unittest.TestCase):
                 "Node.js 20",
                 "Codex CLI",
                 "Python 3.13",
-                "uv tool install 'midwife>=0.13.1'",
+                "uv tool install 'midwife>=0.13.2'",
                 "OpenRouter API key",
             )
             if name == "README.md":  # the router's coupling to Codex, said up front as a feature

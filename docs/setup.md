@@ -10,7 +10,7 @@ Installation, the reader's path through the router, and every setting. The [READ
 | --- | --- | --- |
 | Claude Code, tested with 2.1.319 | the hooks, the band and `/frame-loop` (a hooks module), and the writer through `claude -p` | `claude --version` |
 | git; on Windows, Git for Windows, whose Git Bash Claude Code runs the hooks with | the turn snapshots, and the hooks' shell on Windows | `git --version` |
-| [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.13.1 or later, on Python 3.13: `uv tool install 'midwife>=0.13.1'` | the reader's trials and fixed rules; its Python also runs the hooks | `gadfly --version` |
+| [Gadfly](https://github.com/mirzahusadzic/gadfly) 0.13.2 or later, on Python 3.13: `uv tool install 'midwife>=0.13.2'` | the reader's trials and fixed rules; its Python also runs the hooks | `gadfly --version` |
 | [uv](https://docs.astral.sh/uv/) | installing Gadfly with its own Python 3.13, or running it from a checkout | `uv --version` |
 | the [Unified Model Router](https://github.com/mirzahusadzic/unified-model-router), with Node.js 20 or later, the Codex CLI it was tested with (0.166.0) and an OpenRouter API key | the reader's model calls | `node install.mjs --verify`, in the router's checkout |
 | `gh`, optional | confirming a repository public | `gh repo view --json visibility` |
@@ -32,16 +32,16 @@ The reader comes from a model family other than the Claude whose work it reads, 
 
 ### Install
 
-The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. Its installer sets up the Codex CLI's configuration, asking before it merges into an existing one and backing it up, and adds a startup service that runs the router; the router's README has the details. The hooks run the `gadfly` command that `uv tool install` puts on the path, with its own Python 3.13, and run themselves on that same Python, found beside the `gadfly` command, so one install covers both; without a Python 3.13, the session says so in one line; `pip install 'midwife>=0.13.1'` does the same on a Python 3.13 you already have:
+The reader's calls go through the Unified Model Router, which serves both Muse tiers from one OpenRouter API key, asked for on its first install. Its installer sets up the Codex CLI's configuration, asking before it merges into an existing one and backing it up, and adds a startup service that runs the router; the router's README has the details. The hooks run the `gadfly` command that `uv tool install` puts on the path, with its own Python 3.13, and run themselves on that same Python, found beside the `gadfly` command, so one install covers both; without a Python 3.13, the session says so in one line; `pip install 'midwife>=0.13.2'` does the same on a Python 3.13 you already have:
 
 ```sh
 npm install -g @openai/codex@0.166.0
 git clone https://github.com/mirzahusadzic/unified-model-router.git
 cd unified-model-router && node install.mjs && node install.mjs --verify && cd ..
-uv tool install 'midwife>=0.13.1'
+uv tool install 'midwife>=0.13.2'
 ```
 
-A session's start says when the installed Gadfly is missing or older than frame-loop needs, with the line to run; `uv tool upgrade midwife` upgrades it.
+A session's start says when Gadfly is missing, with the line to run. An installed Gadfly older than frame-loop needs is upgraded there, and by `/frame-loop check`, when `uv tool install` keeps it; one installed another way, or an upgrade that fails, is said with the line to run.
 
 Then install the plugin at the prompt of a Claude Code session, for every project (user) or this one (project):
 
@@ -76,7 +76,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_TRAINING_OK=1` | off | allows a tier that trains on its inputs, for the project |
 | `FRAME_LOOP_MODE` | `shadow` | `shadow` reports; `enforce` also asks before acts and sends Claude back on a ▲ at a turn's end |
 | `FRAME_LOOP_EFFORT` | `low` on Muse | the reader's effort floor, `low` to `max`; risky changes raise it to `high`, never below the floor |
-| `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that; a rules reading stops asking once two answers agree, which saves calls only when fewer than its six go out at once |
+| `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that; a rules reading stops asking once two answers agree, and asks a third only when the first two differ |
 | `FRAME_LOOP_OUTPUT_TOKENS` | `16000` | the cap on each reader answer |
 | `FRAME_LOOP_READ_TIMEOUT` | `540` | seconds a reading's Gadfly run may take before it is stopped and the change is not read |
 | `FRAME_LOOP_READ_TOKENS` | `150000` | the tokens a reading may spend, for each requirement in a completion, before it is stopped and the change is not read; `0` for no cap. It is checked as answers land, so calls in flight can go over it |
