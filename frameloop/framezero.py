@@ -397,5 +397,6 @@ def with_semantic(frame0: dict[str, Any], paths: list[str]) -> dict[str, Any]:
         return frame0
     return {
         **frame0,
-        "principles": list(frame0.get("principles") or []) + [{"id": r["id"], "text": rule_words(r)} for r in due],
+        "principles": list(frame0.get("principles") or [])
+        + [{"id": r["id"], "text": rule_words(r), "indexed": True} for r in due],
     }

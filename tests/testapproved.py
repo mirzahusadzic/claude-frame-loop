@@ -168,6 +168,20 @@ class PrinciplesAndTriggersTests(Approved):
         joined = {**FRAME, "principles": [{"id": "R1", "text": "A rule of the guide.", "indexed": True}]}
         self.assertEqual(framezero.unapproved(joined), [])
 
+    def test_a_scoped_rule_a_change_brings_in_is_left_for_later_too(self):
+        """Seen in a real session: a change to the docs joined the guide's scoped rules without
+        the index's mark, so "3 of its items are not in the words the author approved" rose and
+        the change was not read."""
+        self.answer([ONE, TWO])
+        rules = self.home / "rules.json"
+        scoped = {"id": "R8", "kind": "semantic", "accepted": True, "scope": ["docs/*"], "quote": ["Docs are brief."]}
+        rules.write_text(json.dumps({"source": {"file": "AGENTS.md"}, "rules": [scoped]}), encoding="utf-8")
+        os.environ["FRAME_LOOP_RULES"] = str(rules)
+        loaded = framezero.load_frame0()
+        read = framezero.with_semantic(loaded, ["docs/verdicts.md"])
+        self.assertIn("Docs are brief.", [p["text"] for p in read["principles"]])
+        self.assertEqual(framezero.unapproved(read), [])
+
     def test_a_frames_file_cannot_set_the_loops_own_marks(self):
         """Sparky's fifth review: a file saying `"node"` read as an unanswered frame, and one
         saying `"indexed"` went unapproved."""
