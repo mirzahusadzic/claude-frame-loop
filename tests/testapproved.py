@@ -14,6 +14,7 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "frameloop"))
 sys.path.insert(0, str(ROOT / "tests"))
+import config  # noqa: E402
 import framezero  # noqa: E402
 import gate  # noqa: E402
 import hook  # noqa: E402
@@ -167,6 +168,20 @@ class PrinciplesAndTriggersTests(Approved):
         joined = {**FRAME, "principles": [{"id": "R1", "text": "A rule of the guide.", "indexed": True}]}
         self.assertEqual(framezero.unapproved(joined), [])
 
+    def test_a_frames_file_cannot_set_the_loops_own_marks(self):
+        """Sparky's fifth review: a file saying `"node"` read as an unanswered frame, and one
+        saying `"indexed"` went unapproved."""
+        self.answer([ONE, TWO])
+        written = {
+            **FRAME,
+            "node": "gone",
+            "principles": [{"id": "P1", "text": "An unapproved rule.", "indexed": True}],
+        }
+        self.frame.write_text(json.dumps(written), encoding="utf-8")
+        loaded = framezero.load_frame0()
+        self.assertNotIn("node", loaded)
+        self.assertEqual(framezero.unapproved(loaded), ["An unapproved rule."])
+
     def test_a_rule_joined_by_load_frame0_says_it_is_from_the_index(self):
         rules = self.home / "rules.json"
         kept = {"id": "R1", "kind": "principle", "quote": ["A rule."], "scope": ["*"], "accepted": True}
@@ -262,6 +277,27 @@ class WriteTests(Approved):
     def test_a_write_with_no_answer_needs_the_author(self):
         self.assertEqual(self.act(), ("changed frame 0", True))
 
+    def test_a_node_written_always_needs_the_author(self):
+        """Sparky's fifth review: a node holds a scope and promises no picker has shown, so its
+        words matching says nothing of them."""
+        node = self.home / "tree" / "greeter.json"
+        node.parent.mkdir()
+        node.write_text(json.dumps(FRAME), encoding="utf-8")
+        self.answer([ONE, TWO], frame="greeter")
+        said = lines.act_words({"event": "config", "path": str(node), "at": node.stat().st_mtime})
+        self.assertEqual(said[:2], ("changed the tree", True))
+
+    def test_a_link_where_the_record_is_kept_is_still_the_record(self):
+        """Sparky's fifth review: a write through a link there resolved elsewhere, and went unseen."""
+        outside = self.project.parent / f"outside-{self.project.name}.json"
+        outside.write_text("{}", encoding="utf-8")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        record = self.home / "approved.json"
+        record.symlink_to(outside)
+        self.assertEqual(lines._authors_own(str(record)), "your approvals")
+        os.environ["FRAME_LOOP_PLUGIN"] = "1"
+        self.assertTrue(config.touches_config(str(record)))
+
     def test_a_write_to_the_record_of_approvals_needs_the_author(self):
         """Claude writing the approval itself would be its word standing in for the author's."""
         self.answer([ONE, TWO])
@@ -291,6 +327,14 @@ class EnforceWriteTests(Approved):
     def test_an_edit_that_leaves_the_words_approved_asks_nothing(self):
         self.answer([ONE, "Over the limit it stops."], [TWO])
         self.assertIsNone(self.write("Edit", old_string=TWO, new_string="Over the limit it stops.", replace_all=True))
+
+    def test_a_node_still_asks(self):
+        """Sparky's fifth review: a node's scope changed under words approved, and nothing asked."""
+        node = self.home / "tree" / "greeter.json"
+        node.parent.mkdir()
+        self.answer([ONE, TWO], frame="greeter")
+        self.frame = node
+        self.assertEqual(self.write(content=json.dumps(FRAME)), "ask")
 
     def test_other_words_still_ask(self):
         self.answer([ONE, TWO])

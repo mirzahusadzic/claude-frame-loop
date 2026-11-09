@@ -181,12 +181,14 @@ AUTHORS = (
 
 def _authors_own(path: str) -> str | None:
     """Which of the files that change only with the author this is, in words, or None."""
-    here = Path(path).resolve()
+    named = Path(path)
+    here = [named.resolve(), named.parent.resolve() / named.name]  # a link there is still that file
     home = Path(os.environ.get("CLAUDE_PROJECT_DIR") or state.CWD or os.getcwd()) / ".frame-loop"
     for setting, name, words in AUTHORS:
         places = [home / name] + ([Path(os.environ[setting])] if setting and os.environ.get(setting) else [])
-        if any(here == q or q in here.parents for q in (x.resolve() for x in places)):
-            return words
+        for q in (x.parent.resolve() / x.name for x in places):
+            if any(h == q or q in h.parents for h in here):
+                return words
     return None
 
 
@@ -194,9 +196,7 @@ def _needs_the_author(path: str, own: str | None) -> bool:
     """A write to what is the author's needs them, unless it holds only words they approved."""
     if own == "frame 0":
         return not framezero.file_in_approved_words(path, framezero.FRAME_0)
-    if own == "the tree":
-        return not framezero.file_in_approved_words(path, Path(path).stem)
-    return own is not None
+    return own is not None  # a node holds more than its words, a scope and promises, which no picker has shown
 
 
 def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
@@ -375,7 +375,8 @@ def _tell(
     """Two lines that fit a laptop: the verdict, then the reader, effort, time, tokens.
     The author reads one shorter line (`_short`); these two are the details."""
     refused = (result.get("reason") or "").startswith("not read") and not result.get("scope")
-    state.LIVE["decision"] = gate.BLOCK if refused else result["decision"]  # ■ in the band, as under the reply
+    # ■ in the band, as under the reply; a change outside its scope leads with a ▲, read or not.
+    state.LIVE["decision"] = gate.RISE if result.get("scope") else gate.BLOCK if refused else result["decision"]
     alone = result["decision"] == gate.UNSETTLED  # no line for the author, and no mark in the band
     if alone:
         state.LIVE["unsettled_why"] = _unsettled_words(result.get("reason") or "")

@@ -16,7 +16,7 @@ The change is put into plain words first (with labels on); then two questions ru
 
 ### Outcomes
 
-A read that fits, finds nothing to read or does not settle shows nothing once it ends; the record keeps it. A read also counts as not settled when the change fits but does not rest on the requirement: a doubt, not a mismatch. When a read does not settle, Claude gets how the answers split and looks at the change itself: a real mismatch it tells you about, and either way the work does not count as checked. A ▲ or a read that does not settle starts a turn for Claude, once you are not typing and it is not working; it corrects the work and never frame 0, and if the same read comes back after that, it is yours: "▲ needs you: Claude looked, and the reader still can't settle this". These lines stay:
+A read that fits, finds nothing to read or does not settle shows nothing once it ends; the record keeps it. A read also counts as not settled when the change fits but does not rest on the requirement: a doubt, not a mismatch. When a read does not settle, Claude gets how the answers split and looks at the change itself: a real mismatch it tells you about, and either way the work does not count as checked. A ▲ from a read, or a read that does not settle, starts a turn for Claude, once you are not typing and it is not working, unless the read was refused or frame 0 is not in the words you approved; it corrects the work and never frame 0, and if the same read comes back after that, it is yours: "▲ needs you: Claude looked, and the reader still can't settle this". These lines stay:
 
 | Line | Means | Do |
 | --- | --- | --- |
@@ -46,14 +46,14 @@ Acts the loop records. In shadow mode, the default, an act with no ▲ prints no
 | asked to push (or another act), did not run: denied, or the command failed | no |
 | changed something people see | no |
 | changed the loop's own files · tried to, did not go through | no |
-| changed frame 0 · the tree, in words you did not approve | yes |
-| changed frame 0 · the tree, in words you approved | no |
-| changed the rules · the switch · your approvals | yes |
+| changed frame 0, in words you did not approve | yes |
+| changed frame 0, in words you approved | no |
+| changed the tree · the rules · the switch · your approvals | yes |
 | AGENTS.md: 5 lines added, 2 lines removed | no |
 | deleted build/ · deleted untracked files · deleted files | yes |
 | touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 
-An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act, even beside other commands in one call. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled. In shadow mode that comparison is the report, so a command that only reads is no act; a command naming the record, the work folder or the loop's code, which the hashes do not settle, is kept in the record alone. Enforce mode has to ask before the call, so it goes by the command's text and may ask about a script that only reads.
+An act counts when a command runs it: in a chain or a pipeline, behind `sudo`, `env` or `xargs`, inside `$(…)`, or as the argument of `bash -c`, `sh -c` or `eval`; words in quotes, an `echo` line or a heredoc's text count only when a shell or `xargs` runs them. Shell aliases, functions, scripts and commands assembled as they run (from variables or `printf` formats) are not followed. The loop's own files are everything in the project's `.frame-loop/`, a file not written yet included, the loop's code, and the project's Claude Code settings and hooks; a command that only reads them is not an act, even beside other commands in one call. A patch is read for the files it names, and the loop's own files are hashed before each shell call, so a call that changed them is reported after it, however it was spelled; a background process that writes them after its call has returned is not seen. In shadow mode that comparison is the report, so a command that only reads is no act; a command naming the record, the work folder or the loop's code, which the hashes do not settle, is kept in the record alone. Enforce mode has to ask before the call, so it goes by the command's text and may ask about a script that only reads.
 
 At the next prompt Claude receives the line, its reason and the acts, and explains a ▲. In shadow mode an act is recorded after it happened; `FRAME_LOOP_MODE=enforce` asks you before it.

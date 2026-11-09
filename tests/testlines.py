@@ -73,6 +73,17 @@ class AuthorsFilesTests(unittest.TestCase):
         self.assertEqual((words, needs), ("tried to change the loop's own files, did not go through", False))
 
 
+class OutsideItsScopeTests(unittest.TestCase):
+    def test_a_change_outside_its_scope_shows_a_rise_even_when_its_reading_failed(self):
+        """Sparky's fifth review: the band drew ■ beside "needs you: outside what you authorized"."""
+        state.LIVE.clear()
+        self.addCleanup(state.LIVE.clear)
+        result = {"decision": "block", "reason": "not read: the reader stopped", "scope": ["README.md"]}
+        lines._tell("turn", result, None, 0.0)
+        self.assertEqual(state.LIVE["decision"], "rise")
+        self.assertIn("▲", state.LIVE["shorts"][0])
+
+
 class ActObjectTests(unittest.TestCase):
     """The guide: an act's line is its symbol and what it acted on, no sentence; the exact
     command stays under details."""

@@ -255,6 +255,12 @@ def load_frame0() -> dict[str, Any]:
         else {"id": "unwritten", "unwritten": True, "asks": [], "principles": [], "triggers": []}
     )
     frame0.setdefault("id", "frame-0")  # Claude may save it without one (novice profile)
+    # Marks only the loop may set, never its file: which frame this is, and which rules are the index's.
+    frame0.pop("node", None)
+    for part in ("principles", "triggers"):
+        frame0[part] = [
+            {k: v for k, v in x.items() if k != "indexed"} if isinstance(x, dict) else x for x in frame0.get(part) or []
+        ]
     rules = project_rules()
     if rules:
         # Hand-written: a rule too malformed to read is left out, and the briefing names it.

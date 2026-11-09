@@ -134,17 +134,7 @@ def _claude_settings(parts: list[str]) -> bool:
     )
 
 
-def touches_config(path: str) -> bool:
-    """A path inside the loop's own configuration or record: frame 0, the log, the work
-    folder, the rules and the tree (written or not), the loop's code, or a project's
-    Claude Code settings and hooks."""
-    if "\n" in path or "\0" in path or len(path) > 1024:  # no file has such a name: not a path
-        return False
-    try:
-        p = Path(os.path.expanduser(path))
-        p = (p if p.is_absolute() else Path(state.CWD or os.getcwd()) / p).resolve()
-    except (OSError, ValueError):
-        return False
+def _is_protected(p: Path) -> bool:
     if FOLDS_CASE:
         if _claude_settings([x.casefold() for x in p.parts]):
             return True
@@ -153,9 +143,23 @@ def touches_config(path: str) -> bool:
             here == str(q).casefold() or here.startswith(str(q).casefold().rstrip(os.sep) + os.sep)
             for q in _protected()
         )
-    if _claude_settings(list(p.parts)):
-        return True
-    return any(p == q or q in p.parents for q in _protected())
+    return _claude_settings(list(p.parts)) or any(p == q or q in p.parents for q in _protected())
+
+
+def touches_config(path: str) -> bool:
+    """A path inside the loop's own configuration or record: frame 0, the log, the work
+    folder, the rules and the tree (written or not), the loop's code, or a project's
+    Claude Code settings and hooks."""
+    if "\n" in path or "\0" in path or len(path) > 1024:  # no file has such a name: not a path
+        return False
+    try:
+        named = Path(os.path.expanduser(path))
+        named = named if named.is_absolute() else Path(state.CWD or os.getcwd()) / named
+        p = named.resolve()
+    except (OSError, ValueError):
+        return False
+    # The path as named as well as what it resolves to: a link there is still that file.
+    return any(_is_protected(x) for x in (p, named.parent.resolve() / named.name))
 
 
 def _tokens(part: str) -> list[str]:

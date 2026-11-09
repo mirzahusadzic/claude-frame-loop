@@ -577,9 +577,8 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
 
 
 def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str, Any]) -> bool:
-    """Whether a write leaves frame 0 or a node holding what the author approved, and only that."""
-    own = _authors_own(path)
-    if own not in ("frame 0", "the tree"):
+    """Whether a write leaves frame 0 holding what the author approved, and only that."""
+    if _authors_own(path) != "frame 0":  # a node holds a scope and promises no picker has shown
         return False
     if tool == "Write":
         text = tool_input.get("content")
@@ -592,8 +591,7 @@ def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str,
         text = held.replace(old, new) if tool_input.get("replace_all") else held.replace(old, new, 1)
     else:
         return False
-    frame = framezero.FRAME_0 if own == "frame 0" else Path(path).stem
-    return isinstance(text, str) and framezero.text_in_approved_words(text, frame)
+    return isinstance(text, str) and framezero.text_in_approved_words(text, framezero.FRAME_0)
 
 
 def _loop_files_at(event: dict[str, Any]) -> Path:
