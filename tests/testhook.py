@@ -1231,7 +1231,7 @@ class LineTests(unittest.TestCase):
             first.startswith(lines.for_user("frame-loop · plan · rise: names P1", framezero.load_frame0())), first
         )
         self.assertIn("No new dependency is added.", first)
-        self.assertNotIn("stage 2 confirms", first)
+        self.assertNotIn("both readings named it", first)
         self.assertTrue(second.startswith("  muse max ↑agent, uncalibrated ·"), second)
         self.assertIn("24 calls · 10k in · 30k out (29k reasoning)", second)
         for line in (first, second):
@@ -2304,7 +2304,7 @@ class CoreTests(unittest.TestCase):
 
     def test_each_reason_has_a_plain_sentence(self):
         cases = {
-            ("rise", "violation: names P1: stage 2 confirms whether it rests on it", None): "it may break your rule P1",
+            ("rise", "violation: names P1: both readings named it", None): "it may break your rule P1",
             ("rise", "frame 0 is not ready: frame 0 has no asks yet", None): "what this work is for isn't written yet",
             (
                 "rise",

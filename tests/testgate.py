@@ -58,7 +58,7 @@ class WhichAskTests(unittest.TestCase):
 
     def test_a_split_on_the_rules_says_how_the_answers_split(self):
         self.assertEqual(
-            gate.violation_stage_one(result("none", "P1", split={"none": 4, "P1": 2})),
+            gate.violation(result("none", "P1", split={"none": 4, "P1": 2})),
             (gate.UNSETTLED, "not settled (baseline none, repeat P1; answers none 4, P1 2)"),
         )
 
@@ -91,20 +91,21 @@ class WhichAskTests(unittest.TestCase):
 class ViolationTests(unittest.TestCase):
     def test_two_readings_of_none_pass(self):
         """A step that breaks no rule would rise at every turn."""
-        self.assertEqual(gate.violation_stage_one(result("none", "none"))[0], gate.PASS)
+        self.assertEqual(gate.violation(result("none", "none"))[0], gate.PASS)
 
-    def test_two_readings_of_one_rule_go_to_stage_two(self):
-        """A named rule read twice would pass, or rise without saying which rule stage 2 must confirm."""
+    def test_two_readings_of_one_rule_rise_and_say_so(self):
+        """Two readings naming a rule are the whole finding: no later stage confirms it,
+        and the reason must not promise one."""
         self.assertEqual(
-            gate.violation_stage_one(result("P1", "P1")),
-            (gate.RISE, "names P1: stage 2 confirms whether it rests on it"),
+            gate.violation(result("P1", "P1")),
+            (gate.RISE, "names P1: both readings named it"),
         )
 
     def test_two_readings_that_name_no_rule_are_not_a_rule_broken(self):
         """Seen by running the hook: both readings answering "unclear" told the author "it may
         break your rule unclear". Neither answer names a rule, so Claude looks at it alone."""
         for label in ("unclear", "other"):
-            decision, reason = gate.violation_stage_one(result(label, label))
+            decision, reason = gate.violation(result(label, label))
             self.assertEqual(decision, gate.UNSETTLED, label)
             self.assertIn(f"baseline {label}", reason)
             self.assertNotIn("names", reason)
@@ -112,17 +113,17 @@ class ViolationTests(unittest.TestCase):
     def test_a_split_reading_rises_as_not_settled(self):
         """A split between none and a rule would pass on the one reading of none."""
         self.assertEqual(
-            gate.violation_stage_one(result("none", "P1")),
+            gate.violation(result("none", "P1")),
             (gate.UNSETTLED, "not settled (baseline none, repeat P1)"),
         )
 
     def test_a_reading_with_no_findings_is_never_none(self):
         """A run that found nothing would read as two answers of none and pass; it is not read."""
-        self.assertEqual(gate.violation_stage_one({"exit": 0, "findings": []})[0], gate.BLOCK)
+        self.assertEqual(gate.violation({"exit": 0, "findings": []})[0], gate.BLOCK)
 
     def test_a_failed_rules_run_blocks(self):
         """A failed run read as two missing levels would rise as a rule, or worse, as none."""
-        self.assertEqual(gate.violation_stage_one({"exit": 2}), (gate.BLOCK, "not read: exit 2"))
+        self.assertEqual(gate.violation({"exit": 2}), (gate.BLOCK, "not read: exit 2"))
 
 
 class UndeclaredTests(unittest.TestCase):
@@ -156,5 +157,5 @@ class ReviewLowTests(unittest.TestCase):
 
     def test_no_answer_is_not_read(self):
         for levels in ({}, {"baseline": "R1"}, {"repeat": "none"}):
-            decision, reason = gate.violation_stage_one({"exit": 0, "findings": [{"levels": levels}]})
+            decision, reason = gate.violation({"exit": 0, "findings": [{"levels": levels}]})
             self.assertEqual((decision, reason), (gate.BLOCK, "not read: the reader gave no answer"), levels)

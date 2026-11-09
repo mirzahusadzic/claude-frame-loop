@@ -119,7 +119,7 @@ class TokenCapTest(unittest.TestCase):
         self.assertEqual(result["error"]["message"], "the reader reached its token cap of 100, so it was stopped")
         self.assertTrue(gate._failed(result))
         self.assertEqual(gate.which_ask(result, ["A1"])[0], gate.BLOCK)
-        self.assertEqual(gate.violation_stage_one(result)[0], gate.BLOCK)
+        self.assertEqual(gate.violation(result)[0], gate.BLOCK)
 
     def test_a_run_under_the_cap_is_left_alone(self):
         done = self.gadfly(50, sleep=1)
@@ -383,7 +383,7 @@ class FailedRunTests(unittest.TestCase):
         with mock.patch.object(reader, "_gadfly", lambda *a, **k: done):
             frame = {"name": "which-ask", "battery": {}}
             self.assertEqual(gate.which_ask(reader.run(frame), ["A1"])[0], gate.BLOCK)
-            self.assertEqual(gate.violation_stage_one(reader.run(frame, only=("baseline", "repeat")))[0], gate.BLOCK)
+            self.assertEqual(gate.violation(reader.run(frame, only=("baseline", "repeat")))[0], gate.BLOCK)
             self.assertIn("error", reader.walk(frame, []))
 
     def test_a_status_of_0_is_read(self):

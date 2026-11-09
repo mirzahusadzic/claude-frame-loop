@@ -73,7 +73,7 @@ def which_ask(result: dict[str, Any], declared: list[str]) -> tuple[str, str]:
     return PASS, f"carried on {baseline}"
 
 
-def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
+def violation(result: dict[str, Any]) -> tuple[str, str]:
     if _failed(result):
         return BLOCK, f"not read: {_failure(result)}"
     levels = _levels(result)
@@ -83,7 +83,7 @@ def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
     if baseline == repeat == "none":
         return PASS, "breaks no rule (baseline and repeat read none)"
     if baseline == repeat and baseline not in NO_RULE:
-        return RISE, f"names {baseline}: stage 2 confirms whether it rests on it"
+        return RISE, f"names {baseline}: both readings named it"
     return UNSETTLED, f"not settled (baseline {baseline}, repeat {repeat}{_said(result)})"
 
 

@@ -192,6 +192,8 @@ class PlainTests(unittest.TestCase):
         self.assertEqual(self.plain("obligations: owed O1 not met"), "a check you owe is unmet")
 
     def test_a_rules_reading_that_names_a_rule_says_which(self):
+        self.assertEqual(self.plain("violation: names P1: both readings named it"), "it may break your rule P1")
+        # an older record holds the reason as it was
         self.assertEqual(self.plain("violation: names P1: stage 2 confirms"), "it may break your rule P1")
 
     def test_a_fit_read_as_another_purpose_names_it_in_words(self):

@@ -88,7 +88,7 @@ def read_step(
         _live_step("does it break any of your rules?", 1, 1, "rules")
         broke = run(at(frames.violation(frame0, step, tier)), only=("baseline", "repeat"))
         _ran(broke)
-        decision, reason = gate.violation_stage_one(broke)
+        decision, reason = gate.violation(broke)
         if decision == gate.PASS and fit_read != "done":
             return {"decision": gate.UNSETTLED, "reason": NOT_DONE, "usage": _spent(broke)}
         return {"decision": decision, "reason": f"violation: {reason}", "fit": FIT_READ, "usage": _spent(broke)}
@@ -145,7 +145,7 @@ def read_step(
     _ran({"made": (asked.get("made") or 0) + (broke.get("made") or 0)} if isinstance(asked.get("made"), int) else asked)
     decision, reason = gate.which_ask(asked, declared)
     if decision == gate.UNSETTLED:  # a firm finding or a failed question beside it is not kept from the author
-        rules, why = gate.violation_stage_one(broke)
+        rules, why = gate.violation(broke)
         if rules in (gate.RISE, gate.BLOCK):
             return {"decision": rules, "reason": f"violation: {why}", "usage": _spent(asked, broke)}
         if rules == gate.UNSETTLED:  # Claude hears of both
@@ -153,7 +153,7 @@ def read_step(
     if decision != gate.PASS:
         return {"decision": decision, "reason": f"which-ask: {reason}", "usage": _spent(asked, broke), **whose}
     fit = reason
-    decision, reason = gate.violation_stage_one(broke)
+    decision, reason = gate.violation(broke)
     return {"decision": decision, "reason": f"violation: {reason}", "fit": fit, "usage": _spent(asked, broke)}
 
 

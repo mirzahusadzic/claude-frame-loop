@@ -120,13 +120,6 @@ class WhichAskTests(unittest.TestCase):
         some = frames.which_ask(FRAME0, step(serves=["A5"]), "anthropic")
         self.assertEqual(some["interventions"]["control"], everything)
 
-    def test_one_rule_leaves_no_duplicate_control_in_stage_two(self):
-        single = {**FRAME0, "principles": [FRAME0["principles"][0]], "triggers": []}
-        frame = frames.violation_confirm(single, step(), "P1", "anthropic")
-        self.assertNotIn("control", frame["interventions"])
-        several = frames.violation_confirm(FRAME0, step(), "P1", "anthropic")
-        self.assertIn("control", several["interventions"])
-
     def test_several_declared_asks_are_read_each_alone(self):
         frame = frames.which_ask(FRAME0, step(["A3", "A4"]), "anthropic")
         self.assertTrue(frame["interventions"]["eachAnchor"])
@@ -134,31 +127,13 @@ class WhichAskTests(unittest.TestCase):
 
 
 class ViolationTests(unittest.TestCase):
-    def test_stage_one_reads_the_rules_with_their_ids_from_the_facts_alone(self):
+    def test_it_reads_the_rules_with_their_ids_from_the_facts_alone(self):
         frame = frames.violation(FRAME0, step(), "anthropic")
         spans = frame["body"]["spans"]
         self.assertEqual({s["kind"] for s in spans}, {"principle", "trigger"})
         self.assertTrue(all(s["text"].startswith(s["id"] + ": ") for s in spans))
         self.assertIn("none", frame["observe"]["labels"])
         self.assertNotIn("A5", frame["inputs"][0]["text"])
-
-    def test_stage_two_anchors_exactly_the_named_rule(self):
-        frame = frames.violation_confirm(FRAME0, step(), "P5", "anthropic")
-        self.assertEqual(frame["anchors"], ["P5"])
-        self.assertNotIn("P5", frame["allowed"]["ablation"])
-        self.assertIn("none", frame["allowed"]["ablation"])
-        self.assertEqual(len(frame["interventions"]["control"]), 12)
-
-    def test_stage_two_is_built_only_when_baseline_and_repeat_name_the_same_rule(self):
-        self.assertEqual(frames.stage_two_anchor(FRAME0, "P5", "P5"), "P5")
-        self.assertIsNone(frames.stage_two_anchor(FRAME0, "P5", "P4"))
-        self.assertIsNone(frames.stage_two_anchor(FRAME0, "P5", "none"))
-        self.assertIsNone(frames.stage_two_anchor(FRAME0, "none", "none"))
-        self.assertIsNone(frames.stage_two_anchor(FRAME0, "other", "other"))
-
-    def test_stage_two_refuses_a_name_that_is_not_a_rule(self):
-        with self.assertRaises(frames.FrameError):
-            frames.violation_confirm(FRAME0, step(), "A1", "anthropic")
 
 
 STEPS = [

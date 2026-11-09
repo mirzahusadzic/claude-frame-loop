@@ -10,9 +10,8 @@ Design 2 follows calibrations 1 and 2, which raised every fitting step:
   specific frames:
   - which-ask: "Which ask does this step serve?" It passes when the answer is
     carried and its baseline names a declared ask.
-  - violation: "Which principle or trigger does it break?" It passes when the
-    baseline is none and firm. A named one rises, and its carriage shows that the
-    finding rests on it.
+  - violation: "Which principle or trigger does it break?" It passes when both
+    readings say none, and rises when both name the same rule.
 
 calibrations 1 and 2 were built by readers.py, which stays as it was so their frames
 can be rebuilt.
@@ -267,8 +266,8 @@ def _rules(frame0: dict[str, Any]) -> tuple[list[dict[str, str]], list[str], lis
 
 
 def violation(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[str, Any]:
-    """Stage 1, every step: the reading alone. Run it with --only baseline --only repeat.
-    It passes when both read none, and a split is not settled. Its anchor is
+    """Every step, read twice: run it with --only baseline --only repeat. It passes when
+    both read none, rises when both name a rule, and a split is not settled. Its anchor is
     declared only so the frame parses; a "none" has no span to cut. The reader's
     sensitivity to a real break is what the planted calibration steps prove, once per
     frame 0 and reader."""
@@ -285,38 +284,6 @@ def violation(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
         VIOLATION_INSTRUCTION,
         {"repeat": True, "ablation": True},
         {"ablation": [label for label in labels if label != rules[0]]},
-        tier,
-    )
-
-
-def stage_two_anchor(frame0: dict[str, Any], baseline: str, repeat: str) -> str | None:
-    """The rule stage 2 tests, or None. It is built only when stage 1's baseline and
-    repeat name the same rule, so nobody chooses which one to test. A split, or two
-    different ids, is not settled and gets no stage 2."""
-    _, rules, _ = _rules(frame0)
-    return baseline if baseline == repeat and baseline in rules else None
-
-
-def violation_confirm(frame0: dict[str, Any], step: dict[str, Any], named: str, tier: str) -> dict[str, Any]:
-    """Stage 2, only when stage 1's baseline names a rule: the anchor is exactly that
-    id, by rule, never chosen by hand. Carried means the finding rests on that rule's
-    text, a confirmed break. Cooled means the reader names it even with it cut, which
-    is unconfirmed. Both rise to the human."""
-    body, rules, labels = _rules(frame0)
-    if named not in rules:
-        raise FrameError(f"stage 1 named {named!r}, which is not a rule of frame 0")
-    return _frame(
-        f"violation-confirm-{frame0['id']}-{step['id']}-{named}",
-        f"the step breaks {named} of frame 0",
-        f"decide whether the reader's finding that the step breaks {named} rests on {named}",
-        "a step breaks a rule only by what frame 0's rules state, never by the agent's account",
-        body,
-        [named],
-        step,
-        labels,
-        VIOLATION_INSTRUCTION,
-        {"ablation": True, **_sham(body, [named]), **({"control": rules} if len(rules) > 1 else {})},
-        {"ablation": [label for label in labels if label != named]},
         tier,
     )
 

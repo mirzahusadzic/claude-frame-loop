@@ -258,7 +258,7 @@ def _verdict(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         return "not read: not confirmed public, and the reader trains on its inputs"
     if result.get("where") and "looks like it holds a secret" in reason:
         return "not read: it looks like it holds a secret"
-    named = re.match(r"violation: names (\S+): stage 2", reason)
+    named = re.match(r"violation: names ([^\s:]+): ", reason)
     if named:
         return f"names {named.group(1)}"  # in its own words for the human (for_user)
     if reason.startswith("obligations: "):

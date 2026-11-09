@@ -32,8 +32,8 @@ def _gadfly(args, work):
     )
 
 
-def stage_one(frame, battery):
-    """Stage 1 reads baseline and repeat only: `gadfly run --only`, then `report`.
+def two_readings(frame, battery):
+    """The rules frame reads baseline and repeat only: `gadfly run --only`, then `report`.
     (`firm` has no --only, as this contract test found.)"""
     frame = {**frame, "battery": {"kind": NAMES[battery]}}
     work = ROOT / "tests/.work" / uuid.uuid4().hex
@@ -262,10 +262,10 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(result["category"], "coupled but misaligned")
         self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.UNSETTLED)
 
-    def test_stage_one_reads_baseline_and_repeat(self):
-        code, result = stage_one(frames.violation(FRAME0, STEP, "anthropic"), "Stuck")
+    def test_the_rules_frame_reads_baseline_and_repeat(self):
+        code, result = two_readings(frames.violation(FRAME0, STEP, "anthropic"), "Stuck")
         self.assertEqual(code, 0)
-        decision, reason = gate.violation_stage_one(result)
+        decision, reason = gate.violation(result)
         self.assertEqual(decision, gate.RISE, reason)  # the stuck reader names P1 twice
         self.assertIn("P1", reason)
 
@@ -318,7 +318,7 @@ class LiveReaderTests(unittest.TestCase):
 
     def test_reader_reports_the_calls_and_tokens_it_made(self):
         # the gate's line shows the readers' tokens. firm --json gives `usage` and
-        # `made` (Gadfly 2c09a1a); stage one's run/report do not, so its records are
+        # `made` (Gadfly 2c09a1a); the rules frame's run/report do not, so its records are
         # summed by name the same way.
         import reader
 
@@ -375,16 +375,16 @@ class LiveReaderTests(unittest.TestCase):
         frame["battery"] = {**frames.READERS["anthropic"], "kind": "fake-ideal"}
         self.assertNotIn("withheld", json.dumps(reader.run(frame)))  # a non-training reader may read it
 
-    def test_reader_runs_stage_one_as_run_then_report(self):
+    def test_reader_runs_the_rules_frame_as_run_then_report(self):
         import reader
 
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Stuck"
         frame = {**frames.violation(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-stuck"}}
         result = reader.run(frame, only=("baseline", "repeat"))
-        self.assertEqual(gate.violation_stage_one(result)[0], gate.RISE, result)
+        self.assertEqual(gate.violation(result)[0], gate.RISE, result)
         os.environ["FRAME_LOOP_PARALLEL"] = "3"
         result = reader.run(frame, only=("baseline", "repeat"))
-        self.assertEqual(gate.violation_stage_one(result)[0], gate.RISE, result)
+        self.assertEqual(gate.violation(result)[0], gate.RISE, result)
 
 
 class GateErrorTests(unittest.TestCase):
@@ -399,7 +399,7 @@ class GateErrorTests(unittest.TestCase):
             {"stopped": "StopRun"},
         ):
             self.assertEqual(gate.which_ask(result, ["A5"])[0], gate.BLOCK, result)
-            self.assertEqual(gate.violation_stage_one(result)[0], gate.BLOCK, result)
+            self.assertEqual(gate.violation(result)[0], gate.BLOCK, result)
 
 
 if __name__ == "__main__":
