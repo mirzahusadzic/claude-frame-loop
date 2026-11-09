@@ -4809,7 +4809,8 @@ class NotFirmTests(unittest.TestCase):
         deadline, done = time.time() + 20, {}
         while time.time() < deadline and done.get("state") != "done":
             time.sleep(0.2)
-            done = json.loads((live / f"{self.session}.json").read_text(encoding="utf-8"))
+            shown = live / f"{self.session}.json"  # the background read may not have started yet
+            done = json.loads(shown.read_text(encoding="utf-8")) if shown.is_file() else {}
         self.assertEqual(
             (done.get("decision"), done.get("lines"), done.get("detail")),
             ("unsettled", [], ["the reader couldn't settle which of your requirements this serves"]),

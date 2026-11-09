@@ -1,6 +1,7 @@
 """The snapshot a session runs as its plugin (scripts/snapshot.py): the checkout's files and
 no project state, in the same folder, removing only what an earlier snapshot put there."""
 
+import os
 import subprocess
 import sys
 import tempfile
@@ -37,7 +38,8 @@ class SnapshotTests(unittest.TestCase):
         said = snapshot.snapshot(self.source, self.target)
         self.assertEqual((self.target / "kept.py").read_text(encoding="utf-8"), "kept\n")
         self.assertEqual((self.target / "new file.py").read_text(encoding="utf-8"), "new\n")  # new, not yet committed
-        self.assertTrue((self.target / "hooks/run.sh").stat().st_mode & 0o100)  # still runs
+        if os.name != "nt":  # Windows keeps no execute bit
+            self.assertTrue((self.target / "hooks/run.sh").stat().st_mode & 0o100)  # still runs
         self.assertFalse((self.target / ".frame-loop").exists())
         self.assertFalse((self.target / ".claude").exists())
         self.assertIn("commit ", (self.target / "SNAPSHOT").read_text(encoding="utf-8"))

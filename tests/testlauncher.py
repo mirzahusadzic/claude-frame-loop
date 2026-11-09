@@ -26,6 +26,7 @@ def fake_python(path: Path, recent: bool, says: str) -> None:
     path.chmod(0o755)
 
 
+@unittest.skipIf(os.name == "nt", "Windows runs no script by its name")
 class FakePythonTests(unittest.TestCase):
     def test_a_path_holding_dash_c_is_no_version_check(self):
         """Seen: run from a checkout whose path held "-c" (.../my-claude/...), the fake python
