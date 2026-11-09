@@ -108,6 +108,8 @@ RELEASE_SWITCHES = {"-d", "--draft", "-p", "--prerelease", "--generate-notes", "
 def _no_flags(words: list[str], takes_value: Any) -> list[str]:
     found, i = [], 0
     while i < len(words):
+        if words[i] == "--":  # the end of the options: all that follows is named
+            return found + words[i + 1 :]
         if not words[i].startswith("-"):
             found.append(words[i])
         elif "=" not in words[i] and takes_value(words[i]):
@@ -129,13 +131,16 @@ def _named(command: str, *words: str, takes_value: Any = lambda _: False) -> lis
 
 
 def _named_everywhere(command: str, program: str) -> list[str]:
-    """What every simple command running `program` acts on, across a chain."""
+    """What every command that runs `program` acts on, across a chain: only a command the loop
+    reads as a delete, so `echo rm` is none, and never `find`'s placeholders."""
     found: list[str] = []
     for part in F._split(F.heredocs(command)[0]):
         said = F._words(part)
+        if f"{program} -" not in (F.outward(part) or ""):
+            continue
         for i, word in enumerate(said):
             if F.program(word) == program:
-                found += _no_flags(said[i + 1 :], lambda _: False)
+                found += [x for x in _no_flags(said[i + 1 :], lambda _: False) if x not in ("{}", "+", ";", "\\;")]
                 break
     return found
 
@@ -150,11 +155,10 @@ def _deleted(found: list[str]) -> str:
     held: dict[str, list[str]] = {}
     for path in found:
         held.setdefault(path.rstrip("/").rpartition("/")[0], []).append(path)
-    return _cut(
-        ", ".join(
-            paths[0] if len(paths) == 1 else f"{len(paths)} in {parent or '.'}/" for parent, paths in held.items()
-        )
+    named = ", ".join(
+        paths[0] if len(paths) == 1 else f"{len(paths)} in {parent or '.'}/" for parent, paths in held.items()
     )
+    return named if len(named) <= SHOWN else _cut(f"{len(found)} folders: {named}")  # the count survives the cut
 
 
 def _with_object(key: str, words: str, command: str) -> str:

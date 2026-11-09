@@ -109,6 +109,14 @@ class ActObjectTests(unittest.TestCase):
             ("cd x && rm -rf a b", "deleted a/, b/"),
             ("rm -rf a b c d", "deleted a/, b/ +2 more"),
             ("rm -rf a && rm -rf b", "deleted a/, b/"),
+            ("echo rm -rf x && rm -rf a", "deleted a/"),
+            ("find . -exec rm -rf {} +", "deleted a folder"),
+            ("rm -rf -- -scratch", "deleted -scratch/"),
+            ("rm -rf -- a", "deleted a/"),
+            (
+                "rm -rf " + " ".join(f"/{c * 25}/{c * 25}" for c in "abc"),
+                "deleted 3 folders: /" + "a" * 25 + "/" + "a" * 21 + "…",
+            ),
             (
                 "rm -rf .work/" + " .work/".join(c * 32 for c in "abc") + " && rm -rf tests/.work; ls",
                 "deleted 3 in .work/, tests/.work/",
