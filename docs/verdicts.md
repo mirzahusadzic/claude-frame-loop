@@ -47,10 +47,11 @@ Acts the loop records. In shadow mode, the default, an act with no ▲ prints no
 | changed something people see | no |
 | changed the loop's own files · tried to, did not go through | no |
 | changed frame 0, in words you did not approve | yes |
-| changed frame 0, in words you approved | no |
+| changed frame 0, in words you approved, with no scope or check of its own | no |
 | changed the tree · the rules · the switch · your approvals | yes |
 | AGENTS.md: 5 lines added, 2 lines removed | no |
 | deleted build/ · deleted untracked files · deleted files | yes |
+| deleted build/, may not have run: a chain whose call failed after it | yes |
 | touched a personal file | yes |
 | a guide change where some of your rules lost their wording | yes |
 

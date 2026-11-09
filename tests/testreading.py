@@ -345,7 +345,10 @@ class CompletionTests(Isolated):
         self.claim("S1", ["A1"])
         kept = record.step_diff("S1")
         kept.unlink()
-        kept.symlink_to(outside)
+        try:
+            kept.symlink_to(outside)
+        except OSError:
+            self.skipTest("this system makes no links here")
         testhook.SEEN.clear()
         text = self.complete()
         self.assertNotIn("THE-SECRET-FILE-CONTENT", json.dumps(testhook.SEEN))

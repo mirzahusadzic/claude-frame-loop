@@ -206,7 +206,10 @@ class PrinciplesAndTriggersTests(Approved):
         outside = self.project.parent / f"outside-{self.project.name}.json"
         outside.write_text(json.dumps({"id": "out", "asks": []}), encoding="utf-8")
         self.addCleanup(lambda: outside.unlink(missing_ok=True))
-        (tree / "out.json").symlink_to(outside)
+        try:
+            (tree / "out.json").symlink_to(outside)
+        except OSError:
+            self.skipTest("this system makes no links here")
         os.environ["FRAME_LOOP_TREE"] = str(tree)
         self.assertNotIn("out", framezero._tree_nodes(FRAME))
 
@@ -344,7 +347,10 @@ class WriteTests(Approved):
         outside.write_text("{}", encoding="utf-8")
         self.addCleanup(lambda: outside.unlink(missing_ok=True))
         record = self.home / "approved.json"
-        record.symlink_to(outside)
+        try:
+            record.symlink_to(outside)
+        except OSError:
+            self.skipTest("this system makes no links here")
         self.assertEqual(lines._authors_own(str(record)), "your approvals")
         os.environ["FRAME_LOOP_PLUGIN"] = "1"
         self.assertTrue(config.touches_config(str(record)))
