@@ -10,6 +10,7 @@ import hashlib
 import importlib
 import json
 import os
+import re
 import sys
 import time
 from typing import Any
@@ -470,6 +471,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     def kept(step_id: str) -> str | None:
         """A step's diff, from where the loop kept it and nowhere else: a log row cannot
         point the reading at another file, and a diff that is gone is no evidence."""
+        if not re.fullmatch(r"S\d+", step_id):  # the loop's own ids: a row cannot name a path
+            return None
         path = step_diff(step_id)
         return path.read_text(encoding="utf-8", errors="replace") if path.is_file() else None
 

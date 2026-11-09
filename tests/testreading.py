@@ -311,6 +311,20 @@ class CompletionTests(Isolated):
         _, read = self.asked(": frame-loop-read --complete --all")
         self.assertEqual(sorted(read), ["A1", "A2", "A3"])
 
+    def test_a_step_id_cannot_name_a_file_outside_the_steps(self):
+        """Sparky's fourth review: a record row with the id `../leak` sent that file to the reader."""
+        outside = record.step_diff("leak")
+        outside.parent.parent.mkdir(parents=True, exist_ok=True)
+        (outside.parent.parent / "leak.diff").write_text("+THE-SECRET-FILE-CONTENT\n", encoding="utf-8")
+        self.claim("S1", ["A1"])
+        row = {"session": self.session, "event": "step", "id": "../leak", "text": "a step", "claims": ["A1"]}
+        with self.log.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row) + "\n")
+        testhook.SEEN.clear()
+        text = self.complete()
+        self.assertNotIn("THE-SECRET-FILE-CONTENT", json.dumps(testhook.SEEN))
+        self.assertIn("not read", text)
+
     def test_with_no_step_there_is_nothing_to_read(self):
         """A session with no step would be read as every ask unfulfilled, or as done."""
         self.assertEqual(
