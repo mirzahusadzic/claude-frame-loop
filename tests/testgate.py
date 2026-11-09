@@ -98,6 +98,15 @@ class ViolationTests(unittest.TestCase):
             (gate.RISE, "names P1: stage 2 confirms whether it rests on it"),
         )
 
+    def test_two_readings_that_name_no_rule_are_not_a_rule_broken(self):
+        """Seen by running the hook: both readings answering "unclear" told the author "it may
+        break your rule unclear". Neither answer names a rule, so Claude looks at it alone."""
+        for label in ("unclear", "other"):
+            decision, reason = gate.violation_stage_one(result(label, label))
+            self.assertEqual(decision, gate.UNSETTLED, label)
+            self.assertIn(f"baseline {label}", reason)
+            self.assertNotIn("names", reason)
+
     def test_a_split_reading_rises_as_not_settled(self):
         """A split between none and a rule would pass on the one reading of none."""
         self.assertEqual(

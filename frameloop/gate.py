@@ -16,6 +16,7 @@ from typing import Any
 
 PASS, RISE, BLOCK, UNSETTLED = "pass", "rise", "block", "unsettled"
 DECLARED_SPLIT = "split between declared asks"
+NO_RULE = ("unclear", "other")  # labels of the rules question that name no rule of the author's
 
 
 def _levels(result: dict[str, Any]) -> dict[str, str]:
@@ -80,7 +81,7 @@ def violation_stage_one(result: dict[str, Any]) -> tuple[str, str]:
         return BLOCK, "not read: the reader gave no answer"
     if baseline == repeat == "none":
         return PASS, "breaks no rule (baseline and repeat read none)"
-    if baseline == repeat:
+    if baseline == repeat and baseline not in NO_RULE:
         return RISE, f"names {baseline}: stage 2 confirms whether it rests on it"
     return UNSETTLED, f"not settled (baseline {baseline}, repeat {repeat}{_said(result)})"
 
