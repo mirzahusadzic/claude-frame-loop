@@ -174,10 +174,10 @@ def _read(
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if not step["summary"].strip():  # a plan of its declaration alone: nothing is left to read
         return {"decision": gate.BLOCK, "reason": "not read: nothing to read past the declaration"}, tier, tier_note
-    if tier is None:
-        return {"decision": gate.RISE, "reason": tier_note}, tier, tier_note
+    if tier is None:  # refused before anything is sent: its line says so, as any refusal's does
+        return {"decision": gate.RISE, "reason": f"not read: {tier_note}"}, tier, tier_note
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
-        return {"decision": gate.RISE, "reason": "no reader configured: not read"}, tier, tier_note
+        return {"decision": gate.RISE, "reason": "not read: no reader configured"}, tier, tier_note
     state.LIVE["what"] = "checking " + {
         "the turn's change": "the change",
         "a plan": "Claude's plan",

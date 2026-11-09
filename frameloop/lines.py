@@ -240,6 +240,8 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         return by_question[question]
     if reason.startswith("frame 0 is not ready"):
         return "what this work is for isn't written yet"
+    if "has not allowed it here" in reason:  # the setting's name stays in the details
+        return "not read: this reader trains on what it reads, and this project hasn't allowed that"
     if result.get("decision") == gate.BLOCK or reason.startswith("not read"):
         return _verdict(result, frame0)
     if reason.startswith("obligations: "):

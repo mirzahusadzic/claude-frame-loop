@@ -4782,6 +4782,32 @@ class NotFirmTests(unittest.TestCase):
         self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
 
 
+class RefusedLineTests(unittest.TestCase):
+    """Seen by running the hook: a reader not allowed showed "▲ needs you: reader tier
+    contributor trains on its inputs ... (FRAME_LOOP_TRAINING_OK)", while Privacy promises a
+    refused reading says "not read", and the author reads no settings or tiers."""
+
+    setUp = CoreTests.setUp
+    tearDown = CoreTests.tearDown
+
+    def line(self):
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        return hook.answer(plan_event("Serves: A1\nAdd a greeting."))["systemMessage"]
+
+    def test_a_reader_not_allowed_is_not_read_in_plain_words(self):
+        os.environ.update(env(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_TIER="contributor"))
+        os.environ.pop("FRAME_LOOP_TRAINING_OK", None)
+        said = self.line()
+        self.assertIn("■ not read: this reader trains on what it reads", said)
+        self.assertNotIn("FRAME_LOOP", said)
+        self.assertNotIn("▲", said)
+
+    def test_no_reader_is_not_read(self):
+        os.environ.update(env(FRAME_LOOP_TIER="private"))
+        os.environ.pop("FRAME_LOOP_READER", None)
+        self.assertIn("■ not read: no reader configured", self.line())
+
+
 class OneLineTests(unittest.TestCase):
     """Asked for: nothing but the one short line reaches the author. The details go to the
     band's fold and to Claude, on every path: a turn read in the background too."""

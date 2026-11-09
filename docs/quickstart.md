@@ -2,7 +2,7 @@
 
 One Claude Code session with frame-loop, from the first prompt to done. Installation is in the [README](../README.md); every line the loop prints is in [Verdicts](verdicts.md).
 
-Before the first reading, allow the reader for the project in its `.claude/settings.local.json`; without it, each reading is refused with a ▲ that names the missing setting. For private code, use `"FRAME_LOOP_TIER": "private"` instead:
+Before the first reading, allow the reader for the project in its `.claude/settings.local.json`; without it, each reading ends "■ not read". For private code, use `"FRAME_LOOP_TIER": "private"` instead:
 
 ```json
 {
