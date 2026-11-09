@@ -125,6 +125,15 @@ def _protected() -> list[Path]:
     return paths
 
 
+def _claude_settings(parts: list[str]) -> bool:
+    """Whether a path is a `.claude` folder's own settings or hooks: directly in it, so a
+    plugin's `hooks/` folder or a skill named for settings kept further down is neither."""
+    return any(
+        name == ".claude" and (following.startswith("settings") or following == "hooks")
+        for name, following in zip(parts, parts[1:], strict=False)
+    )
+
+
 def touches_config(path: str) -> bool:
     """A path inside the loop's own configuration or record: frame 0, the log, the work
     folder, the rules and the tree (written or not), the loop's code, or a project's
@@ -137,15 +146,14 @@ def touches_config(path: str) -> bool:
     except (OSError, ValueError):
         return False
     if FOLDS_CASE:
-        parts = [x.casefold() for x in p.parts]
-        if ".claude" in parts and (parts[-1].startswith("settings") or "hooks" in parts):
+        if _claude_settings([x.casefold() for x in p.parts]):
             return True
         here = str(p).casefold()
         return any(
             here == str(q).casefold() or here.startswith(str(q).casefold().rstrip(os.sep) + os.sep)
             for q in _protected()
         )
-    if ".claude" in p.parts and (p.name.startswith("settings") or "hooks" in p.parts):
+    if _claude_settings(list(p.parts)):
         return True
     return any(p == q or q in p.parents for q in _protected())
 

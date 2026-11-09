@@ -326,6 +326,20 @@ class PythonReadTests(unittest.TestCase):
                 self.assertFalse(config._read_only(command))
 
 
+class ClaudeFolderTests(unittest.TestCase):
+    def test_only_a_claude_folders_own_settings_and_hooks_are_the_loops(self):
+        """Seen: a plugin under development in ~/.claude/dev-mods/<x>/hooks/ was told as the
+        loop's own files, because any folder named hooks anywhere under .claude counted."""
+        for path in ("/p/.claude/settings.json", "/p/.claude/settings.local.json", "/p/.claude/hooks/a.py"):
+            self.assertTrue(config.touches_config(path), path)
+        for path in (
+            "/home/me/.claude/dev-mods/x/hooks/register.tsx",
+            "/home/me/.claude/skills/settings-help/SKILL.md",
+            "/home/me/.claude/commands/settings.md",
+        ):
+            self.assertFalse(config.touches_config(path), path)
+
+
 class ProjectDirTests(unittest.TestCase):
     """Sparky's third review: a CLAUDE_PROJECT_DIR naming a missing folder was used for the
     switch, though the band fell back to the session's directory; and the plugin created it."""
