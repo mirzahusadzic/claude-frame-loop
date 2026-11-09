@@ -26,7 +26,7 @@ A reading leaves the hook as a Gadfly frame. Gadfly runs its trials through its 
 | `contributor` (default; `public` is its old name) | Muse Spark 1.3 Contributor, the tier the calibration ran on | yes; see [Privacy](privacy.md) |
 | `private` | Muse Spark 1.3, on an endpoint that keeps no data, at a higher price | no |
 
-The reader comes from a model family other than the Claude whose work it reads, so its answers stay independent of the work; a setting or a plan names only these two tiers, and the others in `frameloop/readers.py`, a Claude model among them, serve calibration runs only. Both tiers are Gadfly's tested counterfactual backends. Contributor trains on what it reads, so nothing is sent to it until `FRAME_LOOP_TRAINING_OK=1` allows it for the project; from a repository GitHub does not confirm public it gets only labels, never code, and only with `FRAME_LOOP_LABELS_OK=1`.
+The reader comes from a model family other than the Claude whose work it reads, so its answers stay independent of the work; a setting or a plan names only these two tiers, and the others in `frameloop/readers.py`, a Claude model among them, serve calibration runs only. Both tiers are Gadfly's tested counterfactual backends. Contributor trains on what it reads, so nothing is sent to it until `FRAME_LOOP_TRAINING_OK=1` allows it for the project; from a repository GitHub does not confirm public it gets only labels, never code.
 
 ---
 
@@ -62,7 +62,7 @@ The default reader trains on what it reads, so allow it per project, in the proj
 }
 ```
 
-For private code, set `"FRAME_LOOP_TIER": "private"` there instead; it needs no such line. The loop keeps a project's files in `<project>/.frame-loop/`: `frame0.json`, `steps.jsonl` (the record), `rules.json`, `tree/` and `work/`. Commit `frame0.json`, `rules.json` and `tree/` to share them; keep the rest out of git.
+For private code, set `"FRAME_LOOP_TIER": "private"` there instead; it needs no such line. The loop keeps a project's files in `<project>/.frame-loop/`: `frame0.json`, `approved.json` (what you approved in the picker), `steps.jsonl` (the record), `rules.json`, `tree/` and `work/`. Commit `frame0.json`, `approved.json`, `rules.json` and `tree/` to share them; keep the rest out of git. A clone without `approved.json` reads its frame as not yet answered, and offers the picker.
 
 ---
 

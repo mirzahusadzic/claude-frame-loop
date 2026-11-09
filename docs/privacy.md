@@ -22,7 +22,7 @@ The plugin always labels: its hooks set the writer, so the reader never gets the
 
 ### What a reading sends
 
-Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. The private-names check masks names only, so a line whose content is private stays out of frame 0 and the rules on a reader that trains on its inputs. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The requirements and rules themselves go with their ids, which the reader answers with. Requirement and rule text is not masked: on a training tier, a reading whose requirements or rules hold one of your private names is refused whole by Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading.
+Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. The private-names check masks names only, so a line whose content is private stays out of frame 0 and the rules on a reader that trains on its inputs. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The requirements and rules themselves go with their ids, which the reader answers with. On a training tier your private names are masked in requirement and rule text too, and Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading, refuses a reading that still holds one.
 
 | Reading | Labels off | Labels on |
 | --- | --- | --- |

@@ -32,7 +32,7 @@ A marker is a no-op shell command the hook reads, and a command of its own: chai
 
 ### When a reading is refused
 
-A reading is refused only for what looks like a secret, or when the writer returns no label. What goes is a summary: frame 0's ids and a requirement's words are taken out of it, and private names are masked.
+A reading is refused for what looks like a secret, when the writer returns no label, when no reader is allowed or configured, and when frame 0 is not ready or not in the words approved. What goes is a summary: frame 0's ids and a requirement's words are taken out of it, and private names are masked.
 
 ---
 
