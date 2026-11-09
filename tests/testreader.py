@@ -368,6 +368,11 @@ class FailedRunTests(unittest.TestCase):
     """Sparky's sixth review: Gadfly's status was not read, so a run that failed after printing a
     whole verdict passed. Its `firm`, `run`, `report` and `walk` exit 0 whatever the verdict."""
 
+    def setUp(self):  # run alone in a checkout, these left their frames in its .frame-loop
+        held = tempfile.TemporaryDirectory(prefix="frame-loop-reader-")
+        self.addCleanup(held.cleanup)
+        self.enterContext(mock.patch.dict(os.environ, FRAME_LOOP_WORK=held.name))
+
     def run_with(self, status, stdout):
         import gate
         import reader
