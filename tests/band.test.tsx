@@ -458,6 +458,39 @@ test('/frame-loop check asks Claude once, leaves the switch alone, and works wit
   expect(store.off?.value).toBe(false)
 })
 
+test('/frame-loop check that did not go is tried once more, and no more', async ($, on) => {
+  const store = seed(on, null, 0)
+  store.woken = { value: 0, version: 1 }
+  store.proposal = { value: null, version: 1 }
+  let tries = 0
+  on('prompt.submit', () => { tries++; throw new Error('a dialog is up') })
+  on('prompt.read', () => ({ value: { text: '', cursor: 0 } }))
+  on('fs.read', () => { throw new Error('no file') })
+  on('fs.exists', () => ({ value: false }))
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('tool.register', () => ({ value: undefined }))
+  on('env.get', () => ({ value: undefined }))
+  on('session.id', () => ({ value: 's' }))
+  on('clock.now', () => ({ value: 60000 }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  on('ui.render', ($: any, e: any) => { const { Text } = $.ui.resolve(e); return <Text>engine</Text> })
+  let drawn = () => {}
+  const ready = new Promise<void>(r => { drawn = r })
+  let periods = 0
+  on('clock.every', async () => {
+    await ready
+    return periods++ < 5 ? { value: undefined } : { deny: 'enough periods' }
+  })
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, isWorking: false }, surface: 'terminal' })
+  await $.command.run({ command: 'frame-loop', args: 'check' })
+  drawn()
+  for (let i = 0; i < 40 && periods <= 5; i++) await new Promise(r => setTimeout(r, 10))
+  await new Promise(r => setTimeout(r, 20))
+  await ui.unmount()
+  expect(tries).toBe(2)
+})
+
 test('/frame-loop check waits while the person is typing', async ($, on) => {
   const { sent } = await waking($, on, { shown: null, command: 'check', draft: 'half a thought', ticks: 4 })
   expect(sent).toEqual([])

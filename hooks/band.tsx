@@ -96,6 +96,7 @@ let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
 let waking = false
 let checkWanted = false // `/frame-loop check` was asked, and Claude not yet told
+let checkRetried = false
 let closing = false // the picker has an answer on its way, which starts the next turn itself
 let retried = 0
 let liveFolder = ''
@@ -183,7 +184,11 @@ export const register: Register = on => {
       // Before any file is read: an install with no reading yet is who asks this.
       if (checkWanted && !busy && !closing && !(await $.prompt.read()).text.trim()) {
         checkWanted = false
-        void Promise.resolve($.prompt.submit({ text: CHECK })).catch(() => {})
+        // As a wake: what did not go is tried once more, and then the person can ask again.
+        void Promise.resolve($.prompt.submit({ text: CHECK })).catch(() => {
+          checkWanted = !checkRetried
+          checkRetried = true
+        })
       }
       try {
         const isOff = (await $.fs.read(switchPath)).trim().toLowerCase() === 'off'
@@ -245,6 +250,7 @@ export const register: Register = on => {
     const args = e.args.trim().toLowerCase()
     if (args === 'check') {
       checkWanted = true // the tick asks, once the session is free
+      checkRetried = false
       return { text: 'frame-loop: checking what a first reading needs.' }
     }
     const want = args === 'on' ? false : args === 'off' ? true : !now
