@@ -4117,7 +4117,7 @@ class RulesTests(unittest.TestCase):
         )
         self.assertEqual(framezero.rules_faults(made, REPO), [])
         self.rules.write_text(json.dumps(made), encoding="utf-8")
-        self.assertIn({"id": "R1", "text": line}, framezero.load_frame0()["principles"])
+        self.assertIn({"id": "R1", "text": line, "indexed": True}, framezero.load_frame0()["principles"])
 
     def test_a_write_to_the_index_that_cannot_be_read_tells_claude_what_to_fix(self):
         """A misquoted line, an unknown kind or a stale hash would leave a confirmed rule
@@ -4328,7 +4328,7 @@ class RulesTests(unittest.TestCase):
 
     def test_a_rule_is_read_by_its_guides_own_words_never_by_its_label(self):
         frame0 = framezero.load_frame0()
-        self.assertIn({"id": "R6", "text": "- docs change with the code"}, frame0["principles"])
+        self.assertIn({"id": "R6", "text": "- docs change with the code", "indexed": True}, frame0["principles"])
 
     def test_no_word_list_nudges_the_duty_is_in_the_briefing(self):
         """the author writes "should" and "may", rarely "must": no detector finds his rules,

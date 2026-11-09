@@ -54,49 +54,75 @@ def approved_words(frame: str | None) -> set[str] | None:
     if not path.is_file():
         return None
     try:
-        rounds = json.loads(path.read_text(encoding="utf-8"))["rounds"]
+        record = json.loads(path.read_text(encoding="utf-8"))
+        rounds = record["rounds"]
+        if record["version"] != 1 or not rounds:  # a record emptied is no fresh start: an answer was there
+            return set()
         mine = [r for r in rounds if frame is None or r["frame"] == frame]
         words: set[str] = set()
         for answer in mine:
-            words |= {_words(x) for x in answer["approved"]}
-            words -= {_words(x) for x in answer["not_approved"]}
+            given, taken = answer["approved"], answer["not_approved"]
+            if not (isinstance(given, list) and isinstance(taken, list)):
+                return set()
+            words |= {_words(x) for x in given}
+            words -= {_words(x) for x in taken}
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return set()
     return words if mine else None
 
 
-def engaged_frame() -> str:
-    return state.NODE if state.NODE and state.NODE != "root" else FRAME_0
+def frame_name(frame0: dict[str, Any]) -> str:
+    """The frame an approval names, as it was loaded: a node engaged but gone reads frame 0."""
+    return frame0.get("node") or FRAME_0
+
+
+def _frames_above(frame0: dict[str, Any]) -> list[str]:
+    """What an approval calls the frames above this one, up to frame 0."""
+    if not frame0.get("node"):
+        return []
+    import tree
+
+    nodes = _tree_nodes(frame0)
+    node = nodes.get(frame0["node"])
+    above = [n["id"] for n in tree._ancestors(node, nodes)] if node else []
+    return [x for x in above if x != "root"] + [FRAME_0]
 
 
 def unapproved(frame0: dict[str, Any]) -> list[str]:
-    """The items of a frame the author has answered for that are not in the words they approved.
-    A frame with no answer yet has none: it is read as before, until they answer. A node's
-    principles and triggers may be approved at the frame above it that added them; the guides'
-    rules, joined in by load_frame0, are not approved this way."""
-    words = approved_words(engaged_frame())
+    """What keeps a frame the author has answered for from being in the words they approved: an
+    item they did not approve, or one they approved that is gone from it. A frame with no answer
+    yet has none: it is read as before, until they answer. A node's principles and triggers may
+    be approved at a frame above it; the guides' rules, joined in by load_frame0, are not
+    approved this way."""
+    words = approved_words(frame_name(frame0))
     if words is None:
         return []
     late = [a["text"] for a in frame0.get("asks") or [] if _words(a["text"]) not in words]
-    rules = project_rules()
-    indexed = {r.get("id") for r in _rule_list(rules)} if rules else set()
-    anywhere = approved_words(None) or set()
-    return late + [
-        x["text"]
-        for part in ("principles", "triggers")
-        for x in frame0.get(part) or []
-        if x.get("id") not in indexed and _words(x["text"]) not in anywhere
-    ]
+    above = set(words)
+    for frame in _frames_above(frame0):
+        above |= approved_words(frame) or set()
+    rules = [x for part in ("principles", "triggers") for x in frame0.get(part) or []]
+    late += [x["text"] for x in rules if not x.get("indexed") and _words(x["text"]) not in above]
+    held = {_words(x["text"]) for x in [*(frame0.get("asks") or []), *rules]}
+    return late + sorted(words - held)
+
+
+def text_in_approved_words(text: str, frame: str) -> bool:
+    """Whether a frame's file with this text holds what the author approved, and only that."""
+    words = approved_words(frame)
+    try:
+        held = json.loads(text)
+        items = {_words(x["text"]) for part in ("asks", "principles", "triggers") for x in held.get(part) or []}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+    return bool(words) and items == words
 
 
 def file_in_approved_words(path: str, frame: str) -> bool:
-    """Whether a frame's file, as it stands, holds only words the author approved."""
-    words = approved_words(frame)
+    """Whether a frame's file, as it stands, holds what the author approved, and only that."""
     try:
-        held = json.loads(Path(path).read_text(encoding="utf-8"))
-        items = [x["text"] for part in ("asks", "principles", "triggers") for x in held.get(part) or []]
-        return bool(words) and bool(items) and all(_words(x) in words for x in items)
-    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return text_in_approved_words(Path(path).read_text(encoding="utf-8"), frame)
+    except OSError:
         return False
 
 
@@ -239,10 +265,10 @@ def load_frame0() -> dict[str, Any]:
             if r.get("kind") == "obligation" and isinstance(r.get("check"), dict) and isinstance(r.get("scope"), list)
         ]
         frame0["principles"] = frame0.get("principles", []) + [
-            {"id": r["id"], "text": rule_words(r)} for r in accepted if r.get("kind") == "principle"
+            {"id": r["id"], "text": rule_words(r), "indexed": True} for r in accepted if r.get("kind") == "principle"
         ]
         frame0["triggers"] = frame0.get("triggers", []) + [
-            {"id": r["id"], "text": rule_words(r)} for r in accepted if r.get("kind") == "trigger"
+            {"id": r["id"], "text": rule_words(r), "indexed": True} for r in accepted if r.get("kind") == "trigger"
         ]
         frame0["semantic"] = [r for r in accepted if r.get("kind") == "semantic"]
     if state.NODE and state.NODE != "root" and not frame0.get("unwritten"):

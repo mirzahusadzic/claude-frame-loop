@@ -29,7 +29,7 @@ A read that fits, finds nothing to read or does not settle shows nothing once it
 | ▲ needs you: a check you owe is unmet | a code check failed, such as tests not run | have it met |
 | ▲ needs you: a change lies outside what you authorized | outside the crossing's scope; "· not checked: a reason" follows when its reading failed too | widen the scope, or undo |
 | ▲ needs you: what this work is for isn't written yet | no frame 0 | state the work |
-| ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker | an item of the frame differs from what you approved in the picker, so nothing was read | ask Claude to open it |
+| ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker | the frame holds something you did not approve, or lacks something you did, so nothing was read | ask Claude to open it |
 | ▲ needs you: 2 of 3 claimed requirements read as done | completion found a requirement the work claimed not done, or could not read it; for the whole frame, "2 of 3 requirements" | finish them |
 | ▲ needs you: Claude didn't say which of your requirements this work serves | completion: the work claims none, and the reader's two answers did not agree on one | ask Claude which |
 | ■ not read: a reason | refused before sending, such as a secret | see [Privacy](privacy.md); never counted as a fit |

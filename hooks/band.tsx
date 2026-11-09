@@ -40,9 +40,16 @@ const APPROVE_SCHEMA = {
       },
     },
     leftOut: { type: 'array', items: { type: 'string' }, description: 'What the proposal leaves out on purpose.' },
+    removes: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Words approved before that this takes out or rewords: each is an item of its own, to approve.',
+    },
   },
   required: ['title', 'items'],
 }
+
+const itemWords = (x: Item) => (x.isRemoval ? `Remove: ${x.text}` : x.text)
 
 // What the next turn reads: plain sentences, as the person would say them.
 const answer = ({ items }: Proposal): string => {
@@ -50,8 +57,8 @@ const answer = ({ items }: Proposal): string => {
   if (not.length === 0) return items.length === 1 ? 'Approved.' : `Approved, all ${items.length}.`
   const yes = items.filter(x => x.isChecked)
   return [
-    yes.length ? `Approved:\n${yes.map(x => `- ${x.text}`).join('\n')}` : 'Nothing approved.',
-    `Not approved:\n${not.map(x => `- ${x.text}`).join('\n')}`,
+    yes.length ? `Approved:\n${yes.map(x => `- ${itemWords(x)}`).join('\n')}` : 'Nothing approved.',
+    `Not approved:\n${not.map(x => `- ${itemWords(x)}`).join('\n')}`,
     'Ask me what is wrong with each one I did not approve, before anything is written.',
   ].join('\n\n')
 }
@@ -85,6 +92,7 @@ const outcome = (decision: string | undefined) =>
 
 let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
+let waking = false
 let liveFolder = ''
 
 // Whose switch the hooks read: what they said for this session. Only they are told the
@@ -109,12 +117,13 @@ const remember = async ($: any, held: Proposal): Promise<string> => {
   } catch {
     // no record yet
   }
-  const words = (isChecked: boolean) => held.items.filter((x: Item) => x.isChecked === isChecked).map((x: Item) => x.text)
+  // A removal approved takes its words out; one not approved leaves them as they were.
+  const texts = (keep: (x: Item) => boolean) => held.items.filter(keep).map((x: Item) => x.text)
   kept.rounds.push({
     frame: held.node ?? 'frame 0',
     title: held.title,
-    approved: words(true),
-    not_approved: words(false),
+    approved: texts(x => x.isChecked && !x.isRemoval),
+    not_approved: texts(x => x.isChecked === !!x.isRemoval),
     at: (await $.clock.now()) / 1000,
   })
   try {
@@ -188,12 +197,15 @@ export const register: Register = on => {
       // free: never over the person's words or Claude's work, and it waits until they are done.
       // A prompt they sent since has told Claude already.
       if (
-        now.wake && !busy && now.at > (await read($, dismissedAt)) && now.at !== (await read($, woken))
+        now.wake && !busy && !waking && now.at > (await read($, dismissedAt)) && now.at !== (await read($, woken))
         && !(await read($, off)) && (await read($, proposal)) === null
         && !(await $.prompt.read()).text.trim()
       ) {
+        // Marked here too: two ticks overlapping must not both start a turn.
+        waking = true
         const at = now.at
         await update($, woken, () => at)
+        waking = false
         void $.prompt.submit({ text: WAKE })
       }
     })
@@ -212,8 +224,17 @@ export const register: Register = on => {
   })
 
   on('tool.call', { tool: APPROVE }, async ($, e) => {
-    const given = e as unknown as { title?: string; node?: string; items?: Omit<Item, 'isChecked'>[]; leftOut?: string[] }
-    const items = (given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true }))
+    const given = e as unknown as {
+      title?: string
+      node?: string
+      items?: Omit<Item, 'isChecked'>[]
+      leftOut?: string[]
+      removes?: string[]
+    }
+    const items: Item[] = [
+      ...(given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true })),
+      ...(given.removes ?? []).map(text => ({ text, isChecked: true, isRemoval: true })),
+    ]
     if (items.length === 0) return { deny: 'approve needs at least one item.' }
     const leftOut = given.leftOut ?? []
     const title = given.title ?? 'Approve'
@@ -236,11 +257,11 @@ export const register: Register = on => {
 
   // Closed with Escape: nothing is approved, and Claude must not be left waiting in silence.
   on('ui.close', async ($, e, next) => {
-    const held = e.id === PICKER && e.origin.kind === 'person' ? await read($, proposal) : null
+    const held = e.id === PICKER ? await read($, proposal) : null
     const closed = await next(e)
     if (held) {
-      await update($, proposal, () => null)
-      await $.prompt.fill({ text: 'I closed the picker without approving anything.' })
+      await update($, proposal, () => null) // any close: a picker gone must not hold back a wake
+      if (e.origin.kind === 'person') await $.prompt.fill({ text: 'I closed the picker without approving anything.' })
     }
     return closed
   })
@@ -265,7 +286,7 @@ export const register: Register = on => {
         {now.items.map((item, index) => (
           <Box flexDirection="column">
             <Button key={`item-${index}`} plain autoFocus={index === 0 ? true : undefined} onPress={() => toggle(index)}>
-              {`[${item.isChecked ? 'x' : ' '}] ${item.text}`}
+              {`[${item.isChecked ? 'x' : ' '}] ${itemWords(item)}`}
             </Button>
             {item.detail ? <Text color="inactive">{`    ${item.detail}`}</Text> : null}
           </Box>

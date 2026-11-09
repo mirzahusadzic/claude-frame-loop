@@ -24,7 +24,7 @@ import state
 from config import plugin_defaults, switch_path
 from declare import _declared, _value
 from effort import _effort_rules, _rule_hits
-from framezero import approved_words, engaged_frame, load_frame0, rules_lost
+from framezero import approved_words, frame_name, load_frame0, rules_lost
 from lines import (
     NOT_APPROVED,
     _guide_words,
@@ -161,7 +161,7 @@ APPROVAL_OWED = (
 def approval_owed(frame0: dict[str, Any]) -> str:
     """A frame with no answer gets its picker once a session until the author answers: passing
     it over must not leave it read unapproved for good, nor ask at every prompt."""
-    frame = engaged_frame()
+    frame = frame_name(frame0)
     if os.environ.get("FRAME_LOOP_PLUGIN") != "1":  # the picker comes with the plugin
         return ""
     if not frame0.get("asks") or approved_words(frame) is not None:

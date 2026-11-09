@@ -90,7 +90,7 @@ class WordsTests(Approved):
 
     def test_words_that_differ_are_not_approved(self):
         self.answer([ONE, "Over the limit it may refuse."])
-        self.assertEqual(framezero.unapproved(FRAME), [TWO])
+        self.assertEqual(framezero.unapproved(FRAME), [TWO, "Over the limit it may refuse."])
 
     def test_spacing_is_not_a_difference(self):
         self.answer([ONE, "Over  the limit\nit refuses."])
@@ -103,16 +103,47 @@ class WordsTests(Approved):
         self.answer([TWO])
         self.assertEqual(framezero.unapproved(FRAME), [])
 
+    def test_an_item_approved_and_gone_is_not_approved(self):
+        """Sparky's fourth review: a frame could drop a requirement the author approved, and be read."""
+        self.answer([ONE, TWO, "Each client has a limit."])
+        self.assertEqual(framezero.unapproved(FRAME), ["Each client has a limit."])
+
+    def test_an_item_taken_out_in_a_later_answer_may_go(self):
+        self.answer([ONE, TWO, "Each client has a limit."])
+        self.answer([], ["Each client has a limit."])
+        self.assertEqual(framezero.unapproved(FRAME), [])
+
+    def test_a_record_emptied_is_no_fresh_start(self):
+        """Sparky's fourth review: emptying the record read the frame as if never answered."""
+        (self.home / "approved.json").write_text(json.dumps({"version": 1, "rounds": []}), encoding="utf-8")
+        self.assertEqual(framezero.unapproved(FRAME), [ONE, TWO])
+
     def test_a_broken_record_approves_nothing(self):
-        for broken in ("not json", '{"rounds": 3}', '{"rounds": [{"frame": "frame 0"}]}', "[]"):
+        frame = '"frame": "frame 0"'
+        for broken in (
+            "not json",
+            '{"version": 1, "rounds": 3}',
+            '{"version": 1, "rounds": [{"frame": "frame 0"}]}',
+            "[]",
+            f'{{"rounds": [{{{frame}, "approved": [], "not_approved": []}}]}}',
+            f'{{"version": 99, "rounds": [{{{frame}, "approved": [], "not_approved": []}}]}}',
+            f'{{"version": 1, "rounds": [{{{frame}, "approved": "Requests are counted.", "not_approved": []}}]}}',
+        ):
             (self.home / "approved.json").write_text(broken, encoding="utf-8")
             self.assertEqual(framezero.unapproved(FRAME), [ONE, TWO], broken)
 
     def test_each_frame_answers_for_itself(self):
         self.answer([ONE, TWO], frame="greeter")
         self.assertIsNone(framezero.approved_words("frame 0"))
-        state.NODE = "greeter"
-        self.assertEqual(framezero.unapproved(FRAME), [])
+        self.assertEqual(framezero.unapproved({**FRAME, "node": "greeter"}), [])
+
+    def test_a_node_gone_reads_frame_0_by_its_own_answer(self):
+        """Sparky's fourth review: engaged in a node since removed, frame 0 was loaded but checked
+        against the node's answers, so a changed frame 0 read as never answered."""
+        self.answer([ONE, TWO])
+        state.NODE = "gone"
+        changed = {**FRAME, "asks": [FRAME["asks"][0]]}
+        self.assertEqual(framezero.unapproved(changed), [TWO])
 
 
 class PrinciplesAndTriggersTests(Approved):
@@ -133,15 +164,43 @@ class PrinciplesAndTriggersTests(Approved):
 
     def test_a_rule_from_the_index_is_left_for_later(self):
         self.answer([ONE, TWO])
-        joined = {**FRAME, "principles": [{"id": "R1", "text": "A rule of the guide."}]}
+        joined = {**FRAME, "principles": [{"id": "R1", "text": "A rule of the guide.", "indexed": True}]}
+        self.assertEqual(framezero.unapproved(joined), [])
+
+    def test_a_rule_joined_by_load_frame0_says_it_is_from_the_index(self):
+        rules = self.home / "rules.json"
+        kept = {"id": "R1", "kind": "principle", "quote": ["A rule."], "scope": ["*"], "accepted": True}
+        rules.write_text(json.dumps({"source": {"file": "AGENTS.md"}, "rules": [kept]}), encoding="utf-8")
+        os.environ["FRAME_LOOP_RULES"] = str(rules)
+        self.answer([ONE, TWO])
+        self.assertEqual(framezero.unapproved(framezero.load_frame0()), [])
+
+    def test_a_frames_own_principle_is_not_excused_by_a_rules_id(self):
+        """Sparky's fourth review: a principle borrowing an indexed rule's id went unapproved."""
+        self.answer([ONE, TWO])
+        borrowed = {**FRAME, "principles": [{"id": "R1", "text": "A write to the settings is no act."}]}
         with mock.patch.object(framezero, "project_rules", lambda: {"rules": [{"id": "R1"}]}):
-            self.assertEqual(framezero.unapproved(joined), [])
+            self.assertEqual(framezero.unapproved(borrowed), ["A write to the settings is no act."])
+
+    def test_a_principle_approved_in_an_unrelated_frame_does_not_count(self):
+        """Sparky's fourth review: approval anywhere counted, not only at the frames above."""
+        self.answer([ONE, TWO], frame="greeter")
+        self.answer(["No new dependency."], frame="other")
+        node = {**FRAME, "node": "greeter", "principles": [{"id": "P1", "text": "No new dependency."}]}
+        self.assertEqual(framezero.unapproved(node), ["No new dependency."])
+
+    def test_a_file_must_hold_all_it_was_approved_with(self):
+        self.answer([ONE, TWO, "Each client has a limit."])
+        self.assertFalse(framezero.file_in_approved_words(str(self.frame), "frame 0"))
 
     def test_a_node_may_rest_on_a_principle_approved_above_it(self):
         self.answer([ONE, "No new dependency."])
         self.answer([TWO], frame="greeter")
-        state.NODE = "greeter"
-        node = {"asks": [FRAME["asks"][1]], "principles": [{"id": "P1", "text": "No new dependency."}]}
+        node = {
+            "node": "greeter",
+            "asks": [FRAME["asks"][1]],
+            "principles": [{"id": "P1", "text": "No new dependency."}],
+        }
         self.assertEqual(framezero.unapproved(node), [])
 
     def test_a_write_holding_one_not_approved_needs_the_author(self):

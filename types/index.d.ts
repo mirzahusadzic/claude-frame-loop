@@ -21,7 +21,7 @@ export type Live = {
 }
 
 // One item of a decomposition, as the picker shows it.
-export type Item = { text: string; detail?: string; isChecked: boolean }
+export type Item = { text: string; detail?: string; isChecked: boolean; isRemoval?: boolean }
 
 // What the picker holds until its round closes. `node` is the frame's place in the tree: a
 // node's id, or none for frame 0.

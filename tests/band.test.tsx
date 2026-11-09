@@ -321,6 +321,20 @@ test('a deselected item is named, kept as not approved, and Claude is sent to as
   await ui.unmount()
 })
 
+test('words taken out are an item to approve, and only an approved removal takes them out', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call({ ...PROPOSED, removes: ['Each client has a limit.', 'Limits reset hourly.'] } as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ key: 'item-2' }))).toBeTruthy()
+  await ui.press({ key: 'item-3' })
+  await ui.press({ key: 'approve' })
+  const [round] = JSON.parse(sent.files[RECORD]).rounds
+  expect(round.approved).toEqual(['Each client is limited per minute.', 'Over the limit, the API returns 429.'])
+  expect(round.not_approved).toEqual(['Each client has a limit.'])
+  expect(sent.submit).toContain('Not approved:\n- Remove: Limits reset hourly.')
+  await ui.unmount()
+})
+
 test('a later round is added to the record, never over it', async ($, on) => {
   const sent = await picking($, on)
   for (const _ of [1, 2]) {

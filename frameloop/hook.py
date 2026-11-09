@@ -920,8 +920,10 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         ),
         "Frame 0 changes only with the author: when they ask for something it does not hold, "
         "propose the requirement, principle or trigger with the approve tool, and once they approve add it with its "
-        "inversion, in the words they approved. A frame whose words are not the ones approved is "
-        "not read, and they are told. If the picker cannot be shown, ask them in chat. The "
+        "inversion, in the words they approved. To reword an item or take one out, name its old words "
+        "in `removes` too: a frame must hold what they approved and only that. A frame whose words "
+        "are not the ones approved is not read, and they are told. If the picker cannot be shown, "
+        "ask them in chat. The "
         "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",
         "When you present finished work, declare what it serves and run `: frame-loop-read "
         "--complete`: each ask the work claimed is read over the steps that claimed it, this turn's "
