@@ -32,16 +32,22 @@ SPLIT_NOTE = (
 )
 
 
-NOT_APPROVED = "frame 0 is not approved"
+NOT_APPROVED = "a frame is not approved"
 NOT_DONE = "which-ask: the end-of-work check did not find it done"  # a turn's end, after that check
 
 
-def not_approved(words: list[str]) -> str:
+def not_approved(words: list[str], frame: str = framezero.FRAME_0) -> str:
     """Why a frame is not read, for Claude; the author reads it in plain words."""
     return (
-        f"{NOT_APPROVED}: {len(words)} of its items are not in the words the author approved. "
+        f"{NOT_APPROVED} ({frame}): {len(words)} of its items are not in the words the author approved. "
         "Call the approve tool with them, in the words you propose, and end your turn"
     )
+
+
+def not_approved_words(frame: str = framezero.FRAME_0) -> str:
+    """The same, as the author reads it: a node by its name, never as frame 0."""
+    whose = "frame 0's words" if frame == framezero.FRAME_0 else f"the words of node {frame}"
+    return f"{whose} aren't the ones you approved: Claude can open the picker"
 
 
 def unsettled_note(reasons: list[str]) -> str:
@@ -206,7 +212,7 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     # The command as it ran, its heredocs' text left out, so a line after one still shows.
     exact = (
         " ⏎ ".join(x.strip() for x in F.heredocs(record.get("command") or "")[0].split("\n") if x.strip())
-        if record.get("event") == "outward"
+        if record.get("command")
         else record.get("path", "")
     )[:DETAILS]
     for key, words, needs in ACT_WORDS:
@@ -314,7 +320,7 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
     if reason.startswith("frame 0 is not ready"):
         return "what this work is for isn't written yet"
     if reason.startswith(NOT_APPROVED):
-        return "frame 0's words aren't the ones you approved: Claude can open the picker"
+        return not_approved_words(reason.split("(", 1)[1].split(")", 1)[0])
     if "has not allowed it here" in reason:  # the setting's name stays in the details
         return "not read: this reader trains on what it reads, and this project hasn't allowed that"
     if result.get("decision") == gate.BLOCK or reason.startswith("not read"):

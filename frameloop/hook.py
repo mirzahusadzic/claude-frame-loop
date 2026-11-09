@@ -433,7 +433,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     if name in ("PostToolUse", "PostToolUseFailure"):
         if not changed:
             return None
-        return _changed_report(name, changed, frame0)
+        return _changed_report(name, changed, frame0, tool_input.get("command", ""))
     if name == "Stop":
         turn = _read_turn(event, frame0, mode)
         if turn and turn.get("decision") == "block":
@@ -717,7 +717,7 @@ def _private_notes(path: str) -> bool:
     return parts[: len(base)] == base and len(parts) > len(base) + 2 and parts[len(base) + 1] == "memory"
 
 
-def _changed_report(name: str | None, changed: list[str], frame0: dict[str, Any]) -> dict[str, Any]:
+def _changed_report(name: str | None, changed: list[str], frame0: dict[str, Any], command: str = "") -> dict[str, Any]:
     """What a shell call that changed the loop's own files gets: each logged, a node file
     and the rules index checked as an edit's content is, and one line for the human."""
     faults, index = [], []
@@ -728,7 +728,17 @@ def _changed_report(name: str | None, changed: list[str], frame0: dict[str, Any]
         fixes = rules_file_faults(path, "Edit", {}) if written else []
         index += fixes
         found += fixes
-        _log({"event": "config", "tool": "Bash", "path": path, "after": True, **({"faults": found} if found else {})})
+        ran = {"command": command} if command else {}
+        _log(
+            {
+                "event": "config",
+                "tool": "Bash",
+                "path": path,
+                "after": True,
+                **ran,
+                **({"faults": found} if found else {}),
+            }
+        )
     said = (
         "frame-loop: L1: the command changed the loop's own files "
         f"({', '.join(_short_path(Path(x)) for x in changed)}). This rises to the human."

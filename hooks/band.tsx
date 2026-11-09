@@ -19,6 +19,7 @@ const proposal = atom({ plugin: 'frame-loop', key: 'proposal' } as const, null a
 const woken = atom({ plugin: 'frame-loop', key: 'woken' } as const, 0)
 // What the band starts that turn with; the hooks know a wake by these words (WAKE, turn.py).
 const WAKE = 'frame-loop: a reading of the work landed. Deal with what it found.'
+const WAKE_WITHIN = 3600 // seconds: a session resumed later is told at its next prompt instead
 
 const PICKER = 'approve'
 const APPROVE = /^mcp__frame-loop__approve$/
@@ -93,6 +94,7 @@ const outcome = (decision: string | undefined) =>
 let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
 let waking = false
+let closing = false // the picker has an answer on its way, which starts the next turn itself
 let retried = 0
 let liveFolder = ''
 
@@ -122,7 +124,7 @@ const remember = async ($: any, held: Proposal): Promise<string> => {
   if (text !== undefined) {
     try {
       kept = JSON.parse(text)
-      if (!Array.isArray(kept?.rounds)) return notKept
+      if (kept?.version !== 1 || !Array.isArray(kept?.rounds)) return notKept
     } catch {
       return notKept // a record that cannot be read is never written over: the answers in it stay
     }
@@ -207,7 +209,8 @@ export const register: Register = on => {
       // free: never over the person's words or Claude's work, and it waits until they are done.
       // A prompt they sent since has told Claude already.
       if (
-        now.wake && !busy && !waking && now.at > (await read($, dismissedAt)) && now.at !== (await read($, woken))
+        now.wake && !busy && !waking && !closing && (await $.clock.now()) / 1000 - now.at < WAKE_WITHIN
+        && now.at > (await read($, dismissedAt)) && now.at !== (await read($, woken))
         && !(await read($, off)) && (await read($, proposal)) === null
         && !(await $.prompt.read()).text.trim()
       ) {
@@ -290,11 +293,16 @@ export const register: Register = on => {
         p && { ...p, items: p.items.map((x, i) => (i === index ? { ...x, isChecked: !x.isChecked } : x)) },
       )
     const finish = async (send: (said: string) => Promise<unknown>) => {
-      await followTheHooks($)
-      const held = await read($, proposal)
-      await update($, proposal, () => null)
-      await $.ui.close({ id: PICKER })
-      if (held) await send(answer(held) + (await remember($, held)))
+      closing = true
+      try {
+        await followTheHooks($)
+        const held = await read($, proposal)
+        await update($, proposal, () => null)
+        await $.ui.close({ id: PICKER })
+        if (held) await send(answer(held) + (await remember($, held)))
+      } finally {
+        closing = false
+      }
     }
     return (
       <Box flexDirection="column">

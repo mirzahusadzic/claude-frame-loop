@@ -182,6 +182,49 @@ class PrinciplesAndTriggersTests(Approved):
         self.assertNotIn("node", loaded)
         self.assertEqual(framezero.unapproved(loaded), ["An unapproved rule."])
 
+    def test_a_node_file_cannot_set_the_mark_either(self):
+        """Sparky's sixth review: the mark was taken off frame 0's file, not off a node's."""
+        tree = self.home / "tree"
+        tree.mkdir()
+        node = {
+            "id": "greeter",
+            "parent": "root",
+            "scope": ["*"],
+            "asks": [FRAME["asks"][0]],
+            "principles": [{"id": "P9", "text": "An unapproved rule.", "indexed": True}],
+        }
+        (tree / "greeter.json").write_text(json.dumps(node), encoding="utf-8")
+        os.environ["FRAME_LOOP_TREE"] = str(tree)
+        self.answer([ONE], frame="greeter")
+        state.NODE = "greeter"
+        self.assertEqual(framezero.unapproved(framezero.load_frame0()), ["An unapproved rule."])
+
+    def test_a_node_that_is_a_link_is_not_loaded(self):
+        """Sparky's sixth review: a link in the tree sent a file outside as a requirement's words."""
+        tree = self.home / "tree"
+        tree.mkdir()
+        outside = self.project.parent / f"outside-{self.project.name}.json"
+        outside.write_text(json.dumps({"id": "out", "asks": []}), encoding="utf-8")
+        self.addCleanup(lambda: outside.unlink(missing_ok=True))
+        (tree / "out.json").symlink_to(outside)
+        os.environ["FRAME_LOOP_TREE"] = str(tree)
+        self.assertNotIn("out", framezero._tree_nodes(FRAME))
+
+    def test_one_approval_is_not_two_items_of_its_words(self):
+        """Sparky's sixth review: a second item with approved words was read as approved."""
+        self.answer([ONE, TWO])
+        twice = {**FRAME, "asks": [*FRAME["asks"], {"id": "A3", "text": TWO, "inversion": {TWO: "x"}}]}
+        self.assertEqual(framezero.unapproved(twice), [TWO])
+        self.frame.write_text(json.dumps(twice), encoding="utf-8")
+        self.assertFalse(framezero.file_in_approved_words(str(self.frame), "frame 0"))
+
+    def test_a_scope_or_a_check_is_no_word_of_a_pickers(self):
+        """Sparky's sixth review: a write in approved words added a scope, and nothing asked."""
+        self.answer([ONE, TWO])
+        for extra in ({"scope": ["src/*"]}, {"obligations": [{"id": "O1"}]}):
+            self.assertFalse(framezero.text_in_approved_words(json.dumps({**FRAME, **extra}), "frame 0"), extra)
+        self.assertTrue(framezero.text_in_approved_words(json.dumps(FRAME), "frame 0"))
+
     def test_a_rule_joined_by_load_frame0_says_it_is_from_the_index(self):
         rules = self.home / "rules.json"
         kept = {"id": "R1", "kind": "principle", "quote": ["A rule."], "scope": ["*"], "accepted": True}
@@ -242,6 +285,14 @@ class NotReadTests(Approved):
         self.assertEqual(
             said, "frame-loop ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker"
         )
+
+    def test_a_node_not_approved_is_named_and_not_called_frame_0(self):
+        """Sparky's sixth review: an unapproved node was told as frame 0."""
+        self.answer([ONE], frame="greeter")
+        reason = lines.not_approved([TWO], "greeter")
+        said = lines._short({"decision": gate.RISE, "reason": reason}, FRAME)
+        self.assertIn("the words of node greeter aren't the ones you approved", said)
+        self.assertNotIn("frame 0", said)
 
     def test_a_frame_with_no_answer_is_still_read(self):
         self.assertEqual(self.read()["decision"], gate.PASS)

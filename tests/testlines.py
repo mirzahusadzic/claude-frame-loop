@@ -73,6 +73,15 @@ class AuthorsFilesTests(unittest.TestCase):
         self.assertEqual((words, needs), ("tried to change the loop's own files, did not go through", False))
 
 
+class ConfigDetailsTests(unittest.TestCase):
+    def test_a_shell_change_to_the_loops_files_keeps_its_command_under_details(self):
+        """Sparky's sixth review: the details held the path, not the exact command."""
+        record = {"event": "config", "path": "/p/.frame-loop/switch", "after": True, "command": "printf off > x"}
+        self.assertEqual(lines.act_words(record)[2], "printf off > x")
+        del record["command"]
+        self.assertEqual(lines.act_words(record)[2], "/p/.frame-loop/switch")
+
+
 class OutsideItsScopeTests(unittest.TestCase):
     def test_a_change_outside_its_scope_shows_a_rise_even_when_its_reading_failed(self):
         """Sparky's fifth review: the band drew ■ beside "needs you: outside what you authorized"."""

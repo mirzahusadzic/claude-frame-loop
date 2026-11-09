@@ -32,7 +32,14 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
     nodes = {"root": {**frame0, "id": "root"}}
     if folder and Path(folder).is_dir():
         for path in sorted(Path(folder).glob("*.json")):
+            if path.is_symlink():  # a node is a file of the tree's: a link could send anything as its words
+                continue
             raw = json.loads(path.read_text(encoding="utf-8"))
+            for part in ("principles", "triggers"):  # only the loop marks what comes from the index
+                if isinstance(raw.get(part), list):
+                    raw[part] = [
+                        {k: v for k, v in x.items() if k != "indexed"} if isinstance(x, dict) else x for x in raw[part]
+                    ]
             nid = raw.get("id", path.stem)
             nodes[nid] = {**raw, "id": nid}  # a file with no id is its file name's node, everywhere
     for nid in _circling(nodes):  # a node whose parents run in a circle never reaches the root

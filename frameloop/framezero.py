@@ -103,8 +103,9 @@ def unapproved(frame0: dict[str, Any]) -> list[str]:
         above |= approved_words(frame) or set()
     rules = [x for part in ("principles", "triggers") for x in frame0.get(part) or []]
     late += [x["text"] for x in rules if not x.get("indexed") and _words(x["text"]) not in above]
-    held = {_words(x["text"]) for x in [*(frame0.get("asks") or []), *rules]}
-    return late + sorted(words - held)
+    every = [_words(x["text"]) for x in [*(frame0.get("asks") or []), *rules] if not x.get("indexed")]
+    twice = sorted({x for x in every if every.count(x) > 1})  # one approval is not two items of its words
+    return late + twice + sorted(words - set(every))
 
 
 def text_in_approved_words(text: str, frame: str) -> bool:
@@ -112,10 +113,12 @@ def text_in_approved_words(text: str, frame: str) -> bool:
     words = approved_words(frame)
     try:
         held = json.loads(text)
-        items = {_words(x["text"]) for part in ("asks", "principles", "triggers") for x in held.get(part) or []}
+        items = [_words(x["text"]) for part in ("asks", "principles", "triggers") for x in held.get(part) or []]
     except (ValueError, KeyError, TypeError, AttributeError):
         return False
-    return bool(words) and items == words
+    # A scope or a check is no word of a picker's, and one approval is not two items of its words.
+    unshown = held.get("scope") or held.get("obligations") or len(items) != len(set(items))
+    return bool(words) and not unshown and set(items) == words
 
 
 def file_in_approved_words(path: str, frame: str) -> bool:

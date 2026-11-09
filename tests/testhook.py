@@ -5108,9 +5108,7 @@ class FolderGoneTests(unittest.TestCase):
         call = {**base, "tool_name": "Bash", "tool_input": {"command": command}, "tool_use_id": "c2"}
         hook.answer({**base, "hook_event_name": "UserPromptSubmit", "prompt": "go"})
         hook.answer({**call, "hook_event_name": "PreToolUse"})
-        for path in sorted(home.rglob("*"), reverse=True):
-            path.rmdir() if path.is_dir() else path.unlink()
-        home.rmdir()
+        home.rename(home.with_name("moved-away"))  # as the command would leave it, with nothing deleted
         hook.answer({**call, "hook_event_name": "PostToolUse"})
         out = hook.answer({**base, "hook_event_name": "Stop", "last_assistant_message": "x", "stop_hook_active": False})
         self.assertIn("▲ removed frame 0", (out or {}).get("systemMessage", ""))

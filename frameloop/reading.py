@@ -21,8 +21,8 @@ import gate
 import state
 from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
-from framezero import _tree_nodes, load_frame0, load_frame0_root, route, unapproved, with_semantic
-from lines import NOT_DONE, UNSETTLED_NOTE, _reader_name, _tell, not_approved, refused_line
+from framezero import _tree_nodes, frame_name, load_frame0, load_frame0_root, route, unapproved, with_semantic
+from lines import NOT_DONE, UNSETTLED_NOTE, _reader_name, _tell, not_approved, not_approved_words, refused_line
 from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
@@ -197,7 +197,7 @@ def _read(
     if faults:
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
     if drifted:
-        return {"decision": gate.RISE, "reason": not_approved(drifted)}, tier, tier_note
+        return {"decision": gate.RISE, "reason": not_approved(drifted, frame_name(frame0))}, tier, tier_note
     if not step["summary"].strip():  # a plan of its declaration alone: nothing is left to read
         return {"decision": gate.BLOCK, "reason": "not read: nothing to read past the declaration"}, tier, tier_note
     if tier is None:  # refused before anything is sent: its line says so, as any refusal's does
@@ -532,10 +532,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     if drifted:
         _log({"event": "completion", "parts": [], "usage": {}, "not_approved": len(drifted)})
         state.LIVE["decision"] = gate.RISE
-        state.LIVE["shorts"] = [
-            "frame-loop ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker"
-        ]
-        return "frame-loop · completion · not read: " + not_approved(drifted)
+        state.LIVE["shorts"] = [f"frame-loop ▲ needs you: {not_approved_words(frame_name(frame0))}"]
+        return "frame-loop · completion · not read: " + not_approved(drifted, frame_name(frame0))
     claims = {c for s in steps for c in s["claims"]} | set(_declared("\n".join(_marks()), frame0))
     asked = frame0["asks"] if whole else [a for a in frame0["asks"] if a["id"] in claims]
     started = time.time()

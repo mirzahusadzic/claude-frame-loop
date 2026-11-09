@@ -346,6 +346,18 @@ test('a record that cannot be read is never written over, and the answer says so
   await ui.unmount()
 })
 
+test('a record of another version is not added to, and the answer says so', async ($, on) => {
+  const sent = await picking($, on)
+  const other = JSON.stringify({ version: 2, rounds: [] })
+  sent.files[RECORD] = other
+  await $.tool.call(PROPOSED as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key: 'approve' })
+  expect(sent.files[RECORD]).toBe(other)
+  expect(sent.submit).toContain('could not keep this answer')
+  await ui.unmount()
+})
+
 test('a later round is added to the record, never over it', async ($, on) => {
   const sent = await picking($, on)
   for (const _ of [1, 2]) {
@@ -463,6 +475,10 @@ test('a wake that did not go is tried once more, and no more', async ($, on) => 
   await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
   for (let i = 0; i < 30 && periods <= 8; i++) await new Promise(r => setTimeout(r, 10))
   expect(tries).toBe(2)
+})
+
+test('a reading that landed long ago wakes nothing', async ($, on) => {
+  expect((await waking($, on, { shown: { ...LANDED, at: -4000 } })).sent).toEqual([])
 })
 
 test('a wake waits while the person is typing', async ($, on) => {
