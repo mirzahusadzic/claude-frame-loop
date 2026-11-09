@@ -198,9 +198,10 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     import ondemand
 
     first, _, rest = command.strip().partition("\n")
-    if "--complete" in shlex.split(first):
+    words = shlex.split(first)
+    if "--complete" in words:
         frame0 = load_frame0()
-        text = complete(frame0, pending=turn_so_far(state.CWD or os.getcwd(), frame0))
+        text = complete(frame0, pending=turn_so_far(state.CWD or os.getcwd(), frame0), whole="--all" in words)
         return _reading_said(text)
     heredoc = HEREDOC.search(first)
     if heredoc:
@@ -912,9 +913,11 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "Frame 0 changes only with the author: when they ask for something it does not hold, "
         "propose the requirement in plain words, and on their OK add it with its inversion. The "
         "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",
-        "When you present finished work, run `: frame-loop-read --complete`: each ask is read "
-        "over the steps that claimed it, this turn's change included, or over all of the "
-        "session's steps when none did. A turn's declarations add up. A change that "
+        "When you present finished work, declare what it serves and run `: frame-loop-read "
+        "--complete`: each ask the work claimed is read over the steps that claimed it, this turn's "
+        "change included, or over all of the session's steps when none did. An ask it never claimed "
+        "is not read; only when the author asks whether the whole frame is done, add `--all`, which "
+        "reads every ask. A turn's declarations add up. A change that "
         "meets a check the rules require names it in its declaration, `--done <ids>`.",
         *(
             [
@@ -923,7 +926,7 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "A node is a crossing fixed as a file in the tree folder, written with the author; "
                 "its asks quote its parent's, its scope lies under the parent's, and every rule "
                 "above it holds. Engage the node you work in with `: frame-loop-node <id>`, a "
-                "no-op the hook reads; then readings use its asks, completion reads its asks over "
+                "no-op the hook reads; then readings use its asks, completion reads the ones claimed over "
                 "its own steps, and a change outside its scope is not authorized. A completed "
                 "node climbs to its parent by itself. Nodes nest to any depth: a node's ask is owned "
                 "by its own steps or by its children, never both, and one its children own is done "

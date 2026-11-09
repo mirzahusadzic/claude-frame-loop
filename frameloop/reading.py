@@ -17,7 +17,7 @@ from typing import Any
 import frames
 import gate
 import state
-from declare import _claimed, _declared, _masked, _without_declaration
+from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
 from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
 from lines import UNSETTLED_NOTE, _reader_name, _tell
@@ -340,11 +340,16 @@ def _cut(text: str, cap: int) -> str:
     return text if len(text) <= cap else text[:cap] + f"\n[diff cut at {cap} characters]"
 
 
-def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | None = None) -> str:
-    """When the agent presents its work: each ask is read once with the diffs of the steps
-    that claim it, or of all the session's steps when none does, since the reader decides and
-    a claim only narrows what it looks at (seen: real sessions declare when presenting, after
-    their steps have ended). `pending` is the change of the turn still running."""
+NOTHING_CLAIMED = "frame-loop ▲ needs you: Claude didn't say which of your requirements this work serves"
+
+
+def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | None = None, whole: bool = False) -> str:
+    """When the agent presents its work: each ask the work claimed is read once with the diffs
+    of the steps that claim it, or of all the session's steps when only a declaration does
+    (seen: real sessions declare when presenting, after their steps have ended). An ask the work
+    never claimed is not held against it (seen: a docs edit read as 0 of 8 done, and the author
+    told): only `whole`, when the author asks about the whole frame, reads every ask. `pending`
+    is the change of the turn still running."""
 
     def kept(step_id: str) -> str | None:
         """A step's diff, from where the loop kept it and nowhere else: a log row cannot
@@ -371,6 +376,16 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     faults = frames.frame0_faults(frame0)
     if faults:  # no requirement can be done against a frame 0 that cannot be read
         return "frame-loop · completion · not read: frame 0 is not ready: " + "; ".join(faults)
+    claims = {c for s in steps for c in s["claims"]} | set(_declared("\n".join(_marks()), frame0))
+    asked = frame0["asks"] if whole else [a for a in frame0["asks"] if a["id"] in claims]
+    if not asked:  # nothing to hold it against: said, and nothing is spent
+        _log({"event": "completion", "parts": [], "usage": {}, "nothing_claimed": True})
+        state.LIVE["decision"], state.LIVE["shorts"] = gate.RISE, [NOTHING_CLAIMED]
+        return (
+            "frame-loop · completion · not read: this work claims no requirement. Declare what it serves "
+            "with `: frame-loop-declare --serves <ids>` and run this again; `--complete --all` reads every "
+            "requirement, only when the author asks whether the whole frame is done"
+        )
     started = time.time()
     tier, tier_note = tier_for(said)
     frame0 = mask_frame(frame0, tier) if tier else frame0
@@ -380,7 +395,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     run = _reader()
     state.LIVE["what"] = "checking the work is done"
     planned: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []  # each ask's frame, or why it has none
-    for ask in frame0["asks"]:
+    for ask in asked:
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
         if within(600) < 90:  # too little of the hook's time is left for one more reading
             planned.append((ask, None, f"{ask['id']} not read (out of time: read it again)"))
@@ -479,7 +494,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     _log({"event": "completion", "parts": parts, "usage": used})
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
     done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
-    asks = len(frame0["asks"])
+    asks = len(asked)
     alone = done < asks and done + not_firm == asks  # all that is left did not settle: Claude's alone
     state.LIVE["decision"] = gate.PASS if done == asks else gate.UNSETTLED if alone else gate.RISE
     if alone:
@@ -490,9 +505,9 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         []
         if alone
         else [
-            "frame-loop ✓ every requirement is done"
+            f"frame-loop ✓ every {'' if whole else 'claimed '}requirement is done"
             if done == asks
-            else f"frame-loop ▲ needs you: {done} of {asks} requirements read as done"
+            else f"frame-loop ▲ needs you: {done} of {asks} {'' if whole else 'claimed '}requirements read as done"
         ]
     )
     first = "frame-loop · completion · " + " · ".join(parts) + (f" · {UNSETTLED_NOTE}" if alone else "")

@@ -118,7 +118,8 @@ def _last_reading() -> str:
 
 COMPLETION_OWED = (
     "frame-loop: the last turn changed files, and the end-of-work check has not run on them. Before you "
-    "tell the author this work is done, or answer whether it is, run `: frame-loop-read --complete`. "
+    "tell the author this work is done, or answer whether it is, declare what it serves and run "
+    "`: frame-loop-read --complete`; add `--all` only if the author asks about the whole frame. "
     "Do not mention this reminder."
 )
 

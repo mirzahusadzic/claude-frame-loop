@@ -3386,7 +3386,7 @@ class CoreTests(unittest.TestCase):
         a1 = next(f for f in seen if "-A1-" in f["name"])
         self.assertIn("greet by name", json.dumps(a1["body"]))
         self.assertIn(lines.for_user("A1 ✓", framezero.load_frame0()), out["systemMessage"])
-        self.assertTrue(any(n.startswith("completion-") and "-A3-" in n for n in names), names)
+        self.assertFalse(any(n.startswith("completion-") and "-A3-" in n for n in names), names)
 
     def test_a_turns_declarations_add_up(self):
         """An agent's record: `--serves A1 A3`, then `--serves A1 A2 A3`, and the step claimed
@@ -4779,7 +4779,7 @@ class NotFirmTests(unittest.TestCase):
         self.turn(self.change(), "Serves: A1")
         os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
         out = self.marker(": frame-loop-read --complete")
-        self.assertIn("▲ needs you: 0 of 3 requirements read as done", out["systemMessage"])
+        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
 
 
 class OneLineTests(unittest.TestCase):

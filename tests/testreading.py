@@ -166,7 +166,7 @@ class CompletionTests(Isolated):
         os.environ["FRAME_LOOP_READER"] = "testreading:together"
         AT_ONCE["barrier"] = threading.Barrier(len(framezero.load_frame0()["asks"]), timeout=20)
         self.claim("S1", ["A1"])
-        self.claim("S2", ["A2"])
+        self.claim("S2", ["A2", "A3"])
         text = self.complete()
         self.assertIn("A1 ✓", text)
         self.assertIn("A2 ✓", text)
@@ -191,6 +191,67 @@ class CompletionTests(Isolated):
         )
         return out["hookSpecificOutput"]["additionalContext"]
 
+    def asked(self, command=": frame-loop-read --complete"):
+        testhook.SEEN.clear()
+        out = hook.answer(
+            {
+                "hook_event_name": "PreToolUse",
+                "tool_name": "Bash",
+                "session_id": self.session,
+                "cwd": PUBLIC,
+                "tool_input": {"command": command},
+            }
+        )
+        names = [f["name"] for f in testhook.SEEN if f["name"].startswith("completion-")]
+        return out, [n.split("-")[-2] for n in names]
+
+    def test_only_what_the_work_claimed_is_read(self):
+        """Seen: a docs edit claiming one requirement of eight was read against all eight, and
+        the author told 0 of 8 were done. Requirements for other work are no mismatch."""
+        self.claim("S1", ["A1"])
+        out, read = self.asked()
+        self.assertEqual(read, ["A1"])
+        self.assertIn("A1 ✓", out["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("A2", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_a_requirement_claimed_and_missed_says_it_was_claimed(self):
+        os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
+        os.environ.pop("FRAME_LOOP_LINES")  # as the plugin runs: the short line
+        self.claim("S1", ["A1"])
+        out, _ = self.asked()
+        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", out["systemMessage"])
+
+    def test_a_declaration_alone_claims_and_reads_over_the_sessions_steps(self):
+        """Seen: real sessions declare as they present, after their steps have ended."""
+        self.claim("S1", [])
+        self.asked(": frame-loop-declare --serves A2")
+        out, read = self.asked()
+        self.assertEqual(read, ["A2"])
+        self.assertIn("A2 ✓", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_work_that_claims_nothing_reads_nothing_and_says_so(self):
+        """Mirza: reading all of them is what caused the 0 of 8, so he is told nothing was
+        claimed, at no cost, and Claude is told how to claim it."""
+        os.environ.pop("FRAME_LOOP_LINES")  # as the plugin runs: the short line
+        self.claim("S1", [])
+        out, read = self.asked()
+        self.assertEqual(read, [])
+        self.assertIn("Claude didn't say which of your requirements this work serves", out["systemMessage"])
+        self.assertIn("frame-loop-declare --serves", out["hookSpecificOutput"]["additionalContext"])
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([r.get("nothing_claimed") for r in rows if r.get("event") == "completion"], [True])
+
+    def test_all_reads_every_requirement_when_the_author_asks_about_the_whole_frame(self):
+        self.claim("S1", ["A1"])
+        out, read = self.asked(": frame-loop-read --complete --all")
+        self.assertEqual(sorted(read), ["A1", "A2", "A3"])
+        self.assertIn("A2 ✓", out["hookSpecificOutput"]["additionalContext"])
+
+    def test_nothing_claimed_is_still_read_whole_with_all(self):
+        self.claim("S1", [])
+        _, read = self.asked(": frame-loop-read --complete --all")
+        self.assertEqual(sorted(read), ["A1", "A2", "A3"])
+
     def test_with_no_step_there_is_nothing_to_read(self):
         """A session with no step would be read as every ask unfulfilled, or as done."""
         self.assertEqual(
@@ -199,7 +260,7 @@ class CompletionTests(Isolated):
 
     def test_without_a_reader_or_an_allowed_tier_no_ask_is_read(self):
         """An ask with no reader, or a training tier not allowed, would be read as done or sent anyway."""
-        self.claim("S1", ["A1"])
+        self.claim("S1", ["A1", "A2"])
         os.environ.pop("FRAME_LOOP_READER")
         self.assertIn("A1 not read (no reader configured) · A2 not read (no reader configured)", self.complete())
         os.environ.update(FRAME_LOOP_READER="testhook:completing", FRAME_LOOP_TIER="contributor")

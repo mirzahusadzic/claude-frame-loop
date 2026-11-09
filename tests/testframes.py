@@ -214,7 +214,7 @@ class MostTests(unittest.TestCase):
         # A change gets one round: asked again, 5 of 5 kept readings still did not settle.
         self.assertEqual(frames.which_ask(FRAME0, step(), "public")["standing"]["most"], 1)
         self.assertEqual(frames.violation(FRAME0, step(), "public")["standing"]["most"], 1)
-        self.assertEqual(frames.completion(ASK0, "A1", STEPS, "public", with_diffs=True)["standing"]["most"], 3)
+        self.assertEqual(frames.completion(ASK0, "A1", STEPS, "public", with_diffs=True)["standing"]["most"], 2)
 
 
 class CompletionTests(unittest.TestCase):
