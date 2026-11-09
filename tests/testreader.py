@@ -82,6 +82,66 @@ class LauncherTest(unittest.TestCase):
         with mock.patch.object(reader.shutil, "which", return_value=None):
             self.assertIsNone(reader._uv_owns(str(kept)))
 
+    def test_an_empty_uv_tool_dir_owns_nothing(self):
+        said = subprocess.CompletedProcess([], 0, "", "")
+        with (
+            mock.patch.object(reader.shutil, "which", side_effect=lambda c: "/bin/uv" if c == "uv" else None),
+            mock.patch.object(reader, "bounded", return_value=said),
+        ):
+            self.assertIsNone(reader._uv_owns("/somewhere/gadfly"))
+
+    def test_an_upgrade_that_cannot_start_says_so(self):
+        """uv gone between finding it and running it: told, never a reading on the old one."""
+
+        def run(command, seconds, *, what, **given):
+            if "install" in command:
+                raise FileNotFoundError("uv")
+            return subprocess.CompletedProcess(command, 0, "gadfly 0.12.4", "")
+
+        with (
+            mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)),
+            mock.patch.object(reader, "_uv_owns", return_value="uv"),
+            mock.patch.object(reader, "bounded", side_effect=run),
+        ):
+            done, missing = reader.brought_up()
+        self.assertIsNone(done)
+        self.assertIn("upgrading it failed: uv", missing)
+
+    def test_what_a_stopped_run_spent_skips_what_cannot_be_read(self):
+        """A record that cannot be read, a line that is no record, and a count that is no
+        number are passed over; the rest is counted."""
+        self.assertEqual(reader._spent_so_far(None), {})
+        runs = Path(tempfile.mkdtemp(prefix="frame-loop-spent-"))
+        (runs / "1.jsonl").mkdir()  # cannot be read as a file
+        lines = ['{"usage": {"total_tokens": 5, "model": "m"}}', "not json", "[1, 2]", '{"usage": {"total_tokens": 2}}']
+        (runs / "2.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        self.assertEqual(reader._spent_so_far(runs), {"made": 2, "usage": {"total_tokens": 7}})
+
+    def test_a_stopped_run_with_no_whole_run_to_read_reads_none(self):
+        """No plan to count by, no run as long as the plan, or a report that failed: none of
+        these is a whole run, so the reading stays not read."""
+        frame = Path(tempfile.mkdtemp(prefix="frame-loop-whole-")) / "frame.json"
+        runs = frame.parent / "runs"
+        runs.mkdir()
+        (runs / "1.jsonl").mkdir()  # cannot be read as a file
+        (runs / "2.jsonl").write_text("{}\n", encoding="utf-8")
+
+        def gadfly(plan, report="{}"):
+            return lambda args, *a, **k: subprocess.CompletedProcess(args, 0, plan if args[0] == "plan" else report, "")
+
+        with mock.patch.object(reader, "_gadfly", side_effect=gadfly("not json")):
+            self.assertIsNone(reader._whole_run(frame, runs))
+        with mock.patch.object(reader, "_gadfly", side_effect=gadfly('{"calls": 3}')):
+            self.assertIsNone(reader._whole_run(frame, runs))
+        (runs / "3.jsonl").write_text("{}\n{}\n{}\n", encoding="utf-8")
+        failed = '{"error": {"message": "no"}}'
+        with mock.patch.object(reader, "_gadfly", side_effect=gadfly('{"calls": 3}', failed)):
+            self.assertIsNone(reader._whole_run(frame, runs))
+        with mock.patch.object(
+            reader, "_gadfly", side_effect=gadfly('{"calls": 3}', '{"overall": {"category": "carried"}}')
+        ):
+            self.assertEqual(reader._whole_run(frame, runs)["category"], "carried")
+
     def test_not_installed_is_never_a_pass(self):
         with (
             self.nowhere(),
