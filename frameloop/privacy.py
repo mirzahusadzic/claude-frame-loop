@@ -233,7 +233,7 @@ def withhold_file() -> str:
     that trains on its inputs, the user's private names, masked before this is reached."""
     import reader
 
-    folder = Path(os.environ.get("FRAME_LOOP_WORK", Path(state.CWD or os.getcwd()) / ".frame-loop"))
+    folder = state.work()
     folder.mkdir(parents=True, exist_ok=True)
     data = {
         "always": {"patterns": [p for _, p in S.SECRET_PATTERNS]},

@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+import state
 from procs import STOPPED, TIMED_OUT, bounded
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
@@ -358,7 +359,7 @@ def _withhold(work: Path) -> str:
 def walk(start: dict[str, Any], frames: list[dict[str, Any]], decision: str = "yes") -> dict[str, Any]:
     """Gadfly's routing of a decision up the tree (`gadfly walk --json`, no model call):
     the one rule of where a climb goes lives in Gadfly, never copied here (a reviewer)."""
-    work = Path(os.environ.get("FRAME_LOOP_WORK", Path.cwd() / ".frame-loop")) / "climb" / uuid.uuid4().hex
+    work = state.work() / "climb" / uuid.uuid4().hex
     work.mkdir(parents=True)
     paths = []
     for n, frame in enumerate([start, *frames]):
@@ -375,7 +376,7 @@ def walk(start: dict[str, Any], frames: list[dict[str, Any]], decision: str = "y
 
 
 def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
-    work = Path(os.environ.get("FRAME_LOOP_WORK", Path.cwd() / ".frame-loop")) / uuid.uuid4().hex
+    work = state.work() / uuid.uuid4().hex
     (work / "runs").mkdir(parents=True)
     withhold = ["--withhold", _withhold(work)]  # Gadfly refuses withheld text before any call
     path = work / "frame.json"

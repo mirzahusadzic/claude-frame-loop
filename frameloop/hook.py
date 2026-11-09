@@ -614,7 +614,7 @@ def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str,
 
 
 def _loop_files_at(event: dict[str, Any]) -> Path:
-    work = Path(os.environ.get("FRAME_LOOP_WORK") or Path(state.CWD or os.getcwd()) / ".frame-loop" / "work")
+    work = state.work()
     call = re.sub(r"[^\w-]", "_", str(event.get("tool_use_id") or "call"))[:80]
     session = re.sub(r"[^\w-]", "_", state.SESSION or "none")
     return work / "loop-files" / f"{session}-{call}.json"

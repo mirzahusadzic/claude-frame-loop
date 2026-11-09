@@ -184,3 +184,28 @@ class ReviewDiffLineTests(unittest.TestCase):
         diff = "--- a/c.yml\n+++ b/c.yml\n@@ -1,2 +1,2 @@\n-reader: old\n+reader: run\n effort: low\n"
         self.assertEqual(declare._without_declaration(diff, "the turn's change"), diff)
         self.assertNotIn("Serves", declare._without_declaration("Serves: A1\nAdd the test.", "a plan"))
+
+
+class WithholdFileTests(unittest.TestCase):
+    """CodeQL's first scan: with no work folder set, the withhold file went to the project's
+    .frame-loop itself, which git does not ignore, and one there held the author's private
+    names where a `git add -A` would publish them. Every fallback is now .frame-loop/work."""
+
+    def test_with_no_work_folder_the_files_go_where_git_ignores_them(self):
+        import tempfile
+
+        import record
+        import writer
+
+        project = Path(tempfile.mkdtemp(prefix="frame-loop-withhold-")).resolve()
+        saved = state.CWD, state.SESSION
+        self.addCleanup(lambda: (setattr(state, "CWD", saved[0]), setattr(state, "SESSION", saved[1])))
+        state.CWD, state.SESSION = str(project), None
+        clean = {k: v for k, v in os.environ.items() if k != "FRAME_LOOP_WORK"}
+        with mock.patch.dict(os.environ, clean, clear=True):
+            written = Path(privacy.withhold_file())
+            self.assertEqual(written.parent, project / ".frame-loop" / "work")
+            self.assertEqual(record.step_diff("S1").parents[2], project / ".frame-loop" / "work")
+            self.assertEqual(writer._cache("x").parent, project / ".frame-loop" / "work" / "labels")
+        ignored = (ROOT / ".gitignore").read_text(encoding="utf-8").split()
+        self.assertIn(".frame-loop/work/", ignored)

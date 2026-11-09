@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import signals
+import state
 from procs import within
 
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
@@ -69,7 +70,7 @@ def facts_line(text: str, manifests: list[str]) -> str:
 
 
 def _cache(text: str) -> Path:
-    work = Path(os.environ.get("FRAME_LOOP_WORK", Path.cwd() / ".frame-loop")) / "labels"
+    work = state.work() / "labels"
     work.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(f"{MODEL}\n{INSTRUCTION}\n{text}".encode()).hexdigest()
     return work / f"{key}.json"
