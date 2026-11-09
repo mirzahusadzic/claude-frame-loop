@@ -182,6 +182,18 @@ class PrinciplesAndTriggersTests(Approved):
         self.assertIn("Docs are brief.", [p["text"] for p in read["principles"]])
         self.assertEqual(framezero.unapproved(read), [])
 
+    def test_a_frames_file_cannot_bring_in_a_scoped_rule(self):
+        """Sparky's ninth review: with no rules index, a scoped rule written into frame 0's file
+        was joined as the index's own, so it needed no approval, and a write adding it asked
+        nothing in enforce mode."""
+        self.answer([ONE, TWO])
+        rule = {"id": "R8", "kind": "semantic", "accepted": True, "scope": ["docs/*"], "quote": ["Unapproved."]}
+        written = json.dumps({**FRAME, "semantic": [rule]})
+        self.frame.write_text(written, encoding="utf-8")
+        read = framezero.with_semantic(framezero.load_frame0(), ["docs/verdicts.md"])
+        self.assertNotIn("Unapproved.", [p["text"] for p in read["principles"]])
+        self.assertFalse(framezero.text_in_approved_words(written, "frame 0"))
+
     def test_a_frames_file_cannot_set_the_loops_own_marks(self):
         """Sparky's fifth review: a file saying `"node"` read as an unanswered frame, and one
         saying `"indexed"` went unapproved."""

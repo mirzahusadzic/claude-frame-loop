@@ -117,7 +117,7 @@ def text_in_approved_words(text: str, frame: str) -> bool:
     except (ValueError, KeyError, TypeError, AttributeError):
         return False
     # A scope or a check is no word of a picker's, and one approval is not two items of its words.
-    unshown = held.get("scope") or held.get("obligations") or len(items) != len(set(items))
+    unshown = held.get("scope") or held.get("obligations") or held.get("semantic") or len(items) != len(set(items))
     return bool(words) and not unshown and set(items) == words
 
 
@@ -260,6 +260,7 @@ def load_frame0() -> dict[str, Any]:
     frame0.setdefault("id", "frame-0")  # Claude may save it without one (novice profile)
     # Marks only the loop may set, never its file: which frame this is, and which rules are the index's.
     frame0.pop("node", None)
+    frame0.pop("semantic", None)  # scoped rules come from the index alone, which no picker shows
     for part in ("principles", "triggers"):
         frame0[part] = [
             {k: v for k, v in x.items() if k != "indexed"} if isinstance(x, dict) else x for x in frame0.get(part) or []
