@@ -983,6 +983,12 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
         "is not read; only when the author asks whether the whole frame is done, add `--all`, which "
         "reads every ask. A turn's declarations add up. A change that "
         "meets a check the rules require names it in its declaration, `--done <ids>`.",
+        "Work in unison with the reader: do the work in the checkout it reads, this session's "
+        "project, so each change reaches it as it is made. When a separate copy seems needed, such "
+        "as a worktree to spare a running server, say so before starting and agree with the author "
+        "how it will be read; never route work around it. An outcome outside the code (a pull "
+        "request merged, an alert closed, a real run's result) leaves no change to read, so no "
+        "reading settles it: tell the author it happened, or what showed it.",
         *(
             [
                 "The work is a tree of nodes, frame 0 its root: "

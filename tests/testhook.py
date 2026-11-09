@@ -628,6 +628,16 @@ class AttackTests(unittest.TestCase):
             if code:
                 self.assertIn("upgrading it failed: error: no network", out["systemMessage"])
 
+    def test_the_briefing_says_to_work_where_the_reader_reads(self):
+        """eGemma's session, Mirza: "work in unison next time... not trying to work around her".
+        Work done in a separate worktree was merged from there, and the check had no change to
+        read; an outcome outside the code can settle no reading at all."""
+        os.environ.update(env())
+        said = " ".join(hook.briefing(framezero.load_frame0(), "shadow").split())
+        self.assertIn("Work in unison with the reader: do the work in the checkout it reads", said)
+        self.assertIn("say so before starting and agree with the author how it will be read", said)
+        self.assertIn("leaves no change to read, so no reading settles it", said)
+
     def test_the_briefing_says_what_makes_a_line_a_rule(self):
         """An agent's report: asked to compile a project's rules, it offered the author's
         corrections of its conduct, lines no change can keep or break, and sorted none
