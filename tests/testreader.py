@@ -364,6 +364,52 @@ class GadflyOutputTest(unittest.TestCase):
         self.assertTrue(gate._failed(out))
 
 
+class FailedRunTests(unittest.TestCase):
+    """Sparky's sixth review: Gadfly's status was not read, so a run that failed after printing a
+    whole verdict passed. Its `firm`, `run`, `report` and `walk` exit 0 whatever the verdict."""
+
+    def run_with(self, status, stdout):
+        import gate
+        import reader
+
+        done = subprocess.CompletedProcess([], status, stdout, "")
+        return reader, gate, done
+
+    def test_a_status_other_than_0_is_no_verdict(self):
+        verdict = json.dumps(
+            {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "A1"}}]}
+        )
+        reader, gate, done = self.run_with(1, verdict)
+        with mock.patch.object(reader, "_gadfly", lambda *a, **k: done):
+            frame = {"name": "which-ask", "battery": {}}
+            self.assertEqual(gate.which_ask(reader.run(frame), ["A1"])[0], gate.BLOCK)
+            self.assertEqual(gate.violation_stage_one(reader.run(frame, only=("baseline", "repeat")))[0], gate.BLOCK)
+            self.assertIn("error", reader.walk(frame, []))
+
+    def test_a_status_of_0_is_read(self):
+        verdict = json.dumps(
+            {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "A1"}}]}
+        )
+        reader, gate, done = self.run_with(0, verdict)
+        with mock.patch.object(reader, "_gadfly", lambda *a, **k: done):
+            self.assertEqual(gate.which_ask(reader.run({"name": "which-ask", "battery": {}}), ["A1"])[0], gate.PASS)
+
+    def test_gadflys_own_error_keeps_its_words(self):
+        reader, _, done = self.run_with(2, json.dumps({"error": {"message": "the battery stopped"}}))
+        self.assertEqual(reader._read_json(done)["error"]["message"], "the battery stopped")
+
+
+class SpentTests(unittest.TestCase):
+    def test_a_call_with_no_total_still_spends(self):
+        """Sparky's sixth review: usage without a total counted as nothing, so no cap ever bound."""
+        import reader
+
+        self.assertEqual(reader._spent_of({"total_tokens": 9, "input_tokens": 1}), 9)
+        self.assertEqual(reader._spent_of({"input_tokens": 100, "output_tokens": 50}), 150)
+        self.assertEqual(reader._spent_of({"output_tokens": 50}), 50)
+        self.assertEqual(reader._spent_of({}), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
 

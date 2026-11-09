@@ -83,6 +83,25 @@ def _split(where: Path) -> dict[str, int]:
     return counts
 
 
+def _spent_of(usage: dict[str, Any]) -> int:
+    """The tokens one call reports: their total, or its input and output where a provider
+    gives no total, so that a cap never counts a spending call as nothing."""
+    whole = usage.get("total_tokens")
+    if isinstance(whole, int):
+        return whole
+    return sum(x for x in (usage.get("input_tokens"), usage.get("output_tokens")) if isinstance(x, int))
+
+
+def _read_json(done: subprocess.CompletedProcess) -> dict[str, Any]:
+    """What Gadfly said, and never a verdict from a run that failed: a status other than 0 is an
+    error, whatever its output says, as a wrapper or a crash can print a whole verdict first."""
+    said = json.loads(done.stdout or done.stderr)
+    told = isinstance(said, dict) and (said.get("error") or said.get("stopped") or said.get("exit"))
+    if done.returncode != 0 and not told:  # what Gadfly says of its own failure keeps its words
+        return {"error": {"message": f"the reader exited with status {done.returncode}"}}
+    return said
+
+
 def _tokens(where: Path) -> int:
     """What the answers so far spent, from Gadfly's records; a line still being written counts
     for nothing."""
@@ -95,10 +114,9 @@ def _tokens(where: Path) -> int:
             continue
         for line in lines:
             try:
-                spent = (json.loads(line).get("usage") or {}).get("total_tokens")
+                total += _spent_of(json.loads(line).get("usage") or {})
             except (ValueError, AttributeError):
                 continue
-            total += spent if isinstance(spent, int) else 0
     return total
 
 
@@ -256,6 +274,8 @@ def walk(start: dict[str, Any], frames: list[dict[str, Any]], decision: str = "y
         path.write_text(json.dumps(frame), encoding="utf-8")
         paths.append(str(path))
     done = _gadfly(["walk", "--from", paths[0], "--decision", decision, *paths[1:], "--json"])
+    if done.returncode != 0:
+        return {"error": (done.stderr or done.stdout or f"exit {done.returncode}").strip()[-300:]}
     try:
         return json.loads(done.stdout)
     except ValueError:
@@ -293,11 +313,11 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             args += ["--parallel", os.environ["FRAME_LOOP_PARALLEL"]]
         ran = _gadfly(args, watch=out, group=group)
         if ran.returncode != 0:
-            return json.loads(ran.stdout or ran.stderr)
+            return _read_json(ran)
         made = json.loads(ran.stdout)
         read = _gadfly(["report", str(path), str(out), "--json"])
         return {
-            **json.loads(read.stdout or read.stderr),
+            **_read_json(read),
             "made": made.get("made"),
             "usage": made.get("usage") or {},
             "split": _split(out),
@@ -322,4 +342,4 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
         watch=work / "runs",
         group=group,
     )
-    return {**json.loads(ran.stdout or ran.stderr), "reader": {"parallel": parallel}, "split": _split(work / "runs")}
+    return {**_read_json(ran), "reader": {"parallel": parallel}, "split": _split(work / "runs")}
