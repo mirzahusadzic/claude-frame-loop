@@ -38,7 +38,7 @@ SHELLS = {"bash", "sh", "zsh", "dash", "ksh"}
 # Wrappers that run the command after them, and their options that take a value.
 WRAPPERS = {
     "sudo": {"-u", "-g", "-h", "-p", "-C", "-D", "-r", "-t", "-U", "-T"},
-    "env": {"-u", "-C", "-S"},
+    "env": {"-u", "-C"},
     "command": set(),
     "exec": {"-a"},
     "time": set(),
@@ -147,6 +147,21 @@ PUBLISH = {
 }
 
 
+def _env_split(words: list[str]) -> list[str]:
+    """`env -S 'rm -rf x'` and its other spellings run the string as a command: its words."""
+    i = 0
+    while i < len(words) and words[i].startswith("-"):
+        word = words[i]
+        if word in ("-S", "--split-string") and i + 1 < len(words):
+            return _words(words[i + 1]) + words[i + 2 :]
+        if word.startswith("--split-string="):
+            return _words(word.split("=", 1)[1]) + words[i + 1 :]
+        if word.startswith("-S") and len(word) > 2:
+            return _words(word[2:]) + words[i + 1 :]
+        i += 2 if word in WRAPPERS["env"] else 1
+    return words
+
+
 def command_words(words: list[str]) -> list[str]:
     """A simple command's words from its program on: past variable assignments, shell
     keywords and wrappers such as `sudo` or `env`, with their options."""
@@ -154,7 +169,8 @@ def command_words(words: list[str]) -> list[str]:
         words = words[1:]
     while words and words[0] in WRAPPERS:
         wrapper = words[0]
-        words = _flags(words[1:], WRAPPERS[wrapper])
+        words = _env_split(words[1:]) if wrapper == "env" else words[1:]
+        words = _flags(words, WRAPPERS[wrapper])
         if wrapper == "timeout" and words:  # `timeout 5 git push`: its duration comes first
             words = words[1:]
         while words and re.fullmatch(r"\w+=.*", words[0]):

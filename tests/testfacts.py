@@ -120,6 +120,26 @@ class FactsTests(unittest.TestCase):
             self.assertIsNotNone(facts.outward(command), command)
 
 
+class EnvSplitTests(unittest.TestCase):
+    def test_a_string_env_runs_is_read_as_a_command(self):
+        """Sparky's fourth review: `env -S 'rm -rf build'` ran a recursive delete, unseen."""
+        for command in (
+            "env -S 'rm -rf build'",
+            "env --split-string='rm -rf build'",
+            "env --split-string 'rm -rf build'",
+            "env '-Srm -rf build'",
+            "env -u HOME -S 'rm -rf build'",
+            "sudo env -S 'rm -rf build'",
+        ):
+            self.assertTrue(facts.outward(command), command)
+        self.assertTrue(facts.outward("env -S 'git push origin main'"))
+
+    def test_what_env_runs_otherwise_is_read_as_before(self):
+        self.assertTrue(facts.outward("env A=1 rm -rf build"))
+        self.assertFalse(facts.outward("env -S 'grep rm -rf build'"))
+        self.assertFalse(facts.outward("env -u HOME ls"))
+
+
 if __name__ == "__main__":
     unittest.main()
 
