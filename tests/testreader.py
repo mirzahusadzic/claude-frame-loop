@@ -386,6 +386,20 @@ class FailedRunTests(unittest.TestCase):
             self.assertEqual(gate.violation(reader.run(frame, only=("baseline", "repeat")))[0], gate.BLOCK)
             self.assertIn("error", reader.walk(frame, []))
 
+    def test_two_readings_stop_a_trial_once_its_answer_is_fixed(self):
+        """Two answers alike of three decide a trial; the third call spent tokens and changed nothing."""
+        verdict = json.dumps({"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}]})
+        reader, gate, done = self.run_with(0, verdict)
+        calls = []
+
+        def gadfly(args, **kwargs):
+            calls.append(args)
+            return done
+
+        with mock.patch.object(reader, "_gadfly", gadfly):
+            reader.run({"name": "violation", "battery": {}}, only=("baseline", "repeat"))
+        self.assertIn("--settle", calls[0])
+
     def test_a_status_of_0_is_read(self):
         verdict = json.dumps(
             {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "A1"}}]}

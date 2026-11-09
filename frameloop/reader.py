@@ -305,6 +305,7 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
             "auto",
             "--output-tokens",
             str(CAP),
+            "--settle",  # no call starts for a trial whose level is fixed; those already out still count
             "--json",
         ]
         for trial in only:

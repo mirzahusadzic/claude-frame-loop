@@ -331,9 +331,10 @@ class LiveReaderTests(unittest.TestCase):
             self.assertEqual(result["usage"]["output_tokens"], result["made"], parallel)
         os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Stuck"
         frame = {**frames.violation(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-stuck"}}
+        os.environ["FRAME_LOOP_PARALLEL"] = "1"  # calls already out when a trial settles are still made
         result = reader.run(frame, only=("baseline", "repeat"))
-        self.assertEqual(result["made"], 6)
-        self.assertEqual(result["usage"]["output_tokens"], 6)
+        self.assertEqual(result["made"], 4)
+        self.assertEqual(result["usage"]["output_tokens"], 4)
 
     def test_a_private_name_in_a_path_is_masked_and_gadfly_lets_it_through(self):
         """Seen on the loop's release: the mod's folder carried the project's private name,
@@ -382,6 +383,9 @@ class LiveReaderTests(unittest.TestCase):
         frame = {**frames.violation(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-stuck"}}
         result = reader.run(frame, only=("baseline", "repeat"))
         self.assertEqual(gate.violation(result)[0], gate.RISE, result)
+        whole = two_readings(frames.violation(FRAME0, STEP, "anthropic"), "Stuck")[1]
+        self.assertEqual(result["findings"][0]["levels"], whole["findings"][0]["levels"])  # the same reading...
+        self.assertEqual(sum(result["split"].values()), 4)  # ...for four calls of the six
         os.environ["FRAME_LOOP_PARALLEL"] = "3"
         result = reader.run(frame, only=("baseline", "repeat"))
         self.assertEqual(gate.violation(result)[0], gate.RISE, result)

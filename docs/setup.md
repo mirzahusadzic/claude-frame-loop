@@ -76,7 +76,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_TRAINING_OK=1` | off | allows a tier that trains on its inputs, for the project |
 | `FRAME_LOOP_MODE` | `shadow` | `shadow` reports; `enforce` also asks before acts and sends Claude back on a ▲ at a turn's end |
 | `FRAME_LOOP_EFFORT` | `low` on Muse | the reader's effort floor, `low` to `max`; risky changes raise it to `high`, never below the floor |
-| `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that |
+| `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that; a rules reading stops asking once two answers agree, which saves calls only when fewer than its six go out at once |
 | `FRAME_LOOP_OUTPUT_TOKENS` | `16000` | the cap on each reader answer |
 | `FRAME_LOOP_READ_TIMEOUT` | `540` | seconds a reading's Gadfly run may take before it is stopped and the change is not read |
 | `FRAME_LOOP_READ_TOKENS` | `150000` | the tokens a reading may spend, for each requirement in a completion, before it is stopped and the change is not read; `0` for no cap. It is checked as answers land, so calls in flight can go over it |
