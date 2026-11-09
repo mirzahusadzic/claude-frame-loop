@@ -93,6 +93,7 @@ const outcome = (decision: string | undefined) =>
 let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
 let waking = false
+let retried = 0
 let liveFolder = ''
 
 // Whose switch the hooks read: what they said for this session. Only they are told the
@@ -110,12 +111,21 @@ const followTheHooks = async ($: any) => {
 // and the hooks read a frame's words against them all. What it could not keep is said.
 const remember = async ($: any, held: Proposal): Promise<string> => {
   const path = switchPath.replace(/switch$/, 'approved.json')
+  const notKept = '\n\nframe-loop could not keep this answer on its record, so these words read as not approved.'
   let kept: { version: number; rounds: unknown[] } = { version: 1, rounds: [] }
+  let text: string | undefined
   try {
-    const found = JSON.parse(await $.fs.read(path))
-    if (Array.isArray(found?.rounds)) kept = found
+    text = await $.fs.read(path)
   } catch {
     // no record yet
+  }
+  if (text !== undefined) {
+    try {
+      kept = JSON.parse(text)
+      if (!Array.isArray(kept?.rounds)) return notKept
+    } catch {
+      return notKept // a record that cannot be read is never written over: the answers in it stay
+    }
   }
   // A removal approved takes its words out; one not approved leaves them as they were.
   const texts = (keep: (x: Item) => boolean) => held.items.filter(keep).map((x: Item) => x.text)
@@ -130,7 +140,7 @@ const remember = async ($: any, held: Proposal): Promise<string> => {
     await $.fs.write(path, `${JSON.stringify(kept, null, 1)}\n`)
     return ''
   } catch {
-    return '\n\nframe-loop could not keep this answer on its record, so these words read as not approved.'
+    return notKept
   }
 }
 
@@ -206,7 +216,12 @@ export const register: Register = on => {
         const at = now.at
         await update($, woken, () => at)
         waking = false
-        void $.prompt.submit({ text: WAKE })
+        // A wake that did not go is tried once more, and then its ▲ or the next prompt must do.
+        void Promise.resolve($.prompt.submit({ text: WAKE })).catch(async () => {
+          if (retried === at) return
+          retried = at
+          await update($, woken, () => 0)
+        })
       }
     })
 
