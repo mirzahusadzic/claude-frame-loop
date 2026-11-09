@@ -4946,6 +4946,42 @@ class OneReadingOfAChangeTests(unittest.TestCase):
         _, asked = self.stop()
         self.assertIn("which", asked)
 
+    def test_the_same_final_tree_reached_from_elsewhere_is_read_whole(self):
+        """Sparky's fourth review: the turn's end leaned on a check of another change, since it
+        compared only the final tree."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:done_and_clean"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        path = REPO / f"same-{uid(self)}.py"
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        path.write_text("a = 1\n", encoding="utf-8")
+        self.bash(": frame-loop-declare --serves A1")
+        self.bash(": frame-loop-read --complete")
+        self.stop()
+        path.write_text("a = 2\n", encoding="utf-8")
+        hook.answer(self.event("UserPromptSubmit", prompt="and back"))
+        path.write_text("a = 1\n", encoding="utf-8")
+        self.bash(": frame-loop-declare --serves A1")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
+    def test_a_reading_of_the_same_final_tree_from_elsewhere_is_not_reused(self):
+        """Sparky's fourth review: a reading of one change stood for another that ended alike."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:done_and_clean"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        path = REPO / f"same-{uid(self)}.py"
+        self.addCleanup(lambda: path.unlink(missing_ok=True))
+        hook.answer(self.event("UserPromptSubmit", prompt="go"))
+        path.write_text("a = 1\n", encoding="utf-8")
+        self.bash(": frame-loop-read --serves A1")
+        self.stop()
+        path.write_text("a = 2\n", encoding="utf-8")
+        hook.answer(self.event("UserPromptSubmit", prompt="and back"))
+        path.write_text("a = 1\n", encoding="utf-8")
+        self.bash(": frame-loop-declare --serves A1")
+        _, asked = self.stop()
+        self.assertIn("which", asked)
+
     def test_half_a_reading_is_not_reused_as_a_whole_one(self):
         self.checked()
         self.stop()

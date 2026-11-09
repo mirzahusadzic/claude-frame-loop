@@ -242,9 +242,13 @@ def _read_before(
     effort = effort_for(said, facts, tier)[0] if tier else None
     if effort is None:
         return None
+    # A turn that began at this tree after a reading did not grow out of it: the same final tree
+    # reached from elsewhere is another change, though it touches the same files.
+    began = max((float(r.get("at", 0)) for r in _records("turn-start") if r.get("tree") == before), default=0.0)
     for r in reversed(_records_all()):
         if (
             r.get("session") == state.SESSION
+            and (r.get("from") == before or float(r.get("at", 0)) >= began)
             and r.get("event") in ("read", "turn", "reused")
             and r.get("verdict")
             and r.get("frame0") == mark
@@ -263,17 +267,18 @@ def _frame_mark(frame0: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(frame0, sort_keys=True).encode("utf-8")).hexdigest()[:16]
 
 
-def _checked_at_end(after: str, said: str, mark: str, declared: list[str], facts: dict[str, Any]) -> bool:
+def _checked_at_end(before: str, after: str, said: str, mark: str, declared: list[str], facts: dict[str, Any]) -> bool:
     """Whether this turn's end-of-work check already asked the reader about these requirements,
-    of this final tree and frame 0, on this reader, at least as hard, over these files. A
-    requirement it could not read is not covered, and neither is a change made after it."""
+    of this very change, on this frame 0 and reader, at least as hard. A requirement it could not
+    read is not covered, and neither is a change made after it."""
     tier, _ = tier_for(said)
     effort = effort_for(said, facts, tier)[0] if tier else None
     if effort is None:
         return False
     for r in reversed(_records("completion")):
         if (
-            r.get("to") == after
+            r.get("from") == before
+            and r.get("to") == after
             and r.get("frame0") == mark
             and r.get("tier") == tier
             and r.get("asked")
@@ -311,7 +316,9 @@ def read_change(cwd: str, before: str, after: str, said: str, frame0: dict[str, 
         diff = diff[:cap] + f"\n[diff cut at {cap} characters]"
     prior = _read_before(kind, before, after, said, mark, _declared(said, frame0), facts)
     # The end-of-work check of this very change asked about the requirements: not again.
-    fit_read = not prior and kind == "turn" and _checked_at_end(after, said, mark, _declared(said, frame0), facts)
+    fit_read = (
+        not prior and kind == "turn" and _checked_at_end(before, after, said, mark, _declared(said, frame0), facts)
+    )
     if prior:
         result, tier, tier_note = {**prior["verdict"], "effort": prior["effort"]}, prior["tier"], ""
     else:
@@ -612,6 +619,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     # What the turn's end need not ask again, for the change still running.
     covers = (
         {
+            "from": pending.get("from"),
             "to": pending.get("tree"),
             "frame0": mark,
             "tier": tier,

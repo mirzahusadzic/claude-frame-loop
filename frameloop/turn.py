@@ -308,7 +308,7 @@ def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
         return None
     marked = [x for r in records[last_stop + 1 :] if r.get("event") == "declare" for x in r.get("lines", [])]
     step = step_label(cwd, before, after, frame0, _declared("\n".join(marked), frame0))
-    return {**step, "tree": after} if step["paths"] else None
+    return {**step, "from": before, "tree": after} if step["paths"] else None
 
 
 def _read_turn(event: dict[str, Any], frame0: dict[str, Any], mode: str) -> dict[str, Any] | None:
