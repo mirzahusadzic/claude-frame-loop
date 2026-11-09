@@ -259,6 +259,20 @@ class CompletionTests(Isolated):
         self.assertEqual(read, [])
         self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", again["systemMessage"])
 
+    def test_an_answer_kept_before_misses_were_marked_is_read_again(self):
+        """Sparky's ninth review: a row kept before an answer said whether it was a firm "not
+        done" read as a doubt, so a firm miss was reused and the author was never told."""
+        os.environ["FRAME_LOOP_READER"] = "testhook:completion_a1_firmly_missed"
+        os.environ.pop("FRAME_LOOP_LINES", None)
+        self.claim("S1", ["A1"], self.A_FILE)
+        self.asked()
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        older = [{k: v for k, v in r.items() if k != "missed"} for r in rows]
+        self.log.write_text("".join(json.dumps(r) + "\n" for r in older), encoding="utf-8")
+        again, read = self.asked()
+        self.assertEqual(read, ["A1"])
+        self.assertIn("▲ needs you: 0 of 1 claimed requirements read as done", again["systemMessage"])
+
     def test_a_reading_that_did_not_finish_is_read_again(self):
         """A failed reading is no answer, so nothing of it may stand."""
         os.environ["FRAME_LOOP_READER"] = "testreading:cut_short"

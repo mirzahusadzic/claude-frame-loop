@@ -308,7 +308,13 @@ def _evidence(
 def _read_already(key: str, ask: str) -> dict[str, Any] | None:
     """This session's answer on the same evidence, if the record holds one it can trust."""
     for r in reversed(_records("completion-read")):
-        if r.get("key") == key and r.get("ask") == ask and isinstance(r.get("part"), str):
+        # A row from before an answer said whether it is a firm "not done" cannot say so: read again.
+        if (
+            r.get("key") == key
+            and r.get("ask") == ask
+            and isinstance(r.get("part"), str)
+            and isinstance(r.get("missed"), bool)
+        ):
             if r["part"].startswith(f"{ask} ") and r.get("ok") == (r["part"] == f"{ask} ✓"):
                 return r
     return None

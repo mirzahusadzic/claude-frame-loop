@@ -4651,6 +4651,7 @@ def completion_not_firm(frame, only=()):
 
 def completion_a1_firmly_missed(frame, only=()):
     """A1 is firmly not done; every other requirement does not settle."""
+    SEEN.append(frame)
     if "A1" in frame["name"]:
         return {"exit": 0, "firm": True, "category": "unresolved", "findings": [{"levels": {"baseline": "no"}}]}
     return completion_not_firm(frame)
