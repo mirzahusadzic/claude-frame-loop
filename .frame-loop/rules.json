@@ -3,7 +3,7 @@
  "version": 2,
  "source": {
   "file": "AGENTS.md",
-  "sha256": "49a6278852ca0d6d3e39f971212851dbb2a826f21a6c0676e7748c256c95c90f"
+  "sha256": "509d5ec288ab578327ac998a9ced0187047f668a7925d38e292e1cbe42aeabad"
  },
  "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
  "rules": [
@@ -65,9 +65,9 @@
    "scope": [
     "*"
    ],
-   "text": "frame 0, rules, tree and switch change only with the user",
+   "text": "frame 0, approvals, rules, tree and switch change only with the user",
    "quote": [
-    "Frame 0, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user."
+    "Frame 0, `approved.json`, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user."
    ],
    "check": null,
    "accepted": true
