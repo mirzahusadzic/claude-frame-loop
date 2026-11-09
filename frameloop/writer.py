@@ -14,6 +14,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import signals
 from procs import within
 
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
@@ -55,13 +56,16 @@ def facts_line(text: str, manifests: list[str]) -> str:
             renamed.append(f"{source} to {current}")
     if not (added or deleted or renamed or modified):
         return ""
+    moved = [x.rsplit(" to ", 1)[-1] for x in renamed]
+    only_docs = all(signals.DOCS.search(p) for p in added + deleted + moved + modified)
     parts = [
         f"{name} {', '.join(paths)}"
         for name, paths in (("added", added), ("deleted", deleted), ("renamed", renamed), ("modified", modified))
         if paths
     ]
     touched = sorted({p.rsplit("/", 1)[-1] for p in added + deleted + modified if p.rsplit("/", 1)[-1] in manifests})
-    return "Files: " + "; ".join(parts) + "." + (f" Manifests: {', '.join(touched)}." if touched else "")
+    said = "Files: " + "; ".join(parts) + "." + (f" Manifests: {', '.join(touched)}." if touched else "")
+    return said + (" Only documentation changes: what it describes is not changed here." if only_docs else "")
 
 
 def _cache(text: str) -> Path:

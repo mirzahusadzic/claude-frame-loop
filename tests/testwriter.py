@@ -107,6 +107,14 @@ class FactsLineTests(unittest.TestCase):
         )
         self.assertEqual(writer.facts_line("not a diff", ["pyproject.toml"]), "")
 
+    def test_a_docs_only_change_is_said_to_be_one_by_code(self):
+        """Seen: a docs fix labelled as "this change rewrites how frame-loop reports results",
+        and the reader, who reads only the label, judged a behaviour change."""
+        docs = "diff --git a/README.md b/README.md\ndiff --git a/docs/x.md b/docs/x.md\n"
+        self.assertIn("Only documentation changes", writer.facts_line(docs, []))
+        code = docs + "diff --git a/src/a.py b/src/a.py\n"
+        self.assertNotIn("Only documentation changes", writer.facts_line(code, []))
+
 
 if __name__ == "__main__":
     unittest.main()
