@@ -506,7 +506,9 @@ class ReviewCompletionLabelTests(unittest.TestCase):
         from unittest import mock
 
         self.addCleanup(setattr, state, "SESSION", state.SESSION)
+        self.addCleanup(setattr, state, "CWD", state.CWD)
         state.SESSION = f"completion-{uid(self)}"
+        state.CWD = str(WORK / f"completion-{uid(self)}")  # never the checkout, whose own approvals would apply
         self.enterContext(mock.patch.dict(os.environ, FRAME_LOOP_WORK=str(WORK / f"completion-{uid(self)}")))
         big = record.step_diff("S1")
         big.parent.mkdir(parents=True, exist_ok=True)
@@ -549,7 +551,9 @@ class CompletionOnceTests(unittest.TestCase):
         from unittest import mock
 
         self.addCleanup(setattr, state, "SESSION", state.SESSION)
+        self.addCleanup(setattr, state, "CWD", state.CWD)
         state.SESSION = f"once-{uid(self)}"
+        state.CWD = str(WORK / f"once-{uid(self)}")  # never the checkout, whose own approvals would apply
         self.enterContext(mock.patch.dict(os.environ, FRAME_LOOP_WORK=str(WORK / f"once-{uid(self)}")))
         frame0 = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
         asks = [a["id"] for a in frame0["asks"]]
