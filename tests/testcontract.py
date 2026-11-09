@@ -376,6 +376,26 @@ class LiveReaderTests(unittest.TestCase):
         frame["battery"] = {**frames.READERS["anthropic"], "kind": "fake-ideal"}
         self.assertNotIn("withheld", json.dumps(reader.run(frame)))  # a non-training reader may read it
 
+    def test_a_whole_run_kept_reads_as_the_real_gadfly_read_it(self):
+        """`gadfly plan` names the calls of a run and `report` reads it, as a stopped reading needs."""
+        import reader
+
+        os.environ["FRAME_LOOP_BATTERY"] = "fakebatteries:Ideal"
+        frame = {**frames.which_ask(FRAME0, STEP, "anthropic"), "battery": {"kind": "fake-ideal"}}
+        work = ROOT / "tests/.work" / uuid.uuid4().hex
+        (work / "runs").mkdir(parents=True)
+        path = work / "frame.json"
+        path.write_text(json.dumps(frame), encoding="utf-8")
+        ran = reader._gadfly(
+            ["firm", str(path), "--battery", os.environ["FRAME_LOOP_BATTERY"], "--runs", str(work / "runs")]
+            + ["--calls", "auto", "--output-tokens", "64", "--json"]
+        )
+        firm = json.loads(ran.stdout)
+        whole = reader._whole_run(path, work / "runs")
+        self.assertEqual(whole["category"], firm["category"])
+        self.assertEqual(whole["findings"][0]["levels"], firm["findings"][0]["levels"])
+        self.assertIs(whole["firm"], False)
+
     def test_reader_runs_the_rules_frame_as_run_then_report(self):
         import reader
 

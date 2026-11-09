@@ -102,6 +102,59 @@ def _read_json(done: subprocess.CompletedProcess) -> dict[str, Any]:
     return said
 
 
+def _spent_so_far(where: Path | None) -> dict[str, Any]:
+    """All a run stopped short made, from Gadfly's records, so what it spent is never lost from
+    the count: its calls, and its tokens by name."""
+    if where is None:
+        return {}
+    files = [where] if where.suffix == ".jsonl" else sorted(where.glob("*.jsonl"))
+    made, usage = 0, {}
+    for f in files:
+        try:
+            lines = f.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            try:
+                spent = json.loads(line).get("usage") or {}
+                items = list(spent.items())
+            except (ValueError, AttributeError):
+                continue
+            made += 1
+            for name, value in items:
+                if isinstance(value, int):
+                    usage[name] = usage.get(name, 0) + value
+    return {"made": made, "usage": usage}
+
+
+def _whole_run(frame: Path, runs: Path) -> dict[str, Any] | None:
+    """What the latest whole run of a reading stopped short found, if it has one. Seen: four of
+    five readings stopped at the cap had a whole run, each over 100,000 tokens, thrown away for
+    the second run they could not finish. Not firm, as one run stopped there is not: an answer
+    to read, never a pass."""
+    plan = _gadfly(["plan", str(frame), "--json"])
+    try:
+        calls = json.loads(plan.stdout)["calls"]
+    except (ValueError, KeyError, TypeError):
+        return None
+    whole = []
+    for f in runs.glob("*.jsonl"):
+        try:
+            if f.stem.isdigit() and len(f.read_text(encoding="utf-8").splitlines()) >= calls:
+                whole.append(f)
+        except OSError:
+            continue
+    if not whole:
+        return None
+    read = _gadfly(["report", str(frame), str(max(whole, key=lambda f: int(f.stem))), "--json"])
+    said = _read_json(read)
+    if not isinstance(said, dict) or said.get("error") or said.get("stopped") or said.get("exit"):
+        return None
+    overall = said.get("overall")
+    category = overall.get("category") if isinstance(overall, dict) else None
+    return {**said, "category": category, "firm": False, "cut": True}
+
+
 def _tokens(where: Path) -> int:
     """What the answers so far spent, from Gadfly's records; a line still being written counts
     for nothing."""
@@ -205,11 +258,12 @@ def _gadfly(args: list[str], watch: Path | None = None, group: str = READING) ->
             watcher.join(2)
     if done.returncode == STOPPED:  # stopped: an error the gate reads as not read
         said = f"the reader reached its token cap of {cap}, so it was stopped"
-        told = {"error": {"message": said}, "usage": {"total_tokens": _tokens(watch)}}
+        told = {"error": {"message": said}, **_spent_so_far(watch)}
         return subprocess.CompletedProcess(command, STOPPED, json.dumps(told), done.stderr)
     if done.returncode == TIMED_OUT and not done.stdout:  # stopped: an error the gate reads as not read
         said = f"the reader gave no answer within {_read_timeout():g} s, so it was stopped"
-        return subprocess.CompletedProcess(command, TIMED_OUT, json.dumps({"error": {"message": said}}), done.stderr)
+        told = {"error": {"message": said}, **_spent_so_far(watch)}
+        return subprocess.CompletedProcess(command, TIMED_OUT, json.dumps(told), done.stderr)
     return done
 
 
@@ -343,4 +397,9 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
         watch=work / "runs",
         group=group,
     )
-    return {**_read_json(ran), "reader": {"parallel": parallel}, "split": _split(work / "runs")}
+    said = _read_json(ran)
+    if ran.returncode == STOPPED:
+        whole = _whole_run(path, work / "runs")
+        if whole:
+            said = {**whole, "made": said.get("made"), "usage": said.get("usage")}
+    return {**said, "reader": {"parallel": parallel}, "split": _split(work / "runs")}

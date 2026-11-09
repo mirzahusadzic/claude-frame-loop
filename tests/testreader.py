@@ -391,6 +391,39 @@ class FailedRunTests(unittest.TestCase):
             self.assertEqual(gate.violation(reader.run(frame, only=("baseline", "repeat")))[0], gate.BLOCK)
             self.assertIn("error", reader.walk(frame, []))
 
+    def stopped(self, runs_written, whole_calls=2):
+        """A `firm` stopped at its cap, having written these runs; plan and report answer."""
+        reader, _, _ = self.run_with(0, "")
+        report = {"overall": {"category": "unresolved"}, "findings": [{"levels": {"baseline": "no"}}]}
+
+        def gadfly(args, **kwargs):
+            if args[0] == "firm":
+                runs = Path(args[args.index("--runs") + 1])
+                for name, count in runs_written.items():
+                    row = json.dumps({"usage": {"total_tokens": 10, "output_tokens": 7}, "observation": "no"})
+                    (runs / name).write_text((row + "\n") * count, encoding="utf-8")
+                told = {"error": {"message": "the reader reached its token cap"}, **reader._spent_so_far(runs)}
+                return subprocess.CompletedProcess([], reader.STOPPED, json.dumps(told), "")
+            said = {"calls": whole_calls} if args[0] == "plan" else report
+            return subprocess.CompletedProcess([], 0, json.dumps(said), "")
+
+        with mock.patch.object(reader, "_gadfly", gadfly):
+            return reader.run({"name": "completion", "battery": {}})
+
+    def test_a_reading_stopped_after_a_whole_run_keeps_that_run(self):
+        result = self.stopped({"1.jsonl": 2, "2.jsonl": 1})
+        self.assertEqual(result["category"], "unresolved")
+        self.assertIs(result["firm"], False)  # never a pass
+        self.assertTrue(result["cut"])
+        self.assertEqual(result["made"], 3)  # the calls of both runs, spent either way
+        self.assertEqual(result["usage"]["total_tokens"], 30)
+
+    def test_a_reading_stopped_in_its_first_run_is_no_answer(self):
+        result = self.stopped({"1.jsonl": 1})
+        self.assertIn("token cap", result["error"]["message"])
+        self.assertEqual(result["made"], 1)  # and what it spent still counts
+        self.assertEqual(result["usage"]["output_tokens"], 7)
+
     def test_two_readings_stop_a_trial_once_its_answer_is_fixed(self):
         """Two answers alike of three decide a trial; the third call spent tokens and changed nothing."""
         verdict = json.dumps({"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}]})
