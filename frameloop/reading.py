@@ -19,8 +19,8 @@ import gate
 import state
 from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
-from framezero import _tree_nodes, load_frame0, load_frame0_root, route, with_semantic
-from lines import UNSETTLED_NOTE, _reader_name, _tell
+from framezero import _tree_nodes, load_frame0, load_frame0_root, route, unapproved, with_semantic
+from lines import UNSETTLED_NOTE, _reader_name, _tell, not_approved
 from live import _live_step, _on_answers, _on_tokens, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
@@ -165,6 +165,7 @@ def _read(
     tier allowed, or it rises unread. `said` is where the agent's lines are (the reply,
     for a turn); by default the text itself (a plan)."""
     tier, tier_note = tier_for(said if said is not None else text)
+    drifted = unapproved(frame0)  # before any mask: the words the author approved
     frame0 = mask_frame(frame0, tier) if tier else frame0
     faults = frames.frame0_faults(frame0)
     # The declaration never reaches the reader: its lines are cut, and every id of
@@ -172,6 +173,8 @@ def _read(
     step = {"id": step_id, "summary": _masked(_without_declaration(text, kind), frame0), "facts": {"kind": kind}}
     if faults:
         return {"decision": gate.RISE, "reason": "frame 0 is not ready: " + "; ".join(faults)}, tier, tier_note
+    if drifted:
+        return {"decision": gate.RISE, "reason": not_approved(drifted)}, tier, tier_note
     if not step["summary"].strip():  # a plan of its declaration alone: nothing is left to read
         return {"decision": gate.BLOCK, "reason": "not read: nothing to read past the declaration"}, tier, tier_note
     if tier is None:  # refused before anything is sent: its line says so, as any refusal's does
@@ -376,6 +379,14 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     faults = frames.frame0_faults(frame0)
     if faults:  # no requirement can be done against a frame 0 that cannot be read
         return "frame-loop · completion · not read: frame 0 is not ready: " + "; ".join(faults)
+    drifted = unapproved(frame0)
+    if drifted:
+        _log({"event": "completion", "parts": [], "usage": {}, "not_approved": len(drifted)})
+        state.LIVE["decision"] = gate.RISE
+        state.LIVE["shorts"] = [
+            "frame-loop ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker"
+        ]
+        return "frame-loop · completion · not read: " + not_approved(drifted)
     claims = {c for s in steps for c in s["claims"]} | set(_declared("\n".join(_marks()), frame0))
     asked = frame0["asks"] if whole else [a for a in frame0["asks"] if a["id"] in claims]
     if not asked:  # nothing to hold it against: said, and nothing is spent

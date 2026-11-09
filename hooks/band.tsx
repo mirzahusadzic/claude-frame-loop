@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Live } from '../types'
+import type { Item, Live, Proposal } from '../types'
 
 // frame-loop's hooks write what they ask now to FRAME_LOOP_LIVE/<session>.json
 // (one small file, rewritten whole); this band draws it above the prompt.
@@ -12,6 +12,44 @@ const dismissedAt = atom({ plugin: 'frame-loop', key: 'dismissedAt' } as const, 
 const openedAt = atom({ plugin: 'frame-loop', key: 'openedAt' } as const, 0)
 // The author's switch, mirrored from <project>/.frame-loop/switch, which the hooks read.
 const off = atom({ plugin: 'frame-loop', key: 'off' } as const, false)
+// The picker: what is being approved, until its round closes.
+const proposal = atom({ plugin: 'frame-loop', key: 'proposal' } as const, null as Proposal | null)
+
+const PICKER = 'approve'
+const APPROVE = /^mcp__frame-loop__approve$/
+const APPROVE_SCHEMA = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: 'What is being approved, in plain words.' },
+    node: { type: 'string', description: "The node's id, for a node of the tree; left out for frame 0." },
+    items: {
+      type: 'array',
+      minItems: 1,
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'One plain sentence, in the words to be written; never JSON or an id.' },
+          detail: { type: 'string', description: 'What it narrows and what it may change, if anything.' },
+        },
+        required: ['text'],
+      },
+    },
+    leftOut: { type: 'array', items: { type: 'string' }, description: 'What the proposal leaves out on purpose.' },
+  },
+  required: ['title', 'items'],
+}
+
+// What the next turn reads: plain sentences, as the person would say them.
+const answer = ({ items }: Proposal): string => {
+  const not = items.filter(x => !x.isChecked)
+  if (not.length === 0) return items.length === 1 ? 'Approved.' : `Approved, all ${items.length}.`
+  const yes = items.filter(x => x.isChecked)
+  return [
+    yes.length ? `Approved:\n${yes.map(x => `- ${x.text}`).join('\n')}` : 'Nothing approved.',
+    `Not approved:\n${not.map(x => `- ${x.text}`).join('\n')}`,
+    'Ask me what is wrong with each one I did not approve, before anything is written.',
+  ].join('\n\n')
+}
 
 const SPIN = ['◐', '◓', '◑', '◒']
 const STALE = 180 // seconds without an update: the read was interrupted, not running
@@ -54,6 +92,33 @@ const followTheHooks = async ($: any) => {
   }
 }
 
+// The approval on the record, where Claude's word cannot stand in for it. Each round is kept,
+// and the hooks read a frame's words against them all. What it could not keep is said.
+const remember = async ($: any, held: Proposal): Promise<string> => {
+  const path = switchPath.replace(/switch$/, 'approved.json')
+  let kept: { version: number; rounds: unknown[] } = { version: 1, rounds: [] }
+  try {
+    const found = JSON.parse(await $.fs.read(path))
+    if (Array.isArray(found?.rounds)) kept = found
+  } catch {
+    // no record yet
+  }
+  const words = (isChecked: boolean) => held.items.filter((x: Item) => x.isChecked === isChecked).map((x: Item) => x.text)
+  kept.rounds.push({
+    frame: held.node ?? 'frame 0',
+    title: held.title,
+    approved: words(true),
+    not_approved: words(false),
+    at: (await $.clock.now()) / 1000,
+  })
+  try {
+    await $.fs.write(path, `${JSON.stringify(kept, null, 1)}\n`)
+    return ''
+  } catch {
+    return '\n\nframe-loop could not keep this answer on its record, so these words read as not approved.'
+  }
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     const home = (await $.env.get('HOME')) || (await $.env.get('USERPROFILE')) // Windows may set only the latter
@@ -69,6 +134,18 @@ export const register: Register = on => {
       name: 'frame-loop',
       description: 'Switch frame-loop on or off for this project: /frame-loop, /frame-loop on, /frame-loop off',
     })
+    try {
+      await $.tool.register({
+        name: 'approve',
+        description:
+          'Ask the person to approve a decomposition item by item, in a picker with every item checked. ' +
+          'End your turn after calling it: their answer arrives as their next message.',
+        inputSchema: APPROVE_SCHEMA,
+        isDeferred: false,
+      })
+    } catch {
+      // no picker here: the band still runs, and Claude asks in chat
+    }
     let seen = 0
     let shownFor = ''
     $.clock.every(250, async () => {
@@ -114,6 +191,85 @@ export const register: Register = on => {
     await $.fs.write(switchPath, want ? 'off\n' : 'on\n')
     await update($, off, () => want)
     return { text: want ? 'frame-loop is off for this project: nothing is checked or read.' : 'frame-loop is on for this project.' }
+  })
+
+  on('tool.call', { tool: APPROVE }, async ($, e) => {
+    const given = e as unknown as { title?: string; node?: string; items?: Omit<Item, 'isChecked'>[]; leftOut?: string[] }
+    const items = (given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true }))
+    if (items.length === 0) return { deny: 'approve needs at least one item.' }
+    const leftOut = given.leftOut ?? []
+    const title = given.title ?? 'Approve'
+    await update($, proposal, () => ({ title, node: given.node, items, leftOut }))
+    const details = items.filter(x => x.detail).length
+    const opened = await $.ui.open({
+      id: PICKER,
+      title,
+      focus: true,
+      closeOnEscape: true,
+      holdToasts: true,
+      rows: Math.min(30, items.length + details + leftOut.length + 7),
+    })
+    if (!opened.isPlaced) {
+      await update($, proposal, () => null)
+      return { deny: `The picker could not be shown (${opened.reason}). Ask in chat instead.` }
+    }
+    return { result: 'The picker is open. End your turn now: the answer arrives as the next message.' }
+  })
+
+  // Closed with Escape: nothing is approved, and Claude must not be left waiting in silence.
+  on('ui.close', async ($, e, next) => {
+    const held = e.id === PICKER && e.origin.kind === 'person' ? await read($, proposal) : null
+    const closed = await next(e)
+    if (held) {
+      await update($, proposal, () => null)
+      await $.prompt.fill({ text: 'I closed the picker without approving anything.' })
+    }
+    return closed
+  })
+
+  on('ui.render', { component: 'Pane', requestId: PICKER }, async ($, e) => {
+    const { Box, Button, Text } = $.ui.resolve(e)
+    const now = await read($, proposal)
+    if (now === null) return <Text color="inactive">Nothing to approve.</Text>
+    const toggle = (index: number) =>
+      update($, proposal, p =>
+        p && { ...p, items: p.items.map((x, i) => (i === index ? { ...x, isChecked: !x.isChecked } : x)) },
+      )
+    const finish = async (send: (said: string) => Promise<unknown>) => {
+      await followTheHooks($)
+      const held = await read($, proposal)
+      await update($, proposal, () => null)
+      await $.ui.close({ id: PICKER })
+      if (held) await send(answer(held) + (await remember($, held)))
+    }
+    return (
+      <Box flexDirection="column">
+        {now.items.map((item, index) => (
+          <Box flexDirection="column">
+            <Button key={`item-${index}`} plain autoFocus={index === 0 ? true : undefined} onPress={() => toggle(index)}>
+              {`[${item.isChecked ? 'x' : ' '}] ${item.text}`}
+            </Button>
+            {item.detail ? <Text color="inactive">{`    ${item.detail}`}</Text> : null}
+          </Box>
+        ))}
+        {now.leftOut.length > 0 ? (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="inactive">Left out, on purpose:</Text>
+            {now.leftOut.map(line => (
+              <Text color="inactive">{` - ${line}`}</Text>
+            ))}
+          </Box>
+        ) : null}
+        <Box marginTop={1} gap={2}>
+          <Button key="approve" variant="primary" onPress={() => finish(text => $.prompt.submit({ text }))}>
+            Approve checked
+          </Button>
+          <Button key="missing" onPress={() => finish(text => $.prompt.fill({ text: `${text}\n\nMissing: ` }))}>
+            Add what's missing
+          </Button>
+        </Box>
+      </Box>
+    )
   })
 
   on('ui.render', { component: 'SessionMode' }, async ($, e, next) => {

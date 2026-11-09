@@ -27,7 +27,7 @@ The counting node, which Claude saves to `.frame-loop/tree/counting.json` on con
 
 ### Node file
 
-One JSON file per node in `.frame-loop/tree/`, fixed only on the user's confirmation.
+One JSON file per node in `.frame-loop/tree/`, fixed only once the user has approved its requirements in the picker.
 
 | Field | Holds | Checked when the file is written |
 | --- | --- | --- |

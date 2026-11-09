@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 import facts as F
+import framezero
 import gate
 import readers
 import state
@@ -29,6 +30,17 @@ SPLIT_NOTE = (
     "the reader split between requirements you named; confirm they all apply and go on, "
     "don't ask for another reading of it, and don't call the work checked"
 )
+
+
+NOT_APPROVED = "frame 0 is not approved"
+
+
+def not_approved(words: list[str]) -> str:
+    """Why a frame is not read, for Claude; the author reads it in plain words."""
+    return (
+        f"{NOT_APPROVED}: {len(words)} of its requirements are not in the words the author approved. "
+        "Call the approve tool with them, in the words you propose, and end your turn"
+    )
 
 
 def unsettled_note(reasons: list[str]) -> str:
@@ -116,6 +128,7 @@ AUTHORS = (
     ("FRAME_LOOP_RULES", "rules.json", "the rules"),
     ("FRAME_LOOP_TREE", "tree", "the tree"),
     (None, "switch", "the switch"),
+    (None, "approved.json", "your approvals"),
 )
 
 
@@ -128,6 +141,15 @@ def _authors_own(path: str) -> str | None:
         if any(here == q or q in here.parents for q in (x.resolve() for x in places)):
             return words
     return None
+
+
+def _needs_the_author(path: str, own: str | None) -> bool:
+    """A write to what is the author's needs them, unless it holds only words they approved."""
+    if own == "frame 0":
+        return not framezero.file_in_approved_words(path, framezero.FRAME_0)
+    if own == "the tree":
+        return not framezero.file_in_approved_words(path, Path(path).stem)
+    return own is not None
 
 
 def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
@@ -151,11 +173,12 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
                 gone = not Path(record.get("path", "")).exists()
                 own = _authors_own(record.get("path", ""))
                 words = f"Claude {'removed' if gone else 'changed'} {own or _which(record.get('path', ''))}"
-                needs = own is not None
+                needs = _needs_the_author(record.get("path", ""), own)
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
                 words = "Claude tried to change the loop's own files, and it did not go through"
             elif key == "L1:" and record.get("event") == "config" and _authors_own(record.get("path", "")):
-                words, needs = f"Claude changed {_authors_own(record.get('path', ''))}", True
+                own = _authors_own(record.get("path", ""))
+                words, needs = f"Claude changed {own}", _needs_the_author(record.get("path", ""), own)
             return words, needs, exact
     return "Claude did something you asked to hear of", False, exact
 
@@ -240,6 +263,8 @@ def _plain(result: dict[str, Any], frame0: dict[str, Any] | None) -> str:
         return by_question[question]
     if reason.startswith("frame 0 is not ready"):
         return "what this work is for isn't written yet"
+    if reason.startswith(NOT_APPROVED):
+        return "frame 0's words aren't the ones you approved: Claude can open the picker"
     if "has not allowed it here" in reason:  # the setting's name stays in the details
         return "not read: this reader trains on what it reads, and this project hasn't allowed that"
     if result.get("decision") == gate.BLOCK or reason.startswith("not read"):

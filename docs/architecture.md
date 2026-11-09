@@ -188,6 +188,7 @@ flowchart LR
 | Privacy gate | before any call | the change before the writer; then the label and file names | refuses secrets; masks private names; takes ids and a requirement's words out of the label |
 | Reader | each read | frame 0, the rules, the label and file names | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
 | Gate | after the reader | the answers | ✓, ▲, ■ or not settled, by fixed rules |
+| Picker | when Claude calls the `approve` tool | the items Claude proposes | each answer added to `.frame-loop/approved.json`; a frame answered for is read only in the words approved |
 | Guard | each shell or edit call | the command or the file | an act that is yours, in the record; in enforce mode, a question first |
 | Band | while a read runs, then until the next prompt | `~/.claude/frame-loop/live/<session>.json` | one line: what is happening now, the time left, the tokens spent; then a ▲ or a ■, with **details** |
 

@@ -364,7 +364,12 @@ def loop_files(event: dict[str, Any]) -> dict[str, str]:
     tree = os.environ.get("FRAME_LOOP_TREE")
     if tree and Path(tree).is_dir():
         paths += sorted(Path(tree).glob("*.json"))  # every node: a cap left the rest unwatched
-    paths += [switch_path(event), project / ".claude" / "settings.json", project / ".claude" / "settings.local.json"]
+    paths += [
+        switch_path(event),
+        project / ".frame-loop" / "approved.json",
+        project / ".claude" / "settings.json",
+        project / ".claude" / "settings.local.json",
+    ]
     hooks = project / ".claude" / "hooks"
     if hooks.is_dir():
         paths += sorted(x for x in hooks.rglob("*") if x.is_file())[:2000]

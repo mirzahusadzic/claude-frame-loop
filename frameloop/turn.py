@@ -24,7 +24,7 @@ import state
 from config import plugin_defaults, switch_path
 from declare import _declared, _value
 from effort import _effort_rules, _rule_hits
-from framezero import load_frame0, rules_lost
+from framezero import approved_words, engaged_frame, load_frame0, rules_lost
 from lines import _guide_words, _short_lines, _signals_short, act_words, for_user, signal_words, unsettled_note
 from live import _alive, _live, detached, stop
 from obligations import obligations_line, outside_scope
@@ -139,6 +139,28 @@ def completion_owed(frame0: dict[str, Any]) -> str:
         return ""
     _log({"event": "completion-reminded"})
     return COMPLETION_OWED
+
+
+APPROVAL_OWED = (
+    "frame-loop: this frame was written before its author approved it item by item. Before other "
+    "work, call the approve tool with its requirements, one item each, in their exact words, and end "
+    "your turn: their answer arrives as their next message. It is read as before until they answer. "
+    "You are told this once."
+)
+
+
+def approval_owed(frame0: dict[str, Any]) -> str:
+    """A frame with no answer gets one picker: told once, across sessions, and never again for
+    that frame, so a person who passes it over is not asked at every prompt."""
+    frame = engaged_frame()
+    if os.environ.get("FRAME_LOOP_PLUGIN") != "1":  # the picker comes with the plugin
+        return ""
+    if not frame0.get("asks") or approved_words(frame) is not None:
+        return ""
+    if any(r.get("event") == "approval-offered" and r.get("frame") == frame for r in _records_all()):
+        return ""
+    _log({"event": "approval-offered", "frame": frame})
+    return APPROVAL_OWED
 
 
 def _turn_start(event: dict[str, Any]) -> None:

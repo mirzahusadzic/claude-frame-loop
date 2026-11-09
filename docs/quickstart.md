@@ -25,7 +25,7 @@ State the work in a git repository as usual. Before any code, Claude restates it
 2. Over the limit, the API returns HTTP 429 with a retry time.
 ```
 
-The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and an inversion per requirement, the requirement's own claim reversed and no stronger, which the reader is also asked; every later change is checked against it, and read by the reader on a signal.
+Claude puts the sentences to you in a picker, each one checked. Uncheck what is wrong and choose **Approve checked**; Claude asks what is wrong with each one you unchecked, and writes nothing until each is approved, revised or dropped. The confirmed list is **frame 0**, each sentence a **requirement**. Claude saves it to `.frame-loop/frame0.json` with an id and an inversion per requirement, the requirement's own claim reversed and no stronger, which the reader is also asked; every later change is checked against it, and read by the reader on a signal.
 
 Frame 0 can also start from what the project already has: ask Claude to compose it from a spec or an earlier plan. Claude shows each requirement with where it came from, and you confirm the same way. Later, a request frame 0 does not hold becomes a proposed requirement, added only on your confirmation.
 

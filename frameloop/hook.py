@@ -96,6 +96,7 @@ from turn import (  # noqa: E402
     _read_turn,
     _turn_start,
     _turn_summary,
+    approval_owed,
     completion_owed,
     turn_so_far,
 )
@@ -405,7 +406,7 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
         if not _briefed(event):  # after `/reload-plugins` or `/frame-loop on` no session starts
             _log({"event": "briefed", "version": _version()})
             told = "\n\n".join(x for x in (briefing(frame0, mode), told) if x)
-        told = "\n".join(x for x in (told, completion_owed(frame0)) if x)
+        told = "\n".join(x for x in (told, approval_owed(frame0), completion_owed(frame0)) if x)
         _turn_start(event)
         return (
             {"hookSpecificOutput": {"hookEventName": "UserPromptSubmit", "additionalContext": told}} if told else None
@@ -788,7 +789,10 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "Frame 0 is not written yet, so nothing is read against it. When the author gives "
                 "you a task, reflect what this work is for back to the author in the author's words, "
                 "as plain sentences, one per line, easy to copy; ask about anything unclear. Never "
-                "show the author JSON, ids or inversions: they are for agents. On the author's OK, "
+                "show the author JSON, ids or inversions: they are for agents. Put the sentences to the "
+                "author with the approve tool, one item each, and end your turn: their answer arrives "
+                "as their next message. Ask what is wrong with any item not approved, and call it again "
+                "with what you revise. Only when every item is approved or dropped, "
                 "write frame 0 yourself as JSON to "
                 f"{os.environ.get('FRAME_LOOP_FRAME0')}: each ask as "
                 '{"id": "A1", "text": "<the author\'s words>", "inversion": '
@@ -910,7 +914,9 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
             else []
         ),
         "Frame 0 changes only with the author: when they ask for something it does not hold, "
-        "propose the requirement in plain words, and on their OK add it with its inversion. The "
+        "propose the requirement with the approve tool, and once they approve add it with its "
+        "inversion, in the words they approved. A frame whose words are not the ones approved is "
+        "not read, and they are told. If the picker cannot be shown, ask them in chat. The "
         "switch, `/frame-loop on` or `off`, is the author's alone: never write it.",
         "When you present finished work, declare what it serves and run `: frame-loop-read "
         "--complete`: each ask the work claimed is read over the steps that claimed it, this turn's "
@@ -936,8 +942,9 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
             else [
                 "Large work can nest: at a crossing, with the author, split an ask too coarse for "
                 "one step into nodes, each a JSON file in the project's .frame-loop/tree/ folder, "
-                f"its fields in {_docs('crossings.md')}; nodes nest to any depth, and each node file "
-                "is the author's to confirm before it is written."
+                f"its fields in {_docs('crossings.md')}; nodes nest to any depth, and each node's "
+                "requirements are the author's to approve with the approve tool, naming the node, "
+                "before its file is written."
             ]
         ),
         "Pushes, releases, recursive deletes and any change to the loop's own configuration "

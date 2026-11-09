@@ -19,8 +19,22 @@ export type Live = {
   pid?: number // a background read's process
 }
 
+// One item of a decomposition, as the picker shows it.
+export type Item = { text: string; detail?: string; isChecked: boolean }
+
+// What the picker holds until its round closes. `node` is the frame's place in the tree: a
+// node's id, or none for frame 0.
+export type Proposal = { title: string; node?: string; items: Item[]; leftOut: string[] }
+
 declare module 'claude-code' {
   interface PluginState {
-    'frame-loop': { live: Live | null; frame: number; dismissedAt: number; openedAt: number; off: boolean }
+    'frame-loop': {
+      live: Live | null
+      frame: number
+      dismissedAt: number
+      openedAt: number
+      off: boolean
+      proposal: Proposal | null
+    }
   }
 }

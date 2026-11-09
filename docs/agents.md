@@ -55,6 +55,14 @@ An inversion's key is the whole requirement and its value the same claim reverse
 
 ---
 
+### The approve tool
+
+Claude calls `approve` to put a decomposition to the author item by item: `title`, `items` (each a `text` and an optional `detail`), an optional `leftOut`, and `node`, a node's id, left out for frame 0. Each item is one plain sentence, in the words that will be written. The tool cannot wait: Claude ends its turn when the picker opens, and the answer arrives as the author's next message.
+
+Each answer is added to `.frame-loop/approved.json`, by the picker and never by Claude; a later answer overrules an earlier one, and frame 0's requirements and a node's are approved apart. Claude writes a frame only when every item is approved or dropped, in the words approved. A frame answered for whose words differ is not read, and the author is told; the write itself is not blocked. A frame with no answer yet is read as before and is offered one picker, once. Rules, principles and triggers are not approved this way.
+
+---
+
 ### What reaches the reader
 
 A requirement's and a rule's words go to the reader word for word on every reading. The private-names check catches names only, never a line whose content is private, such as one describing a private method. On a reader that trains on its inputs, sort these while compiling: raise such a line with the author and leave it out of frame 0 and the index, or keep the project on the `private` tier.

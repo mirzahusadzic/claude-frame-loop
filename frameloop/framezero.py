@@ -36,6 +36,57 @@ def _rule_list(rules: dict[str, Any]) -> list[dict[str, Any]]:
     return [r for r in found if isinstance(r, dict)] if isinstance(found, list) else []
 
 
+FRAME_0 = "frame 0"  # how an approval names frame 0; a node goes by its id
+
+
+def _words(text: str) -> str:
+    return " ".join(text.split())
+
+
+def approved_words(frame: str) -> set[str] | None:
+    """The words the author approved for a frame, as the picker recorded them round by round,
+    a later round overruling an earlier one. None when the frame has had no answer yet; an
+    empty set when the record cannot be read, so that nothing passes on a broken record."""
+    from config import project_dir
+
+    path = Path(project_dir({"cwd": state.CWD})) / ".frame-loop" / "approved.json"
+    if not path.is_file():
+        return None
+    try:
+        rounds = json.loads(path.read_text(encoding="utf-8"))["rounds"]
+        mine = [r for r in rounds if r["frame"] == frame]
+        words: set[str] = set()
+        for answer in mine:
+            words |= {_words(x) for x in answer["approved"]}
+            words -= {_words(x) for x in answer["not_approved"]}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return set()
+    return words if mine else None
+
+
+def engaged_frame() -> str:
+    return state.NODE if state.NODE and state.NODE != "root" else FRAME_0
+
+
+def unapproved(frame0: dict[str, Any]) -> list[str]:
+    """The requirements of a frame the author has answered for that are not in the words they
+    approved. A frame with no answer yet has none: it is read as before, until they answer."""
+    words = approved_words(engaged_frame())
+    if words is None:
+        return []
+    return [a["text"] for a in frame0.get("asks") or [] if _words(a["text"]) not in words]
+
+
+def file_in_approved_words(path: str, frame: str) -> bool:
+    """Whether a frame's file, as it stands, holds only words the author approved."""
+    words = approved_words(frame)
+    try:
+        asks = json.loads(Path(path).read_text(encoding="utf-8"))["asks"]
+        return bool(words) and bool(asks) and all(_words(a["text"]) in words for a in asks)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def rules_path() -> Path | None:
     """Where the project's rules index is read from: FRAME_LOOP_RULES, or, installed as a
     plugin, <project>/.frame-loop/rules.json, written or not."""

@@ -229,3 +229,129 @@ test('after /clear or a resume, the band shows the new session, never the last o
   expect((await ui.find({ type: 'Text', text: /needs you/ }))?.text).toBe('needs you: the new session')
   await ui.unmount()
 })
+
+// The picker: a decomposition approved item by item, the answer on the record.
+const PICKER = {
+  plugin: 'frame-loop',
+  component: 'Pane',
+  requestId: 'approve',
+  props: { title: 'Approve', isFocused: true, bodyColumns: 80, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
+} as const
+
+const PROPOSED = {
+  tool: 'mcp__frame-loop__approve',
+  title: 'Approve frame 0',
+  items: [{ text: 'Each client is limited per minute.' }, { text: 'Over the limit, the API returns 429.', detail: 'may change: limits' }],
+  leftOut: ['Limits per endpoint.'],
+}
+
+const picking = async ($: any, on: any, placed = true) => {
+  const sent: { submit?: string; fill?: string; closed?: boolean; opened?: any; files: Record<string, string> } = { files: {} }
+  on('ui.open', (_: unknown, e: any) => {
+    sent.opened = e
+    return { value: placed ? { isPlaced: true } : { isPlaced: false, reason: 'too narrow' } }
+  })
+  on('ui.close', () => { sent.closed = true; return { value: undefined } })
+  on('prompt.submit', (_: unknown, e: any) => { sent.submit = e.text; return { text: e.text } })
+  on('prompt.fill', (_: unknown, e: any) => { sent.fill = e.text; return { isFilled: true } })
+  on('clock.now', () => ({ value: 5000 }))
+  on('fs.write', (_: unknown, e: { path: string; text: string }) => { sent.files[posix(e.path)] = e.text; return { value: undefined } })
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    if (posix(e.path).endsWith('/s.project')) return { value: '/project\n' }
+    if (sent.files[posix(e.path)] !== undefined) return { value: sent.files[posix(e.path)] }
+    throw new Error('no file')
+  })
+  on('fs.exists', () => ({ value: false }))
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('tool.register', () => ({ value: undefined }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/home/u' : undefined }))
+  on('session.id', () => ({ value: 's' }))
+  on('clock.every', () => ({ value: undefined }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/project', surface: 'terminal', isInteractive: true })
+  return sent
+}
+
+const RECORD = '/project/.frame-loop/approved.json'
+
+test('every item starts checked, and the tool tells Claude to end its turn', async ($, on) => {
+  await picking($, on)
+  const called = await $.tool.call(PROPOSED as any)
+  expect(JSON.stringify(called)).toContain('End your turn')
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect(await ui.find({ key: 'item-0' })).toBeTruthy()
+  await ui.unmount()
+})
+
+test('approving everything says so, starts the next turn and keeps the words on the record', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(PROPOSED as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toBe('Approved, all 2.')
+  expect(sent.closed).toBe(true)
+  expect(JSON.parse(sent.files[RECORD]).rounds).toEqual([{
+    frame: 'frame 0', title: 'Approve frame 0', at: 5,
+    approved: ['Each client is limited per minute.', 'Over the limit, the API returns 429.'], not_approved: [],
+  }])
+  await ui.unmount()
+})
+
+test('one item approved reads as a sentence', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call({ ...PROPOSED, items: [PROPOSED.items[0]] } as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toBe('Approved.')
+  await ui.unmount()
+})
+
+test('a deselected item is named, kept as not approved, and Claude is sent to ask what is wrong', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call({ ...PROPOSED, node: 'counting' } as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key: 'item-1' })
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toContain('Approved:\n- Each client is limited per minute.')
+  expect(sent.submit).toContain('Not approved:\n- Over the limit, the API returns 429.')
+  expect(sent.submit).toContain('Ask me what is wrong')
+  const [round] = JSON.parse(sent.files[RECORD]).rounds
+  expect(round.frame).toBe('counting')
+  expect(round.not_approved).toEqual(['Over the limit, the API returns 429.'])
+  await ui.unmount()
+})
+
+test('a later round is added to the record, never over it', async ($, on) => {
+  const sent = await picking($, on)
+  for (const _ of [1, 2]) {
+    await $.tool.call(PROPOSED as any)
+    const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+    await ui.press({ key: 'approve' })
+    await ui.unmount()
+  }
+  expect(JSON.parse(sent.files[RECORD]).rounds.length).toBe(2)
+})
+
+test('adding what is missing leaves the answer in the prompt for the person to finish', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(PROPOSED as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key: 'missing' })
+  expect(sent.submit).toBeUndefined()
+  expect(sent.fill).toBe('Approved, all 2.\n\nMissing: ')
+  await ui.unmount()
+})
+
+test('a picker that cannot be shown says so to Claude, never as an approval', async ($, on) => {
+  const sent = await picking($, on, false)
+  const called = await $.tool.call(PROPOSED as any)
+  expect(JSON.stringify(called)).toContain('Ask in chat')
+  expect(sent.submit).toBeUndefined()
+  expect(sent.files[RECORD]).toBeUndefined()
+})
+
+test('no items is refused', async ($, on) => {
+  await picking($, on)
+  const called = await $.tool.call({ ...PROPOSED, items: [] } as any)
+  expect(JSON.stringify(called)).toContain('at least one item')
+})

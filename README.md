@@ -21,7 +21,7 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 
 <p align="center"><em>One request in nested frames: the rule guides the work and measures it. <a href="docs/rules.md#when-the-rules-act">When the rules act</a>.</em></p>
 
-- **Frame 0:** your requirements, in your words, on your OK.
+- **Frame 0:** your requirements, in your words, approved item by item in a picker.
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
 - **Reader:** on a signal, on a plan, or when Claude asks, under Gadfly's trials; a fit without your requirement is rejected.
 - **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names, with frame 0 and the rules; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
