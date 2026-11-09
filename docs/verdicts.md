@@ -10,7 +10,7 @@ The band is one line that changes in place: what is happening now, the time left
 
 What is read: the change at a turn's end, Claude's plan on leaving plan mode, a proposal before any code, or, on Claude's request, whether the work is done. Why a change is read: it touches files none of your rules cover; a check you owe is unmet; it is a large change, deletes a file, changes a dependency or touches the loop's settings; a change Claude claimed has no effect; a change lies outside what you authorized.
 
-The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules indexed for the project only the first. For a change Claude declared no requirement for, the one question is "what is it for?". A change already read in the session is not read again, and a read that reaches its token cap stops and shows as not read. When you ask whether the work is done, or Claude presents it as done, Claude runs `: frame-loop-read --complete`, a marker: a shell command that does nothing (`:` is the shell's no-op), which the loop's hooks read; then each requirement the work claimed is read against the changes that claim it. A requirement it never claimed is not read, unless you ask whether the whole frame is done.
+The change is put into plain words first (with labels on); then two questions run at once, "does it do what you asked, and does it break any of your rules?", and with no rules indexed for the project only the first. For a change Claude declared no requirement for, the question is "what is it for?"; when both answers name one requirement, the two questions above then test it as if declared. A change already read in the session is not read again, and a read that reaches its token cap stops and shows as not read. When you ask whether the work is done, or Claude presents it as done, Claude runs `: frame-loop-read --complete`, a marker: a shell command that does nothing (`:` is the shell's no-op), which the loop's hooks read; then each requirement the work claimed is read against the changes that claim it. A requirement it never claimed is not read, unless you ask whether the whole frame is done.
 
 ---
 
@@ -20,11 +20,12 @@ A read that fits, finds nothing to read or does not settle shows nothing once it
 
 | Line | Means | Do |
 | --- | --- | --- |
-| ▲ needs you: Claude didn't say which of your requirements this serves | no declaration | ask Claude which |
 | ▲ needs you: this serves a purpose none of your requirements has: add one? | the reader names a purpose outside frame 0 | add a requirement, or drop the change |
 | ▲ needs you: this serves none of your requirements | padding: a change that serves no purpose at all | ask why the change is there |
 | ▲ needs you: the reader doesn't see this resting on the requirement Claude named | it still fits with that requirement cut | ask what it is for |
 | ▲ needs you: the reader sees it serving "a requirement", not the requirement Claude named | another requirement carries it | check which requirement it serves |
+| ▲ needs you: the reader sees a purpose none of your requirements has | Claude named a requirement, and the reader names a purpose outside frame 0 | add a requirement, or drop the change |
+| ▲ needs you: the reader sees it serving none of your requirements | Claude named a requirement, and the reader sees no purpose in the change | ask why the change is there |
 | ▲ needs you: it may break your rule "a rule" | both readings named the rule | read the change against it |
 | ▲ needs you: a check you owe is unmet | a code check failed, such as tests not run | have it met |
 | ▲ needs you: a change lies outside what you authorized | outside the crossing's scope; "· not checked: a reason" follows when its reading failed too | widen the scope, or undo |

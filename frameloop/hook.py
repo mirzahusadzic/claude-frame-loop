@@ -18,10 +18,9 @@ Configuration, by environment (set by the human in the hook's command line):
 - FRAME_LOOP_GH: the gh binary for the visibility check (default: gh from a trusted
   system path, never the caller's PATH).
 
-Whenever the tier trains on its inputs, the project must be confirmed public on GitHub,
-and the channel is guarded: the agent works normally, whatever it reads from outside the
-project is hashed line by line in the background, and a reading whose outgoing text
-holds such a line, or anything that looks like a secret, is never sent.
+A reading goes as the writer's summary of the change, the author's private names masked on
+a tier that trains on its inputs. Without a writer the change itself goes, to such a tier only
+from a project GitHub confirms public. Anything that looks like a secret is never sent.
 - FRAME_LOOP_EFFORT: the human's effort floor for the reader (low, medium, high,
   xhigh, max); unset, the tier's default holds;
 - FRAME_LOOP_READ_TURNS=1: for people who don't use plan mode, read each turn's change
