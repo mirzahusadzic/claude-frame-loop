@@ -45,6 +45,7 @@ Acts the loop records. In shadow mode, the default, an act with no ▲ prints no
 | Claude asked to push (or another act), and it did not run: denied, or the command failed | no |
 | Claude changed something people see | no |
 | Claude changed the loop's own files · tried, and it did not go through | no |
+| Claude changed frame 0 · the rules · the tree · the switch | yes |
 | AGENTS.md: 5 lines added, 2 lines removed | no |
 | Claude deleted a folder · deleted untracked files · deleted files | yes |
 | Claude touched a personal file | yes |

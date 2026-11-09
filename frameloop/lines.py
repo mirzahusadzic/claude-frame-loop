@@ -6,6 +6,7 @@ Standard library only.
 
 from __future__ import annotations
 
+import os
 import re
 import time
 from pathlib import Path
@@ -109,6 +110,26 @@ def _which(command: str) -> str:
     return " and ".join(named[:2]) if named else "the loop's own files"
 
 
+# What changes only with the author, by its setting and its place in the project's .frame-loop/.
+AUTHORS = (
+    ("FRAME_LOOP_FRAME0", "frame0.json", "frame 0"),
+    ("FRAME_LOOP_RULES", "rules.json", "the rules"),
+    ("FRAME_LOOP_TREE", "tree", "the tree"),
+    (None, "switch", "the switch"),
+)
+
+
+def _authors_own(path: str) -> str | None:
+    """Which of the files that change only with the author this is, in words, or None."""
+    here = Path(path).resolve()
+    home = Path(os.environ.get("CLAUDE_PROJECT_DIR") or state.CWD or os.getcwd()) / ".frame-loop"
+    for setting, name, words in AUTHORS:
+        places = [home / name] + ([Path(os.environ[setting])] if setting and os.environ.get(setting) else [])
+        if any(here == q or q in here.parents for q in (x.resolve() for x in places)):
+            return words
+    return None
+
+
 def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
     """An act as the author reads it: what Claude did, whether it needs the author, and
     the exact command or path, for the details."""
@@ -128,9 +149,13 @@ def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:
                 words = f"Claude ran a command on {_which(record.get('command') or '')}"
             elif key == "L1:" and record.get("after"):  # seen after the call: it went through
                 gone = not Path(record.get("path", "")).exists()
-                words = f"Claude {'removed' if gone else 'changed'} {_which(record.get('path', ''))}"
+                own = _authors_own(record.get("path", ""))
+                words = f"Claude {'removed' if gone else 'changed'} {own or _which(record.get('path', ''))}"
+                needs = own is not None
             elif key == "L1:" and not _landed(record):  # asked before the write: it may be refused
                 words = "Claude tried to change the loop's own files, and it did not go through"
+            elif key == "L1:" and record.get("event") == "config" and _authors_own(record.get("path", "")):
+                words, needs = f"Claude changed {_authors_own(record.get('path', ''))}", True
             return words, needs, exact
     return "Claude did something you asked to hear of", False, exact
 

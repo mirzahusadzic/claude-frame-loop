@@ -3,6 +3,7 @@ it: plain sentences for every verdict, and rules that only ever rise."""
 
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -14,6 +15,63 @@ import effort  # noqa: E402
 import lines  # noqa: E402
 import signals  # noqa: E402
 import state  # noqa: E402
+
+
+class AuthorsFilesTests(unittest.TestCase):
+    """Seen: in shadow mode Claude wrote frame 0 and the author saw nothing, though frame 0, the
+    rules, the tree and the switch change only with the author and the briefing says the write
+    reaches them."""
+
+    def setUp(self):
+        self.project = Path(tempfile.mkdtemp(prefix="authors-")).resolve()
+        (self.project / ".frame-loop/tree").mkdir(parents=True)
+        self.addCleanup(setattr, state, "CWD", state.CWD)
+        state.CWD = str(self.project)
+        patched = mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(self.project)})
+        patched.start()
+        self.addCleanup(patched.stop)
+        for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
+            os.environ.pop(name, None)
+
+    def act(self, name, **more):
+        path = self.project / ".frame-loop" / name
+        path.write_text("{}", encoding="utf-8")
+        return lines.act_words({"event": "config", "path": str(path), "at": path.stat().st_mtime, **more})
+
+    def test_a_write_to_what_is_the_authors_needs_them(self):
+        for name, words in (
+            ("frame0.json", "Claude changed frame 0"),
+            ("rules.json", "Claude changed the rules"),
+            ("tree/node.json", "Claude changed the tree"),
+            ("switch", "Claude changed the switch"),
+        ):
+            self.assertEqual(self.act(name)[:2], (words, True), name)
+            self.assertEqual(self.act(name, after=True)[:2], (words, True), name)
+
+    def test_it_reaches_the_author_under_the_reply(self):
+        state.LIVE.clear()
+        self.addCleanup(state.LIVE.clear)
+        state.LIVE["acts"] = [self.act("frame0.json")]
+        self.assertEqual(lines._short_lines(None), "frame-loop ▲ needs you: Claude changed frame 0")
+
+    def test_a_frame_0_named_by_its_setting_counts(self):
+        elsewhere = self.project / "kept-frame.json"
+        elsewhere.write_text("{}", encoding="utf-8")
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_FRAME0": str(elsewhere)}):
+            said = lines.act_words({"event": "config", "path": str(elsewhere), "at": elsewhere.stat().st_mtime})
+        self.assertEqual(said[:2], ("Claude changed frame 0", True))
+
+    def test_the_loops_other_files_stay_quiet(self):
+        self.assertEqual(self.act("steps.jsonl")[1], False)
+        self.assertEqual(self.act("steps.jsonl", after=True)[1], False)
+
+    def test_a_write_that_did_not_land_needs_no_one(self):
+        path = self.project / ".frame-loop/frame0.json"
+        path.write_text("{}", encoding="utf-8")
+        words, needs, _ = lines.act_words({"event": "config", "path": str(path), "at": path.stat().st_mtime + 60})
+        self.assertEqual(
+            (words, needs), ("Claude tried to change the loop's own files, and it did not go through", False)
+        )
 
 
 class AfterwardsTests(unittest.TestCase):
