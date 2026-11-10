@@ -111,19 +111,17 @@ class WhichAskTests(unittest.TestCase):
         self.assertEqual(len(frames.frame0_faults(half)), 6)
         self.assertEqual(frames.frame0_faults(FRAME0), [])
 
-    def test_declaring_every_ask_leaves_no_duplicate_control(self):
-        # The router test: the session declared all four asks; the control trial (all asks
-        # cut) then equalled the ablation (the declared asks cut), and Gadfly refused it.
-        everything = [a["id"] for a in FRAME0["asks"]]
-        frame = frames.which_ask(FRAME0, step(serves=everything), "anthropic")
-        self.assertNotIn("control", frame["interventions"])
-        some = frames.which_ask(FRAME0, step(serves=["A5"]), "anthropic")
-        self.assertEqual(some["interventions"]["control"], everything)
-
-    def test_several_declared_asks_are_read_each_alone(self):
-        frame = frames.which_ask(FRAME0, step(["A3", "A4"]), "anthropic")
-        self.assertTrue(frame["interventions"]["eachAnchor"])
-        self.assertFalse({"A3", "A4"} & set(frame["allowed"]["ablation"]))
+    def test_the_fit_asks_only_the_trials_its_decision_reads(self):
+        # The control trial and each declared ask cut alone never changed what the gate
+        # decided, in any reading on record: the fit asks for neither, however many it declares.
+        for serves in (["A5"], ["A3", "A4"], [a["id"] for a in FRAME0["asks"]]):
+            with self.subTest(serves=serves):
+                frame = frames.which_ask(FRAME0, step(serves=serves), "anthropic")
+                self.assertNotIn("control", frame["interventions"])
+                self.assertNotIn("eachAnchor", frame["interventions"])
+                self.assertTrue(frame["interventions"]["repeat"] and frame["interventions"]["ablation"])
+                self.assertIn("inversion", frame["interventions"])
+                self.assertFalse(set(serves) & set(frame["allowed"]["ablation"]))
 
 
 class ViolationTests(unittest.TestCase):

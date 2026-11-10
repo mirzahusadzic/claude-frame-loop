@@ -195,13 +195,11 @@ def which_ask(frame0: dict[str, Any], step: dict[str, Any], tier: str) -> dict[s
     for a in frame0["asks"]:
         if a["id"] in mine:
             inversion.update(a.get("inversion") or {})
+    # No control trial and no ask cut alone: over the 163 readings on record neither changed
+    # what the gate decided. The control only tells apart two answers that are both no pass,
+    # and an ask cut alone is evidence beside the answer, never part of it.
     interventions: dict[str, Any] = {"repeat": True, "ablation": True, **_sham(body, mine)}
-    if set(mine) != set(asks):
-        # With every ask declared, cutting them all is the ablation itself: no control.
-        interventions["control"] = asks
     allowed: dict[str, Any] = {"ablation": elsewhere}
-    if len(mine) > 1:
-        interventions["eachAnchor"] = True
     if inversion:
         interventions["inversion"] = inversion
         allowed["inversion"] = elsewhere

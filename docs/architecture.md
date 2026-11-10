@@ -186,7 +186,7 @@ flowchart LR
 | Free checks | each turn's end | the diff between the turn's first snapshot and now | files, size, the checks the rules require, and the signals |
 | Writer | before each read, with labels on | the change, Claude's declaration cut and frame 0's ids masked | a plain-words label, by Haiku through `claude -p` on your login |
 | Privacy gate | before any call | the change before the writer; then the label and file names | refuses secrets; masks private names; takes ids and a requirement's words out of the label |
-| Reader | each read | frame 0, the rules, the label and file names | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, every requirement removed, the requirement reversed |
+| Reader | each read | frame 0, the rules, the label and file names | answers to Gadfly's trials: baseline, repeat, the requirement removed, a harmless line removed, the requirement reversed; whether a requirement is done also asks with every step removed |
 | Gate | after the reader | the answers | ✓, ▲, ■ or not settled, by fixed rules |
 | Picker | when Claude calls the `approve` tool | the items Claude proposes | each answer added to `.frame-loop/approved.json`; a frame answered for is read only in the words approved |
 | Guard | each shell or edit call | the command or the file | an act that is yours, in the record; in enforce mode, a question first |
@@ -213,7 +213,7 @@ The reader is asked questions, never Claude's opinion of its own work. Fixed rul
 
 | Question | Trials | Rule |
 | --- | --- | --- |
-| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), every requirement removed, the requirement reversed | ✓ only if it rests on the declared requirement: naming another requirement is ▲; a fit that holds without it, and answers that do not settle, show nothing and go to Claude first, and to the user if the same read comes back |
+| which requirement does the change fulfil? | baseline, repeat, the declared requirement removed, a harmless line removed (when a requirement is left undeclared; with every one declared, nothing is), the requirement reversed | ✓ only if it rests on the declared requirement: naming another requirement is ▲; a fit that holds without it, and answers that do not settle, show nothing and go to Claude first, and to the user if the same read comes back |
 | does it break a rule? (with rules indexed) | baseline, repeat | ✓ if both read none; ▲ naming the rule if both name it; not settled if they disagree |
 | what is it for? (no requirement declared) | baseline, repeat | when both name one requirement, the two questions above test it as if declared; otherwise never ✓: a missing requirement or padding is ▲, and a disagreement is not settled |
 | is the requirement done? (completion, of the requirements the work claimed, or the one the reader names when it claims none; of all of them only when the user asks about the whole frame) | Gadfly's firm runs over the claiming steps, or all of the session's steps when only a declaration claims it | ✓ only if carried (the answer moves when those steps are removed) and firm (more runs would not change it); ▲ on a firm miss or a requirement not read; when all that is left did not settle, nothing shows and Claude alone is told |
