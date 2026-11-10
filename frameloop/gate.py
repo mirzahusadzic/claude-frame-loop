@@ -63,6 +63,8 @@ def which_ask(result: dict[str, Any], declared: list[str]) -> tuple[str, str]:
         split = result.get("split") or {}
         if len(split) > 1 and set(split) <= set(declared):
             return UNSETTLED, f"not firm ({DECLARED_SPLIT}: {_answers(result)}{_moved(result)})"
+        if result.get("short"):  # asking ended early: no answer left could make it a firm fit
+            return UNSETTLED, f"not firm (no answer left could rest the fit on its declared ask{_said(result)})"
         return UNSETTLED, f"not firm (category {result.get('category')}{_said(result)})"
     if baseline == "unclear":  # settled on being unable to say: no mismatch was found
         return UNSETTLED, "the reader reads it as unclear"

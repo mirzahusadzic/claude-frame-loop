@@ -1,4 +1,4 @@
-"""The CLI contract: the real `gadfly firm` (0.13.2 or later) with fake readers, read
+"""The CLI contract: the real `gadfly firm` (0.14.0 or later) with fake readers, read
 by the gate. No network and no cost. Run folders go under tests/.work/ (ignored),
 each one fresh, and nothing is deleted."""
 

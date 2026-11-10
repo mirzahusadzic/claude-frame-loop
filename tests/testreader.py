@@ -152,7 +152,7 @@ class LauncherTest(unittest.TestCase):
         ran.assert_not_called()
         result = __import__("json").loads(done.stdout)
         self.assertTrue(gate._failed(result))
-        self.assertIn("uv tool install 'midwife>=0.13.2'", gate._failure(result))
+        self.assertIn("uv tool install 'midwife>=0.14.0'", gate._failure(result))
 
 
 class TokenCapTest(unittest.TestCase):
@@ -454,6 +454,19 @@ class FailedRunTests(unittest.TestCase):
 
         done = subprocess.CompletedProcess([], status, stdout, "")
         return reader, gate, done
+
+    def test_only_the_fit_is_asked_to_end_once_it_cannot_be_a_firm_one(self):
+        """A fit that could no longer pass was asked to the end, on calls that changed nothing.
+        Whether a requirement is done is still read whole."""
+        reader, gate, done = self.run_with(0, json.dumps({"exit": 0, "firm": False, "short": "carried"}))
+        asked = []
+        with mock.patch.object(reader, "_gadfly", lambda args, **k: asked.append(args) or done):
+            ended = reader.run({"name": "which-ask-f-t", "battery": {}})
+            reader.run({"name": "completion-f-A1-diffs", "battery": {}})
+        fit, completion = asked
+        self.assertEqual(fit[fit.index("--short-of") + 1], "carried")
+        self.assertNotIn("--short-of", completion)
+        self.assertEqual(gate.which_ask(ended, ["A1"])[0], gate.UNSETTLED)
 
     def test_a_status_other_than_0_is_no_verdict(self):
         verdict = json.dumps(

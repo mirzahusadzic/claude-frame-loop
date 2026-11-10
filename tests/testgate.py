@@ -27,6 +27,17 @@ class WhichAskTests(unittest.TestCase):
         self.assertEqual(decision, gate.UNSETTLED)
         self.assertEqual(reason, "not firm (category carried)")
 
+    def test_a_reading_ended_early_is_unsettled_and_says_why(self):
+        """Gadfly asks no more once the fit cannot be a firm carried one: a doubt for Claude, never a
+        reading that failed, and never a pass."""
+        ended = {"exit": 0, "firm": False, "short": "carried", "category": None, "findings": [], "stopped": None}
+        self.assertEqual(
+            gate.which_ask({**ended, "split": {"A1": 6}}, ["A1"]),
+            (gate.UNSETTLED, "not firm (no answer left could rest the fit on its declared ask; answers A1 6)"),
+        )
+        split = gate.which_ask({**ended, "split": {"A1": 4, "A2": 2}}, ["A1", "A2"])
+        self.assertEqual(split, (gate.UNSETTLED, f"not firm ({gate.DECLARED_SPLIT}: A1 4, A2 2)"))
+
     def test_a_reading_that_is_not_firm_says_how_the_answers_split(self):
         """With only "not firm", Claude has nothing to look at."""
         split = {"A2": 2, "other": 1, "A1": 4}
