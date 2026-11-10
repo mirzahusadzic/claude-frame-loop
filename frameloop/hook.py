@@ -1070,15 +1070,37 @@ def main() -> int:
         return 0
     if len(sys.argv) == 3 and sys.argv[1] == "--background":
         return _background(sys.argv[2])
+    began = time.monotonic()
     try:
         event = json.load(sys.stdin)
     except (ValueError, RecursionError) as error:  # broken, or nested past what Python reads
-        print(json.dumps(_unreadable(str(error) if isinstance(error, ValueError) else "nested too deep")))
+        out = _unreadable(str(error) if isinstance(error, ValueError) else "nested too deep")
+        _tap(None, out, began)
+        print(json.dumps(out))
         return 0
     out = safe_answer(event)
+    _tap(event, out, began)
     if out is not None:
         print(json.dumps(out))
     return 0
+
+
+def _tap(event: Any, out: dict[str, Any] | None, began: float) -> None:
+    """Asked to (FRAME_LOOP_DEBUG names a file), every hook call is kept there as one row: the
+    event Claude Code sent, the answer it got back, a null when the hook had none, and the
+    seconds it took. Off unless asked: an event holds the session's prompts and what its tools
+    were given, so the file is the author's own and is never sent anywhere. A file that cannot
+    be written changes no answer."""
+    path = os.environ.get("FRAME_LOOP_DEBUG")
+    if not path:
+        return
+    row = {"at": time.time(), "seconds": round(time.monotonic() - began, 3), "event": event, "answer": out}
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as tap:
+            tap.write(json.dumps(row, ensure_ascii=False, default=str) + "\n")
+    except OSError:
+        pass
 
 
 if __name__ == "__main__":

@@ -89,6 +89,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_LIVE` | `~/.claude/frame-loop/live` | the folder of the band's live files, read by the hooks and the band alike |
 | `FRAME_LOOP_USER_GUIDE` | `~/.claude/CLAUDE.md` | the user's own guide; a turn that changes it is reported, as for `AGENTS.md` |
 | `FRAME_LOOP_FRAME0`, `FRAME_LOOP_LOG`, `FRAME_LOOP_WORK`, `FRAME_LOOP_RULES`, `FRAME_LOOP_TREE` | in `<project>/.frame-loop/` | frame 0, the record, the work folder, the rules and the tree, elsewhere |
+| `FRAME_LOOP_DEBUG` | off | a file that keeps every hook call as one JSON line: the event Claude Code sent, the answer it got back and the seconds it took. It holds the session's prompts and what its tools were given, so keep it out of the repository; nothing sends it anywhere, and Claude cannot write to it |
 | `GADFLY_CHECKOUT` | none | a Gadfly checkout, run through uv in place of the `gadfly` command; without either, a checkout in `~/gadfly` |
 | `FRAME_LOOP_GH` | `gh` from the system's own folders | the `gh` that confirms a repository public, when it is installed elsewhere; never taken from the caller's `PATH` |
 | `CODEX_ROUTER_TOKEN` | from the router's `openrouter.env` | the router's token |

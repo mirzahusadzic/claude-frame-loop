@@ -110,7 +110,8 @@ def _home() -> Path:
 
 def _protected() -> list[Path]:
     paths = [ROOT]
-    for name in ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE"):
+    kept = ("FRAME_LOOP_FRAME0", "FRAME_LOOP_LOG", "FRAME_LOOP_WORK", "FRAME_LOOP_RULES", "FRAME_LOOP_TREE")
+    for name in (*kept, "FRAME_LOOP_DEBUG"):  # the debug record too: Claude never rewrites what it was told
         if os.environ.get(name):
             paths.append(Path(os.environ[name]).resolve())
     paths.append(switch_path({"cwd": state.CWD}).resolve())  # the author's switch: Claude never flips it
