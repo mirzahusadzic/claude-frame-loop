@@ -1161,7 +1161,10 @@ class AdaptiveEffortTests(unittest.TestCase):
         for tier in ("contributor", "private"):
             self.assertEqual(effort.effort_for("", {}, tier)[0], "low", tier)
             self.assertEqual(effort.effort_for("Effort: high", {}, tier)[0], "high", tier)
-            self.assertEqual(effort.effort_for("", {"chars": 8001}, tier)[0], "high", tier)
+            self.assertEqual(effort.effort_for("", {"deleted": ["a.py"]}, tier)[0], "high", tier)
+            level, notes, _ = effort.effort_for("", {"chars": 8001}, tier)
+            self.assertEqual((level, [n for n in notes if n.startswith("raised")]), ("low", []), tier)
+            self.assertEqual(effort.effort_for("", {"chars": 8001}, tier, completion=True)[0], "high", tier)
 
     def test_the_agent_may_raise_the_effort_and_the_line_is_cut(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
@@ -1201,11 +1204,17 @@ class AdaptiveEffortTests(unittest.TestCase):
         out = self.stop("Serves: A1")
         self.assertIn("↑dependency-manifest", out["systemMessage"])
 
-    def test_a_large_diff_raises_the_effort_by_rule(self):
+    def test_a_large_diff_is_read_at_the_floor(self):
+        """A large change is a reason to read it, never a harder reading: read at low it
+        decided as it did at high, on about half the tokens."""
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")
+        seen = loaded_seen()
         self.start()
         (REPO / "hello.py").write_text("print('x')\n" * 2000, encoding="utf-8")
-        self.assertIn("↑large-diff", self.stop("Serves: A1")["systemMessage"])
+        out = self.stop("Serves: A1")["systemMessage"]
+        self.assertIn("a rule signal (large-diff)", out)
+        self.assertNotIn("↑", out)
+        self.assertEqual({frame["battery"]["reasoning"] for frame in seen}, {"low"})
 
     def test_an_ordinary_turn_reads_at_the_floor(self):
         os.environ.update(FRAME_LOOP_READER="testhook:passing", FRAME_LOOP_EFFORT="low")

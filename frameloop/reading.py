@@ -590,7 +590,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
         if tier and not os.environ.get("FRAME_LOOP_TREE") and all(s["diff"] is not None for s in steps):
             # Before any label or call. A tree's climb reads its answers again, so it reads them.
-            seen_effort, _, seen_error = effort_for(said, _diff_facts([s["diff"] for s in claimed]), tier)
+            seen_effort, _, seen_error = effort_for(said, _diff_facts([s["diff"] for s in claimed]), tier, True)
             if not seen_error:
                 keys[ask["id"]] = _evidence(ask, claimed, steps, tier, seen_effort)
                 kept = _read_already(keys[ask["id"]], ask["id"])
@@ -638,7 +638,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             planned.append((ask, None, f"{ask['id']} not read ({refusal})"))
             continue
         # As hard as a turn's end would read these changes, so that it need not read them again.
-        asked_effort, _, error = effort_for(said, _diff_facts([s["diff"] or "" for s in claimed]), tier)
+        asked_effort, _, error = effort_for(said, _diff_facts([s["diff"] or "" for s in claimed]), tier, True)
         effort = asked_effort if effort is None or RANK[asked_effort or effort] < RANK[effort] else effort
         if error:  # an effort floor that cannot be read is never read below, as for a step
             planned.append((ask, None, f"{ask['id']} not read ({error})"))

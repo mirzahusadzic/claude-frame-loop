@@ -1,6 +1,6 @@
 {
-  "version": 1,
-  "note": "Effort only rises. The human's floor is FRAME_LOOP_EFFORT; the agent may raise it with an 'Effort:' line, never lower it; these rules raise it on facts from a turn's diff, never on a model's choice. A level not calibrated by a margin run for its model is marked uncalibrated on the gate's line (a reviewer's conditions, 2026-11-05).",
+  "version": 2,
+  "note": "Effort only rises. The human's floor is FRAME_LOOP_EFFORT; the agent may raise it with an 'Effort:' line, never lower it; these rules raise it on facts from a turn's diff, never on a model's choice. A rule marked \"raises\": \"completion\" raises it only when the reader is asked whether a requirement is done; for a change it is a reason to read, as every rule here is, and leaves the effort where it was: a large change read at low decided as it did at high in ten of twelve readings on record, on about half the tokens, and the two that differed split one each way. No such reading is on record for whether a requirement is done, so that one still rises. A level not calibrated by a margin run for its model is marked uncalibrated on the gate's line (a reviewer's conditions, 2026-11-05).",
   "raise_to": "high",
   "rules": [
     {"id": "deleted-file", "when": "the turn deletes a file"},
@@ -10,7 +10,7 @@
                "go.mod", "go.sum", "Gemfile", "Gemfile.lock"]},
     {"id": "loop-settings", "when": "the turn changes Claude Code settings, hooks or frame 0",
      "contains": [".claude/", "frame0"]},
-    {"id": "large-diff", "when": "the turn's diff is longer than this many characters", "chars": 8000}
+    {"id": "large-diff", "when": "the turn's diff is longer than this many characters", "chars": 8000, "raises": "completion"}
   ],
   "calibrated": {
     "openrouter/meta/muse-spark-1.3-contributor": {"low": "margin 1 (frame-loop 51f0ae6): 0/8 false alarms, 0/20 false passes",

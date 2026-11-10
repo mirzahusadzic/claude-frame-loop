@@ -37,10 +37,13 @@ def _rule_hits(rule: dict[str, Any], facts: dict[str, Any]) -> bool:
     return True  # an unknown rule raises the effort: fail toward the stricter reading
 
 
-def effort_for(said: str, facts: dict[str, Any] | None, tier: str) -> tuple[str | None, list[str], str | None]:
+def effort_for(
+    said: str, facts: dict[str, Any] | None, tier: str, completion: bool = False
+) -> tuple[str | None, list[str], str | None]:
     """The effort a reading uses, its notes, or an error. It only rises: the human's floor
     (or the tier's default), the agent's "Effort:" line above it, and the versioned rules
-    on facts from the diff. A level no margin run has calibrated for the model says so."""
+    on facts from the diff. A rule that raises for `completion` alone leaves a change's own
+    reading where it was. A level no margin run has calibrated for the model says so."""
     rules = _effort_rules()
     floor = os.environ.get("FRAME_LOOP_EFFORT") or readers.READERS[tier].get("reasoning", "high")
     if floor not in EFFORTS:
@@ -54,7 +57,9 @@ def effort_for(said: str, facts: dict[str, Any] | None, tier: str) -> tuple[str 
         notes.append("agent's lower effort ignored")
     elif asked and asked not in EFFORTS:
         notes.append(f"agent's effort {asked!r} ignored")
-    hit = [r["id"] for r in rules["rules"] if _rule_hits(r, facts or {})]
+    # a rule that raises for completion alone is, for a change, a reason to read (`turn`)
+    raising = [r for r in rules["rules"] if completion or r.get("raises") != "completion"]
+    hit = [r["id"] for r in raising if _rule_hits(r, facts or {})]
     if hit and RANK[rules["raise_to"]] > RANK[effort]:
         effort = rules["raise_to"]
         notes.append("raised: " + ", ".join(hit))
