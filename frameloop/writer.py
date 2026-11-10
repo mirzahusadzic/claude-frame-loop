@@ -20,8 +20,8 @@ from procs import within
 
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
 INSIDE_WRITER = "FRAME_LOOP_INSIDE_WRITER"  # set in the writer's own `claude -p`
-# A label of part of a change could pass what the rest breaks: a longer change is not
-# labelled at all, and its reading stays open.
+# A longer change is labelled from its first LIMIT characters and says where it was cut; the
+# list of its files, written by code, stays whole.
 LIMIT = 40000
 WIDTH = 24  # a label sharing this many characters in a row with the change quotes it
 

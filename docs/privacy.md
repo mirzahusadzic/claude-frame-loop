@@ -16,7 +16,7 @@ What a reading sends, to whom, and what is refused before it leaves the machine.
 
 The plugin always labels: its hooks set the writer, so the reader never gets the diff. The "Labels off" column below applies only when the hooks run outside the plugin, without `FRAME_LOOP_WRITER`.
 
-**What runs:** each hook runs the plugin's `hooks/run.sh`, which runs its `frameloop/hook.py`, standard library only, on Gadfly's own Python. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. Nothing else is sent or fetched.
+**What runs:** each hook runs the plugin's `hooks/run.sh`, which runs its `frameloop/hook.py`, standard library only, on Gadfly's own Python. It calls `git` for snapshots, `claude -p` on your login for the label, `gh` to check that a repository is public, and Gadfly, which sends the reader's calls to the router on `127.0.0.1:18766` and on to OpenRouter. When the installed Gadfly is older than the plugin needs and `uv tool install` keeps it, a session's start upgrades it from PyPI, which sends nothing of the project. Nothing else is sent or fetched.
 
 ---
 
@@ -38,6 +38,8 @@ Every reading also carries frame 0's requirements and the rules, in their own wo
 Nothing goes to the writer or the reader without a reading, and a turn is read only when the repository's snapshot changed. A turn that only writes outside the repository is not labelled or read, and sends neither frame 0 nor the rules. The file's path and content are not seen by the loop; Claude Code still sends the session to its own model, as it always does. On a reader that trains on its inputs, the session's briefing runs `gh repo view` with the repository's address, to ask GitHub whether it is public; that sends no content.
 
 The snapshot belongs to the working tree, not to a session: when another session changes the repository during a turn, this session's turn labels and reads that change, though never this session's replies or files outside the repository.
+
+With `FRAME_LOOP_DEBUG` set, every hook call is kept in that file on this machine, prompts and tool inputs included; the loop never sends it, so keep it out of the repository.
 
 The switch holds for a whole project. To leave one session out, start it with `claude --settings '{"disableAllHooks":true}'`, adding `--resume <id>` to continue a thread; this turns off every hook in that session, other plugins' too, and it cannot be done from inside a running session.
 
