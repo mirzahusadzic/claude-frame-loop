@@ -9,6 +9,7 @@ import os
 import signal
 import subprocess
 import tempfile
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -18,6 +19,21 @@ STOPPED = 125  # the exit of a run its caller told to stop
 # The hook's own deadline, as time.monotonic() reads it: Claude Code stops a hook at its
 # timeout, so every run within it takes the time left, never more (None: no such bound).
 DEADLINE: float | None = None
+
+
+# The programs running now, each in a process group of its own: a signal sent to this process's
+# group never reaches them, so whoever stops this process stops them by name (`stop_running`).
+_RUNNING: set[subprocess.Popen] = set()
+_RUNNING_LOCK = threading.Lock()
+
+
+def stop_running() -> None:
+    """Stop every program a `bounded` run of this process still has out, with all they started:
+    a read told to stop must not leave its reader asking on."""
+    with _RUNNING_LOCK:
+        out = list(_RUNNING)
+    for proc in out:
+        stop_tree(proc)
 
 
 def within(seconds: float) -> float:
@@ -48,6 +64,8 @@ def bounded(
             ),
             **given,
         )
+        with _RUNNING_LOCK:
+            _RUNNING.add(proc)
         allowed = within(seconds)
         ends = time.monotonic() + allowed
         try:
@@ -66,6 +84,9 @@ def bounded(
                 f"{what} took longer than {seconds:g} s" if allowed >= seconds else f"{what} ran out of the hook's time"
             )
             return subprocess.CompletedProcess(command, TIMED_OUT, "", said)
+        finally:
+            with _RUNNING_LOCK:
+                _RUNNING.discard(proc)
         return subprocess.CompletedProcess(command, proc.returncode, _text(out), _text(err))
 
 

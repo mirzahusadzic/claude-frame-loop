@@ -54,6 +54,67 @@ class BoundedTests(unittest.TestCase):
         self.assertEqual(done.returncode, procs.TIMED_OUT)
 
 
+STOPPED_READ = """
+import signal, sys, time
+from concurrent.futures import ThreadPoolExecutor
+import procs, turn
+signal.signal(signal.SIGTERM, turn._stopped)  # as a background read sets it
+asks = int(sys.argv[1])
+marks = "import os, sys, time; open(sys.argv[1] + str(os.getpid()), 'w').close(); time.sleep(60)"
+reader = [sys.executable, "-c", marks, sys.argv[2]]
+run = lambda: procs.bounded(reader, 120, what="the reader")
+if asks == 1:
+    run()
+else:  # a change's two questions, asked at once
+    with ThreadPoolExecutor(asks) as pool:
+        [job.result() for job in [pool.submit(run) for _ in range(asks)]]
+"""
+
+
+@unittest.skipIf(os.name == "nt", "a process group is stopped by signal on POSIX; Windows stops the tree")
+class StoppedReadTests(unittest.TestCase):
+    """Seen by reproduction: a background read replaced by a newer one was stopped by its
+    process group, but each of its reader's runs has a group of its own, so the reader asked
+    on, and with two questions out the read itself stayed until both had ended."""
+
+    def stopped(self, asks):
+        import tempfile
+
+        import live
+
+        with tempfile.TemporaryDirectory() as folder:
+            mark = str(Path(folder) / "reader-")
+            read = subprocess.Popen(
+                [sys.executable, "-c", STOPPED_READ, str(asks), mark],
+                env={**os.environ, "PYTHONPATH": str(ROOT / "frameloop")},
+                **live.detached(),
+            )
+            try:
+                deadline = time.monotonic() + 30
+                while len(list(Path(folder).iterdir())) < asks and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                readers = [int(x.name.split("-")[1]) for x in Path(folder).iterdir()]
+                self.assertEqual(len(readers), asks)
+                live.stop(read.pid)  # what a newer read does to the one still running
+                self.assertEqual(read.wait(timeout=15), 0)  # the read ends at once, through its `finally`
+                deadline = time.monotonic() + 10
+                while any(live._alive(pid) for pid in readers) and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                self.assertEqual([pid for pid in readers if live._alive(pid)], [])
+            finally:
+                for pid in [read.pid, *[int(x.name.split("-")[1]) for x in Path(folder).iterdir()]]:
+                    try:
+                        os.kill(pid, 9)
+                    except OSError:
+                        pass
+
+    def test_a_stopped_read_stops_its_readers_run(self):
+        self.stopped(1)
+
+    def test_a_stopped_read_asking_two_questions_stops_both_and_ends(self):
+        self.stopped(2)
+
+
 class HookDeadlineTests(unittest.TestCase):
     """Sparky's third review: each run had its own deadline, but not the hook: a plan's writer
     and reader, or a completion's asks in a row, outran the 600 s Claude Code gives it, which

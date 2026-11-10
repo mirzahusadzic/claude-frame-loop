@@ -494,11 +494,20 @@ def _read_in_background(event: dict[str, Any], cwd: str, before: str, after: str
     return {"systemMessage": "frame-loop · turn · checking in the background"}
 
 
+def _stopped(*_: Any) -> None:
+    """A background read stopped by a newer one: its reader's runs first, each in a process
+    group of its own that the stop's signal never reaches (seen: the reader asked on beside
+    the read that replaced it), then out through `finally`, so the payload never stays behind."""
+    import procs
+
+    procs.stop_running()
+    sys.exit(0)
+
+
 def _background(payload_path: str) -> int:
     """The background read: the turn's read as the Stop hook would make it, its outcome in
     the record and the band."""
-    # Stopped by a newer read: exit through `finally`, so the payload never stays behind.
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    signal.signal(signal.SIGTERM, _stopped)
     payload = json.loads(Path(payload_path).read_text(encoding="utf-8"))
     state.SESSION, state.CWD, state.NODE = payload["session"], payload["cwd"], payload.get("node")
     state.LIVE.clear()
