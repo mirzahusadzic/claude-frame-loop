@@ -1,6 +1,7 @@
 """procs.py: a program run within a deadline, stopped with every process it started, on
 every system."""
 
+import json
 import os
 import subprocess
 import sys
@@ -70,6 +71,27 @@ else:  # a change's two questions, asked at once
         [job.result() for job in [pool.submit(run) for _ in range(asks)]]
 """
 
+# The same read, entered the way the hook starts it: `turn._background` with a payload, its
+# reading replaced by the stand-in reader's runs, so the stop it gets is the one it sets itself.
+BACKGROUND_READ = """
+import json, sys
+from concurrent.futures import ThreadPoolExecutor
+import procs, turn
+asks, mark, payload = int(sys.argv[1]), sys.argv[2], sys.argv[3]
+marks = "import os, sys, time; open(sys.argv[1] + str(os.getpid()), 'w').close(); time.sleep(60)"
+reader = [sys.executable, "-c", marks, mark]
+run = lambda: procs.bounded(reader, 120, what="the reader")
+def read_change(*_):
+    if asks == 1:
+        run()
+    else:  # a change's two questions, asked at once
+        with ThreadPoolExecutor(asks) as pool:
+            [job.result() for job in [pool.submit(run) for _ in range(asks)]]
+    raise SystemExit(3)  # never reached: the read is stopped first
+turn.read_change, turn.load_frame0, turn.plugin_defaults = read_change, dict, lambda _: None
+sys.exit(turn._background(payload))
+"""
+
 
 @unittest.skipIf(os.name == "nt", "a process group is stopped by signal on POSIX; Windows stops the tree")
 class StoppedReadTests(unittest.TestCase):
@@ -77,7 +99,7 @@ class StoppedReadTests(unittest.TestCase):
     process group, but each of its reader's runs has a group of its own, so the reader asked
     on, and with two questions out the read itself stayed until both had ended."""
 
-    def stopped(self, asks):
+    def stopped(self, asks, script=STOPPED_READ, payload=None):
         import tempfile
 
         import live
@@ -85,7 +107,7 @@ class StoppedReadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             mark = str(Path(folder) / "reader-")
             read = subprocess.Popen(
-                [sys.executable, "-c", STOPPED_READ, str(asks), mark],
+                [sys.executable, "-c", script, str(asks), mark, *([payload] if payload else [])],
                 env={**os.environ, "PYTHONPATH": str(ROOT / "frameloop")},
                 **live.detached(),
             )
@@ -113,6 +135,21 @@ class StoppedReadTests(unittest.TestCase):
 
     def test_a_stopped_read_asking_two_questions_stops_both_and_ends(self):
         self.stopped(2)
+
+    def test_the_background_read_the_hook_starts_stops_its_readers_runs_and_its_payload(self):
+        import tempfile
+
+        for asks in (1, 2):
+            with self.subTest(asks=asks), tempfile.TemporaryDirectory() as project:
+                payload = Path(project) / "payload.json"
+                event = {"session_id": "s", "cwd": project}
+                payload.write_text(
+                    json.dumps({"session": "s", "cwd": project, "event": event, "before": "", "after": "", "said": ""}),
+                    encoding="utf-8",
+                )
+                with mock.patch.dict(os.environ, {"FRAME_LOOP_WORK": str(Path(project) / "work")}):
+                    self.stopped(asks, BACKGROUND_READ, str(payload))
+                self.assertFalse(payload.exists())  # out through its `finally`
 
 
 class HookDeadlineTests(unittest.TestCase):
@@ -164,7 +201,13 @@ class HookDeadlineTests(unittest.TestCase):
             "principles": [],
             "triggers": [],
         }
+        import tempfile
+
+        import state
+
         with (
+            tempfile.TemporaryDirectory() as project,  # not the checkout's own approved words
+            mock.patch.object(state, "CWD", project),
             mock.patch.object(reading, "_records", return_value=steps),
             mock.patch.object(reading, "kept_diff", return_value="+x\n", create=True),
             mock.patch.object(reading, "tier_for", return_value=("private", "")),
