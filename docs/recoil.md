@@ -22,7 +22,7 @@ For routing, every node is also a Gadfly frame that is never asked. Per requirem
 
 | Owner of a requirement | Filled when |
 | --- | --- |
-| its steps | a completion read carried and firm |
+| its steps | a completion read carried and firm, or, on a signal, counted by its tests |
 | its children | every child requirement quoting it is filled, and each such child is complete |
 | frame 0's requirements | by the children that quote them, else by frame 0's own steps |
 
@@ -34,14 +34,14 @@ A part is read when its work is finished, without Claude asking: when the work m
 
 ### Counted by its tests
 
-Reading a finished change against a requirement is the expensive reading, and on a large change it often cannot settle: the reader sees a summary, and a summary of a large change says less than the requirement asks. With `FRAME_LOOP_READ=signal`, work inside an approved part is held another way: the split was read before any code, the part's files are held by code, its rules by the rules question, and its requirements by its tests.
+Reading a finished change against a requirement is the expensive reading, and on a large change it often cannot settle: the reader sees a summary, and a summary of a large change says less than the requirement asks. With `FRAME_LOOP_READ=signal`, work inside a part is held another way: the split was read before any code, the part's files are held by code, its rules by the rules question, and its requirements by its tests.
 
 | A part's requirement is | When |
 | --- | --- |
-| counted, "✓ by its tests (not read: no signal)" | its change stays inside the part's files, a test changed with it, a step claims it, and the rules question on the change passed |
-| read against its change, as before | something marks it: a change outside the part's files, no test changed with it, no step claims it, a deleted file, a dependency manifest, the loop's own settings, or a rules question that did not pass |
+| counted, "✓ by its tests (not read: no signal)" | its change stays inside the part's files, a test changed with it, a step claims it, and the rules question on the change, its contracts among its rules, passed |
+| read against its change, as before | something marks it: a change outside the part's files, no change of its own, no test changed with it, no step claims it, a deleted file, a dependency manifest, the loop's own settings, or a rules question that did not pass, whose rule is then said to you in its words |
 
-The line says it was not read, and the signal that makes a requirement be read is logged. Size alone is never a signal. The default is `always`, which reads every finished part; the setting is in [Setup](setup.md).
+A sibling part's files, changed in the same turn, do not count against a part; a file in no part's files does. The line says it was not read, and the signal that makes a requirement be read is logged. Size alone is never a signal. At a turn's end, a change Claude declared inside the engaged part's files is asked only the rules question, and its line says "the fit was not read: no signal". The default is `always`, which reads every change and every finished part; the setting is in [Setup](setup.md).
 
 > [!IMPORTANT]
 > "By its tests" means a test file changed with the work, not that the loop ran the test and saw it fail before and pass after. That check is on the [Roadmap](roadmap.md).

@@ -41,12 +41,13 @@ Frame 0 can also start from what the project already has: ask Claude to compose 
 | A change with a purpose frame 0 lacks | the same read | `frame-loop ▲ needs you: this serves a purpose none of your requirements has: add one?` |
 | A change with no purpose | the same read | `frame-loop ▲ needs you: this serves none of your requirements` |
 | A request outside frame 0 | Claude proposes a new requirement; frame 0 changes only on confirmation | nothing |
+| A requirement too coarse for one step | Claude proposes splitting it into parts; the split is read as words, then you approve it whole in one picker: [Crossings](crossings.md) | what the reading found, on the picker's pages |
 | You ask whether the work is done, or Claude presents it as done | a completion read of the requirements the work claimed, each against the changes that claim it; all of them only when you ask about the whole frame | nothing when each reads as done; on a firm "not done", `frame-loop ▲ needs you: 2 of 3 claimed requirements read as done`; what did not settle goes to Claude first |
 
-A signal is a file no rule covers, a check you owe that is unmet, such as tests not run, a large change, a deleted file, a changed dependency, a change to the loop's settings, a change Claude claimed that has no effect, or a change outside what you authorized. While the reader works, the band above the prompt is one line that changes in place: what is happening now, the time left and the tokens spent.
+A signal is something the free checks find, such as a file no rule covers, a check you owe that is unmet or a deleted file; Verdicts lists them all. While the reader works, the band above the prompt is one line that changes in place: what is happening now, the time left and the tokens spent.
 
 ```text
 ◐ frame-loop checking the change · about 0:12 left · 9k tokens
 ```
 
-Shadow mode is the default: it blocks nothing; to have acts wait for your OK, switch to enforce mode as the README's Use table shows. In shadow mode a read runs in the background: a ▲ or ■ stays in the band until the next prompt and **details** unfolds it. A ▲ or a read that does not settle also starts a turn for Claude, once you are not typing and it is not working, so it can correct the work; a drift that comes back after that goes to you. The reader gets frame 0, the rules, a label and file names, never the session or the code: [Privacy](privacy.md). It reads the change in the session's own checkout: work done in another copy, such as a separate worktree, reaches it only once it is there. An outcome outside the code, such as a pull request merged, an alert closed or a real run's result, leaves no change to read, so no reading settles it; Claude tells you it happened instead.
+Shadow mode is the default: it blocks nothing, and a read runs in the background; a ▲ or ■ stays in the band until the next prompt, and **details** unfolds it. To have acts wait for your OK, switch to enforce mode as the README's Use table shows. The reader gets frame 0, the rules, a label and file names, never the session or the code: [Privacy](privacy.md).

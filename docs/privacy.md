@@ -2,7 +2,7 @@
 
 What a reading sends, to whom, and what is refused before it leaves the machine. The reader never sees the session (your prompts, Claude's replies) or a file the change does not touch.
 
-- **`private` tier:** frame 0, the rules, and Haiku's summary and file names of each change go to an endpoint that keeps no data; secrets are refused. Not ensured: that a summary holds nothing private, or the endpoint's promise, which frame-loop cannot check.
+- **`private` tier:** frame 0, the rules, Haiku's summary and file names of each change, and a split's lines go to an endpoint that keeps no data; secrets are refused. Not ensured: that a summary holds nothing private, or the endpoint's promise, which frame-loop cannot check.
 - **`contributor` tier:** the same go to a reader that trains on them; secrets are refused and your private names masked. Not ensured: frame-loop cannot keep a private repository's content private.
 
 ---
@@ -12,7 +12,7 @@ What a reading sends, to whom, and what is refused before it leaves the machine.
 | Model | Reads | Runs |
 | --- | --- | --- |
 | Writer (Haiku) | the whole change, once, to label it in plain words; never one that looks like it holds a secret | Anthropic's API on the user's Claude Code login, as Claude Code itself: `claude -p`, no tools, no MCP, no session kept |
-| Reader, the tier in `FRAME_LOOP_TIER` | frame 0, the rules, and the change's label and file names | Gadfly on this machine, the Unified Model Router on loopback, then OpenRouter, then the model's provider, Meta. The `contributor` tier (the default; `public` is its old name) runs Muse Spark 1.3 Contributor, whose provider trains on its inputs; `private` runs Muse Spark 1.3 on an endpoint that keeps no data. For private code, use `private`. |
+| Reader, the tier in `FRAME_LOOP_TIER` | frame 0, the rules, and the change's label and file names, or a split's lines | Gadfly on this machine, the Unified Model Router on loopback, then OpenRouter, then the model's provider, Meta. The `contributor` tier (the default; `public` is its old name) runs Muse Spark 1.3 Contributor, whose provider trains on its inputs; `private` runs Muse Spark 1.3 on an endpoint that keeps no data. For private code, use `private`. |
 
 The plugin always labels: its hooks set the writer, so the reader never gets the diff. The "Labels off" column below applies only when the hooks run outside the plugin, without `FRAME_LOOP_WRITER`.
 
@@ -22,7 +22,7 @@ The plugin always labels: its hooks set the writer, so the reader never gets the
 
 ### What a reading sends
 
-Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. The private-names check masks names only, so a line whose content is private stays out of frame 0 and the rules on a reader that trains on its inputs. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The requirements and rules themselves go with their ids, which the reader answers with. On a training tier your private names are masked in requirement and rule text too, and Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading, refuses a reading that still holds one.
+Every reading also carries frame 0's requirements and the rules, in their own words, the lines of `~/.claude/CLAUDE.md` that were indexed as rules included. The private-names check masks names only, so a line whose content is private stays out of frame 0 and the rules on a reader that trains on its inputs. Claude's declaration of which requirements a change serves is cut from what is sent, and frame 0's ids in the change are masked. The writer is told to quote no code, line, identifier, path or id, and to name each product, service, project and person the change concerns; its label goes as written, words it shares with a requirement included, and on a training tier only the names in your private-names file are masked in it. The requirements and rules themselves go with their ids, which the reader answers with. On a training tier your private names are masked in requirement and rule text too, and Gadfly's withhold, the list of what Gadfly must never send that frame-loop hands it for each reading, refuses a reading that still holds one.
 
 | Reading | Labels off | Labels on |
 | --- | --- | --- |
@@ -30,7 +30,7 @@ Every reading also carries frame 0's requirements and the rules, in their own wo
 | plan, on leaving plan mode | the plan's text | the file names, if any, and the plan's label |
 | proposal, before any code | its text | its label |
 | completion | each step's free label and the claimed steps' diffs, cut at 4,000 characters each | each step's label, from its whole diff |
-| a split, before its picker | its lines, what each narrows, its contracts, the requirement being split and the rules for each part's files, as written; to a reader that trains, only from a project confirmed public | the same: a split is words, not a change, and has no label |
+| a split, before its picker | its parts' names and lines, what each line narrows, its contracts, the requirement being split and the rules for each part's files, as written | the same: a split is words, not a change, and has no label |
 
 ---
 
@@ -55,6 +55,7 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 | secrets: API, AWS (a key's id, its secret and a session token), GitHub and Slack tokens, private keys | every tier, and the writer | refused, before the writer reads the change | frame-loop, then Gadfly's withhold |
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
 | no writer, and a repository not confirmed public | a training tier | refused: the change itself would go | frame-loop |
+| a split, and a repository not confirmed public | a training tier | refused: its lines would go as written, and the picker says it was not read | frame-loop |
 | private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names, labels and frame 0, as a whole word in any case | frame-loop |
 | a change over 400,000 characters | labels on | labelled from its first 400,000 characters; the list of files stays whole | frame-loop |
 

@@ -23,11 +23,11 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 
 - **Frame 0:** your requirements, in your words, approved item by item in a picker.
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
-- **Reader:** on a signal, on a plan, or when Claude asks, under Gadfly's trials; a fit without your requirement is rejected.
-- **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names, with frame 0 and the rules; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
-- **Large work, split:** a requirement too coarse to check is split into parts; the split is read as words before any code, and you approve it whole in one picker, with its contracts.
-- **Authority:** pushes, releases, publishing, deletes, the loop's own files: recorded, and Claude is told; a delete, or a change to frame 0, the rules, the tree or the switch, also reaches you as a ▲; in enforce mode, they wait for your OK.
-- **Live:** a band above the prompt: what is happening now, the time left, the tokens spent.
+- **Reader:** on a signal, on a plan, on a split, or when Claude asks, under Gadfly's trials; a fit without your requirement is rejected.
+- **A summary goes out:** Haiku, on your login, summarizes the change in plain words without quoting its code, naming what the change names; the reader (another model, Muse Spark) gets the summary and file names, with frame 0 and the rules; secrets are refused, and only the names you list as private are masked. It may carry private text. [Privacy](docs/privacy.md).
+- **Large work, split:** a requirement too coarse to check is split into parts; the split is read as words before any code, you approve it whole in one picker, with its contracts, and each part is read when the work moves on from it.
+- **Authority:** pushes, releases, publishing, deletes, the loop's own files: recorded, and Claude is told; a delete, a change to the rules or the switch, or a change to frame 0 or the tree in words you did not approve, also reaches you as a ▲; in enforce mode, they wait for your OK.
+- **Live:** a band above the prompt: what is happening now, the time left, the tokens spent, and the part the work is in.
 
 ---
 
@@ -40,6 +40,7 @@ While a read runs, the band is one line that changes in place. Once it ends, onl
 | `◐ frame-loop checking the change · about 0:12 left · 9k tokens` | a read running |
 | `frame-loop ▲ needs you: <why>` | a mismatch, an unmet check, or an act that needs you |
 | `frame-loop ■ not read: <why>` | refused or failed; never a fit |
+| `✓ frame-loop counting is done · now in the 429 response` | in large work, the part the work is in, and one just finished |
 
 ---
 

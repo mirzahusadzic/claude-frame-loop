@@ -81,11 +81,11 @@ The rules act twice: they guide the work as Claude recompiles it, and they measu
 | --- | --- | --- |
 | you state a way of working | Claude offers the line for the guide; on your OK it writes the line and indexes it as a rule, an obligation with its code check; writing the rules file is your act and is reported to you | Claude, on your OK |
 | a session starts | Claude is briefed with frame 0, the confirmed rules and what each obligation owes, and told of any rule whose lines left its guide | the loop |
-| at a crossing | each node carries every rule above it word for word, and a scope inside its parent's | Claude drafts, you confirm, code checks the file |
+| at a crossing | each part carries every rule above it word for word, and a scope inside its parent's; before the picker, each part's lines are read against the rules that hold for its files | Claude drafts the split, the reader reads it, you approve it whole, code checks each part's file |
 | while Claude works | Claude decomposes the requirements into nodes, each quoting its parent, and compiles them into the change, with the rules before it at each step; it declares which requirement each turn serves | Claude |
 | each tool call | your acts are checked against a fixed table, not a rule; a command an obligation asks for is recorded when it runs | the loop |
 | each turn's end | the obligations whose files the change touches are checked by code: a command run, a file changed, left alone or holding a pattern; a file no rule covers is a signal | the loop, no model |
-| on a signal | the writer turns the change into a label; the reader asks whether the label breaks a rule: principles and triggers in every read, scoped rules when their files change | the writer, the reader, then fixed rules |
+| on a signal | the writer turns the change into a label; the reader asks whether the label breaks a rule: principles and triggers in every read, scoped rules when their files change, and a part's contracts while the work is in that part | the writer, the reader, then fixed rules |
 | a guide changes | the change is reported, and a rule whose quoted lines left the guide is ▲; its new index waits for your OK | the loop, then you |
 
 ---
