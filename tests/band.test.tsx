@@ -659,6 +659,7 @@ test('the split\'s reading shows on its pages: which lines are needed, which ove
       parent: 'frame 0',
       requirements: { A1: 'covered' },
       lines: { 'Requests are counted per client.': 'overlaps', 'The count resets each minute.': 'needed' },
+      thin: ['The count resets each minute.'],
     }),
   })
   await $.tool.call(SPLIT as any)
@@ -666,6 +667,7 @@ test('the split\'s reading shows on its pages: which lines are needed, which ove
   const shown = await texts(ui)
   expect(shown).toContain('      the other lines already cover this one')
   expect(shown).toContain('      needed: without it the requirement is not met')
+  expect(shown).toContain('      says which words it narrows, not how')
   await ui.press({ key: 'go-review' })
   await ui.unmount()
   expect(await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))).toContain(

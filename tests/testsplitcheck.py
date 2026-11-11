@@ -121,6 +121,21 @@ class SplitCheckTests(unittest.TestCase):
         self.assertIn("no part narrows: “A client over its limit gets HTTP 429.”", said)
         self.assertNotIn("not settled", said)
 
+    def test_a_line_that_only_quotes_its_parent_is_named(self):
+        """A split read as words did not settle where a part's link to its parent stood in no
+        line. A detail of fewer than three words of its own says which words, not how."""
+        parent = PARENT[0]["text"]
+        self.assertTrue(splitcheck.only_quotes("", parent))
+        self.assertTrue(splitcheck.only_quotes('narrows: "Each client is limited"', parent))
+        self.assertFalse(splitcheck.only_quotes("narrows the limit to one count a client", parent))
+        said, _ = self.read(covered)
+        self.assertIn(
+            "these say which words they narrow, not how: "
+            "“The 6th request in a window is over the…”, “A window lasts one minute.”",
+            said,
+        )
+        self.assertNotIn("not how: “Requests are counted per client.”", said)
+
     def test_a_reading_that_does_not_settle_is_no_pass_and_no_mismatch(self):
         said, _ = self.read(wavering)
         self.assertIn("not settled: the reader could not tell that its parts make it true", said)

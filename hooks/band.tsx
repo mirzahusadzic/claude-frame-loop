@@ -198,7 +198,7 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
     const work = (await set($.env.get('FRAME_LOOP_WORK'))) || `${home}/work`
     const read = await json(`${work}/split-read.json`)
     if (read?.parent === (parent ?? 'frame 0') && read.requirements && read.lines)
-      header.check = { requirements: read.requirements, lines: read.lines }
+      header.check = { requirements: read.requirements, lines: read.lines, thin: Array.isArray(read.thin) ? read.thin : [] }
   } catch {
     // the split was not read: its pages say nothing of a reading
   }
@@ -713,6 +713,9 @@ export const register: Register = on => {
               {item.detail ? <Text color="inactive">{`      ${item.detail}`}</Text> : null}
               {ROLE[header?.check?.lines[item.text] ?? ''] ? (
                 <Text color="inactive">{`      ${ROLE[header?.check?.lines[item.text] ?? '']}`}</Text>
+              ) : null}
+              {header?.check?.thin?.includes(item.text) ? (
+                <Text color="inactive">{'      says which words it narrows, not how'}</Text>
               ) : null}
             </Box>
           ))}

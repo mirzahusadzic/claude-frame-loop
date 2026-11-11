@@ -12,6 +12,7 @@ Standard library only.
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -85,6 +86,20 @@ def frame_for(parent: str, ask: dict[str, Any], lines: list[dict[str, str]], tie
     return frame
 
 
+# Words that say nothing of how a line narrows: the detail's own scaffolding.
+PLAIN = frozenset(
+    "narrows narrow narrowed the to of in a an its it this that part same requirement words and or is as".split()
+)
+
+
+def only_quotes(detail: str, requirement: str) -> bool:
+    """Whether a line's detail says which words of the requirement it narrows and not how: fewer
+    than three words of its own. In a real split the link between a part and its parent (a part
+    is "finished" when the work "moves on") stood in no line, and the reading could not settle."""
+    known = set(re.findall(r"[a-z0-9']+", requirement.lower())) | PLAIN
+    return len([w for w in re.findall(r"[a-z0-9']+", detail.lower()) if w not in known]) < 3
+
+
 def verdict(result: dict[str, Any], lines: list[dict[str, str]]) -> dict[str, Any]:
     """What a reading says of one requirement and of each line under it. A failed reading is
     never a pass: it is not settled, and says why."""
@@ -137,6 +152,9 @@ def told(parent: str, found: list[dict[str, Any]], unsplit: list[str]) -> str:
                 f" ({one['why']})" if one.get("why") else ""
             )
         out.append(f"{head}: {tail}")
+    thin = [f"“{_short(t, 40)}”" for one in found for t in one.get("thin") or []]
+    if thin:
+        out.append(f"frame-loop · split of {parent} · these say which words they narrow, not how: " + ", ".join(thin))
     if unsplit:
         out.append(f"frame-loop · split of {parent} · no part narrows: " + "; ".join(f"“{_short(t)}”" for t in unsplit))
     if any(one["said"] != COVERED for one in found):
@@ -176,7 +194,12 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     with ThreadPoolExecutor(max_workers=max(1, len(planned))) as pool:
         results = list(pool.map(lambda plan: run(plan[2]), planned))
     found = [
-        {"requirement": ask["text"], "id": ask["id"], **verdict(result, lines)}
+        {
+            "requirement": ask["text"],
+            "id": ask["id"],
+            **verdict(result, lines),
+            "thin": [line["text"] for line in lines if only_quotes(line["detail"], ask["text"])],
+        }
         for (ask, lines, _), result in zip(planned, results, strict=True)
     ]
     unsplit = [a["text"] for a in asks if a["id"] not in by]
@@ -194,6 +217,7 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         "parent": split.get("parent") or FRAME_0,
         "requirements": {one["id"]: one["said"] for one in found},
         "lines": {x["text"]: x["role"] for one in found for x in one["lines"] if x["role"]},
+        "thin": [t for one in found for t in one["thin"]],
         "at": started,
     }
     return told(parent, found, unsplit), record

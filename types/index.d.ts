@@ -66,7 +66,8 @@ export type Header = {
   // The split's own reading, when the hooks read this split before the picker opened: each
   // requirement split, by id, as covered, not covered or not settled, and each line that was
   // found needed, or one the other lines already cover.
-  check?: { requirements: Record<string, string>; lines: Record<string, string> }
+  // and the lines whose detail says which words they narrow and not how.
+  check?: { requirements: Record<string, string>; lines: Record<string, string>; thin?: string[] }
 }
 
 declare module 'claude-code' {
