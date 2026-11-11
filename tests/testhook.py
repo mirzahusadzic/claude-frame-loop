@@ -2147,6 +2147,15 @@ class ObligationTests(unittest.TestCase):
         self.assertIn("frame 0 is not ready", self.read())
 
 
+def completing_but_breaking(frame, only=()):
+    """As `completing`, but the rules question names a rule twice."""
+    if frame["name"].startswith("violation-"):
+        SEEN.append(frame)
+        rule = next(a for a in frame["anchors"])
+        return {"exit": 0, "made": 6, "findings": [{"levels": {"baseline": rule, "repeat": rule}}]}
+    return completing(frame, only)
+
+
 def completing(frame, only=()):
     """A fake reader for completion frames: fulfilled (yes, carried, firm)."""
     SEEN.append(frame)
@@ -3913,6 +3922,50 @@ class TreeHookTests(CoreTests):
         self.assertIn("N1 ✓ by its tests (not read: no signal)", told)
         self.assertEqual(
             [r.get("routed") for r in self.events("filled") if r.get("ask") == "N1"], ["its tests, no signal"]
+        )
+
+    def _quiet(self):
+        frame = json.loads(self.frame0.read_text(encoding="utf-8"))
+        frame["obligations"] = []  # no free signal: the turn's end does not read the change
+        self.frame0.write_text(json.dumps(frame), encoding="utf-8")
+        os.environ["FRAME_LOOP_READ"] = "signal"
+
+    def test_on_a_signal_only_a_part_is_put_to_the_rules_question_before_it_is_counted(self):
+        """Pass 10, F2: a quiet change inside its part, with a test, was counted by its tests
+        and climbed without ever being asked whether it breaks a rule."""
+        self._quiet()
+        seen = loaded_seen()
+        told = self._work_in_greeter(with_test=True)
+        self.assertTrue([f["name"] for f in seen if f["name"].startswith("violation-")], [f["name"] for f in seen])
+        self.assertIn("N1 ✓ by its tests", told)
+
+    def test_on_a_signal_only_a_rule_the_change_may_break_stops_the_count_and_is_said(self):
+        self._quiet()
+        os.environ["FRAME_LOOP_READER"] = "testhook:completing_but_breaking"
+        told = self._work_in_greeter(with_test=True)
+        self.assertNotIn("by its tests", told)
+        self.assertIn("its rules ✗", told)
+        self.assertFalse([r for r in self.events("filled") if r.get("routed") == "its tests, no signal"])
+
+    def test_on_a_signal_only_a_test_counts_for_the_requirement_its_step_claims_alone(self):
+        """Pass 10, F3: with `--complete --all`, a requirement no step claimed took every step
+        as its own, and one requirement's test passed them all."""
+        self._quiet()
+        self.start()
+        self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n", encoding="utf-8")
+        (REPO / "tests").mkdir(exist_ok=True)
+        made = REPO / "tests" / f"test_settings_{uid_number(self)}.py"
+        made.write_text("def test_settings():\n    assert True\n", encoding="utf-8")
+        self.addCleanup(lambda: made.exists() and made.unlink())
+        self.marker(": frame-loop-declare --serves N1")
+        told = self.marker(": frame-loop-read --complete --all")["hookSpecificOutput"]["additionalContext"]
+        self.end()
+        self.assertIn("N1 ✓ by its tests", told)
+        self.assertNotIn("N2 ✓ by its tests", told)
+        self.assertIn(
+            {"ask": "N2", "signals": ["no step claims it"]},
+            [{k: r[k] for k in ("ask", "signals")} for r in self.events("read-signal")],
         )
 
     def test_on_a_signal_only_a_part_with_no_test_is_read(self):

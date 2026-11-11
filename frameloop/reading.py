@@ -74,6 +74,28 @@ def _in_scope(paths: list[str], scope: list[str]) -> bool:
     return bool(paths) and bool(scope) and all(any(fnmatch.fnmatch(p, g) for g in scope) for p in paths)
 
 
+def _rules_hold(
+    frame0: dict[str, Any], claimed: list[dict[str, Any]], said: str, ask_id: str
+) -> tuple[bool, str, dict[str, int]]:
+    """Whether the steps claimed for a requirement break none of the frame's rules, as the
+    rules question reads them: only a pass holds. A frame with no rules holds with no call."""
+    if not (frame0.get("principles") or frame0.get("triggers")):
+        return True, "", {}
+    text = "\n".join(s["diff"] or "" for s in claimed)
+    paths = [p for s in claimed for p in s.get("paths") or []]
+    result, _, _ = _read(
+        frame0,
+        text,
+        [ask_id],
+        "the turn's change",
+        f"part-{state.NODE}",
+        said=said,
+        facts={"paths": paths},
+        fit_read=IN_PART,
+    )
+    return result.get("decision") == gate.PASS, str(result.get("reason") or "not read"), dict(result.get("usage") or {})
+
+
 def read_signals(claimed: list[dict[str, Any]], frame0: dict[str, Any], said: str, tier: str | None) -> list[str]:
     """Why a part's finished work is read against its requirement after all: each a fact the
     code finds, never a judgement. None means the split, the files, the tests and the rules
@@ -703,10 +725,30 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     keys: dict[str, str] = {}  # what each requirement's answer rests on
     before: dict[str, dict[str, Any]] = {}  # the answers already read on that
     by_tests: set[str] = set()  # on a signal only: the requirements no signal marks
+    ruled: dict[tuple[str, ...], tuple[bool, str, dict[str, int]]] = {}  # the rules question, a set of steps once
+    rules_said: list[str] = []
     for ask in [a for a in asked if a["id"] not in by_parts]:
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
         if on_signal() and state.NODE not in (None, "root"):
             marks = read_signals(claimed, frame0, said, tier)
+            if not any(ask["id"] in s["claims"] for s in steps):
+                # A test counts only for the requirement its step claims: with no claim, every
+                # step stands in, and one requirement's test would pass them all (pass 10, F3).
+                marks.append("no step claims it")
+            if not marks:
+                # Its change is put to the rules question first, once for the same steps: a quiet
+                # turn is not read at its end, so nothing else has asked (pass 10, F2).
+                of = tuple(s["id"] for s in claimed)
+                if of not in ruled:
+                    ruled[of] = _rules_hold(frame0, claimed, said, ask["id"])
+                held, why, spent = ruled[of]
+                for k, v in spent.items():
+                    used[k] = used.get(k, 0) + v
+                ruled[of] = (held, why, {})  # its cost is counted once
+                if not held:
+                    marks.append(f"the rules question on its change did not pass ({why})")
+                    if why not in rules_said:
+                        rules_said.append(why)
             if not marks:
                 by_tests.add(ask["id"])
                 planned.append((ask, None, f"{ask['id']} {BY_TESTS}"))
@@ -838,6 +880,9 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
                 _log({"event": "filled", "node": node, "ask": hole[len("done-") :], "routed": "gadfly walk"})
         for k, v in _spent(result).items():
             used[k] = used.get(k, 0) + v
+    for why in rules_said:  # a rule a part's change may break is the author's to hear
+        parts.append(f"its rules ✗ ({why})")
+        missed += 1
     if os.environ.get("FRAME_LOOP_TREE"):  # the host rule climbs, no call (recoil 1)
         import tree
 
