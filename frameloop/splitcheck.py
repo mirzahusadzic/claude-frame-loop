@@ -22,10 +22,12 @@ import frames
 import gate
 import state
 from framezero import FRAME_0, _tree_nodes, load_frame0_root, with_semantic
+from lines import _reader_name
 from obligations import owed
-from privacy import SECRETS, tier_for
+from privacy import SECRETS, _short_path, _trains, not_public, tier_for
 from reading import _reader
 from record import _log
+from repo import project_root
 
 INSTRUCTION = (
     "Read only the parts above and the requirement below. If every part above were made true, "
@@ -95,6 +97,32 @@ def breaks(result: dict[str, Any] | None, ruled: dict[str, str]) -> str | None:
         named = reason.removeprefix("names ").split(":", 1)[0]
         return ruled.get(named, named)
     return OPEN
+
+
+def shape_of(split: dict[str, Any]) -> list[str]:
+    """What a reading was a reading of, as the picker can rebuild it from the split it is about
+    to show: every line with its part, what it narrows and its detail, every part's files, and
+    every contract with its parts. A split revised after its reading is another split."""
+    out = []
+    for part in split.get("parts") or []:
+        pid = str(part.get("id"))
+        out.append("|".join(["files", pid, *sorted(map(str, part.get("scope") or []))]))
+        for item in part.get("items") or []:
+            out.append(
+                "|".join(
+                    [
+                        "line",
+                        pid,
+                        str(item.get("quotes") or ""),
+                        str(item.get("text") or ""),
+                        str(item.get("detail") or ""),
+                    ]
+                )
+            )
+    for c in split.get("contracts") or []:
+        if isinstance(c, dict):
+            out.append("|".join(["contract", str(c.get("text") or ""), *sorted(map(str, c.get("parts") or []))]))
+    return sorted(out)
 
 
 class SplitError(ValueError):
@@ -341,6 +369,12 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     run = _reader()
     if tier is None or run is None:
         return f"frame-loop · split · not read: {note or 'no reader configured'}", None
+    if _trains(tier) and not_public(state.CWD) is not None:
+        # A split's lines are words no one has approved yet, sent as they stand: a reader that
+        # trains on its inputs gets them only from a project confirmed public (pass 10, F1).
+        where, reader = _short_path(project_root(state.CWD)), _reader_name(tier)
+        said = f"frame-loop · split · not read: {where} is not confirmed public, and {reader} trains on its inputs"
+        return said, None
     state.LIVE["what"] = "checking the split"
     planned = [(known[q], by[q], frame_for(parent, known[q], by[q], tier)) for q in by]
     held = parent_frame(split.get("parent"))
@@ -395,6 +429,7 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     )
     record = {
         "parent": split.get("parent") or FRAME_0,
+        "of": shape_of(split),
         "requirements": {one["id"]: one["said"] for one in found},
         "lines": {x["text"]: x["role"] for one in found for x in one["lines"] if x["role"]},
         "thin": [t for one in found for t in one["thin"]],

@@ -181,7 +181,22 @@ const approvedWords = (record: any, frame: string): Set<string> | null => {
 // Where a split sits, from the files the hooks read: frame 0, the tree's nodes up from the one
 // split, the approvals, and the guide's rules index. What cannot be read is said, never filled in.
 const ROOT_NAMES = ['root', 'frame 0', 'frame0', 'frame-0']
-const readHeader = async ($: any, parent: string | undefined): Promise<Header> => {
+// What a split's reading was a reading of, rebuilt from the split about to be shown, as the hooks
+// build it (splitcheck.shape_of): a split revised after its reading is another split.
+const shapeOf = (given: any): string[] => {
+  const out: string[] = []
+  for (const part of Array.isArray(given?.parts) ? given.parts : []) {
+    const id = String(part?.id)
+    out.push(['files', id, ...(Array.isArray(part?.scope) ? part.scope.map(String) : []).sort()].join('|'))
+    for (const item of Array.isArray(part?.items) ? part.items : [])
+      out.push(['line', id, String(item?.quotes ?? ''), String(item?.text ?? ''), String(item?.detail ?? '')].join('|'))
+  }
+  for (const c of Array.isArray(given?.contracts) ? given.contracts : [])
+    if (c && typeof c === 'object')
+      out.push(['contract', String(c.text ?? ''), ...(Array.isArray(c.parts) ? c.parts.map(String) : []).sort()].join('|'))
+  return out.sort()
+}
+const readHeader = async ($: any, parent: string | undefined, given?: any): Promise<Header> => {
   const home = switchPath.replace(/[\\/]switch$/, '')
   const set = async (value: Promise<string | undefined>) => (await Promise.resolve(value).catch(() => '')) || ''
   const json = async (path: string) => JSON.parse(await $.fs.read(path))
@@ -244,7 +259,9 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
     // What the hooks read of this split on its way here (splitcheck.py), kept beside their work.
     const work = (await set($.env.get('FRAME_LOOP_WORK'))) || `${home}/work`
     const read = await json(`${work}/split-read.json`)
-    if (read?.parent === (parent ?? 'frame 0') && read.requirements && read.lines)
+    // Only this split's own reading: one made for other lines, files or contracts says nothing here.
+    const isThisSplit = Array.isArray(read?.of) && JSON.stringify(read.of) === JSON.stringify(shapeOf(given))
+    if (read?.parent === (parent ?? 'frame 0') && isThisSplit && read.requirements && read.lines)
       header.check = {
         requirements: read.requirements,
         lines: read.lines,
@@ -628,7 +645,7 @@ export const register: Register = on => {
         isChecked: true,
       }))
       await followTheHooks($)
-      const header = await readHeader($, given.parent)
+      const header = await readHeader($, given.parent, given)
       await update($, proposal, () => ({
         title,
         parent: given.parent,

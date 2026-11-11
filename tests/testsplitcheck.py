@@ -431,6 +431,59 @@ class SplitCheckTests(unittest.TestCase):
         self.assertEqual(sorted(tree.quoting("root", "A1", nodes)), [("counting", "C1"), ("window", "W1")])
         self.assertTrue(tree.owned_by_parts("root", {"id": "A1"}, nodes))
 
+    def test_a_training_reader_gets_a_split_only_from_a_project_confirmed_public(self):
+        """Pass 10, F1: the split's lines went to a reader that trains on its inputs from any
+        project, though nobody had approved them and a change from the same project goes only
+        as a summary."""
+        seen = []
+        with (
+            mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(
+                splitcheck, "_reader", lambda: lambda frame, only=(): seen.append(frame) or covered(frame)
+            ),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+            mock.patch.object(splitcheck, "_trains", lambda tier: True),
+            mock.patch.object(splitcheck, "project_root", lambda cwd: Path("/work/secret-project")),
+        ):
+            with mock.patch.object(splitcheck, "not_public", lambda cwd: Path("/work/secret-project")):
+                said, record = splitcheck.check(SPLIT)
+            self.assertEqual(seen, [])
+            self.assertIsNone(record)
+            self.assertIn("not read:", said)
+            self.assertIn("is not confirmed public", said)
+            with mock.patch.object(splitcheck, "not_public", lambda cwd: None):
+                said, record = splitcheck.check(SPLIT)
+            self.assertTrue(seen)
+            self.assertIsNotNone(record)
+
+    def test_a_reading_records_what_it_was_a_reading_of(self):
+        """Pass 10, F5: the record named only the frame split, so the picker showed it on any
+        split of that frame. It names every line, file and contract it read."""
+        _, record = self.record()
+        self.assertEqual(record["of"], splitcheck.shape_of(SPLIT))
+        revised = json.loads(json.dumps(SPLIT))
+        revised["parts"][0]["items"][0]["text"] = "Requests are counted per account."
+        self.assertNotEqual(splitcheck.shape_of(revised), record["of"])
+        moved = json.loads(json.dumps(SPLIT))
+        moved["parts"][0]["scope"] = ["other.py"]
+        self.assertNotEqual(splitcheck.shape_of(moved), record["of"])
+
+    def record(self):
+        with (
+            mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("private", "")),
+            mock.patch.object(
+                splitcheck,
+                "_reader",
+                lambda: lambda frame, only=(): keeps(frame) if "violation" in frame["name"] else covered(frame),
+            ),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+        ):
+            return splitcheck.check(SPLIT)
+
 
 if __name__ == "__main__":
     os.environ.setdefault("FRAME_LOOP_WORK", str(ROOT / "tests/.work"))

@@ -652,11 +652,23 @@ test('each page\'s header is read from the tree: path, requirement split, princi
   expect(review).toContain('  · A request that is not limited is answered as today  (frame 0)')
 })
 
+// What a saved split reading was a reading of, as the hooks record it (splitcheck.shape_of).
+const shapeOf = (given: any): string[] => {
+  const out: string[] = []
+  for (const part of given.parts ?? []) {
+    out.push(['files', part.id, ...[...part.scope].sort()].join('|'))
+    for (const item of part.items) out.push(['line', part.id, item.quotes ?? '', item.text, item.detail ?? ''].join('|'))
+  }
+  for (const c of given.contracts ?? []) out.push(['contract', c.text, ...[...c.parts].sort()].join('|'))
+  return out.sort()
+}
+
 test('the split\'s reading shows on its pages: which lines are needed, which overlap, and what did not settle', async ($, on) => {
   const sent = await picking($, on)
   Object.assign(sent.files, TREE_FILES, {
     '/project/.frame-loop/work/split-read.json': JSON.stringify({
       parent: 'frame 0',
+      of: shapeOf(SPLIT),
       requirements: { A1: 'covered' },
       lines: { 'Requests are counted per client.': 'overlaps', 'The count resets each minute.': 'needed' },
       thin: ['The count resets each minute.'],
@@ -687,8 +699,8 @@ test('the split\'s reading shows on its pages: which lines are needed, which ove
 
 test('a split that did not settle, or was read for another frame, says so or says nothing', async ($, on) => {
   const sent = await picking($, on)
-  const read = (parent: string, said: string) =>
-    JSON.stringify({ parent, requirements: { A1: said }, lines: { 'Requests are counted per client.': 'needed' } })
+  const read = (parent: string, said: string, of: string[] = shapeOf(SPLIT)) =>
+    JSON.stringify({ parent, of, requirements: { A1: said }, lines: { 'Requests are counted per client.': 'needed' } })
   const pages = async () => {
     await $.tool.call(SPLIT as any)
     const first = await $.ui.mount({ ...PICKER, surface: 'terminal' })
@@ -708,6 +720,14 @@ test('a split that did not settle, or was read for another frame, says so or say
   const other = await pages()
   expect(other.page.join('\n')).not.toContain('needed: without it')
   expect(other.review).toContain('Not read before you: this split was not read against what it splits.')
+  // Pass 10, F5: a reading was matched by the frame it split alone, so a split revised after
+  // its reading, or another split of the same frame, wore the earlier one's "true" and "needed".
+  const revised = shapeOf({ ...SPLIT, parts: [{ ...SPLIT.parts[0], items: [{ text: 'Another line.', quotes: 'A1' }] }] })
+  sent.files['/project/.frame-loop/work/split-read.json'] = read('frame 0', 'covered', revised)
+  const stale = await pages()
+  expect(stale.page.join('\n')).not.toContain('needed: without it')
+  expect(stale.review).toContain('Not read before you: this split was not read against what it splits.')
+  expect(stale.review.join('\n')).not.toContain('the parts make what they split true')
 })
 
 test('a split below frame 0 shows the path through the parts and the principles each adds', async ($, on) => {
@@ -834,6 +854,7 @@ test('what the split\'s reading found of each contract shows on the pages of the
   Object.assign(sent.files, TREE_FILES, {
     '/project/.frame-loop/work/split-read.json': JSON.stringify({
       parent: 'frame 0',
+      of: shapeOf(CONTRACTED),
       requirements: { A1: 'covered' },
       lines: {},
       parts: {},
@@ -858,7 +879,8 @@ test('a contract kept shows so on its pages; one the reading never saw says it w
   const sent = await picking($, on)
   Object.assign(sent.files, TREE_FILES, {
     '/project/.frame-loop/work/split-read.json': JSON.stringify({
-      parent: 'frame 0', requirements: { A1: 'covered' }, lines: {}, parts: {}, contracts: { [SHARED]: 'kept' },
+      parent: 'frame 0',
+      of: shapeOf(CONTRACTED), requirements: { A1: 'covered' }, lines: {}, parts: {}, contracts: { [SHARED]: 'kept' },
     }),
   })
   await $.tool.call(CONTRACTED as any)
