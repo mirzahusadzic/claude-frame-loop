@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: mirzahusadzic/gadfly
-          ref: c08dd31467856cb6ab4cb59ef332ba01a5402357  # v0.14.0, for the contract tests
+          ref: f35d5b1014558c81e6bdbf1722630eedd4a54b43  # v0.15.0, for the contract tests
           path: gadfly
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
@@ -62,7 +62,7 @@ jobs:
       - name: Git identity for the tests' own repositories
         run: git config --global user.email ci@example.invalid && git config --global user.name ci
       - name: Install Gadfly
-        run: uv tool install 'midwife>=0.14.0' && gadfly --version
+        run: uv tool install 'midwife>=0.15.0' && gadfly --version
       - name: Test, with Gadfly; no network call and no key
         env:
           GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly

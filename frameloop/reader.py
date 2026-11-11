@@ -1,4 +1,4 @@
-"""The live reader: runs a frame through the gadfly CLI (0.14.0 or later) and returns
+"""The live reader: runs a frame through the gadfly CLI (0.15.0 or later) and returns
 Gadfly's JSON. Each call gets its own fresh folder under FRAME_LOOP_WORK; nothing is
 deleted. Gadfly reserves the calls itself (--calls auto, 9aa8a4a); only the per-call
 output cap binds."""
@@ -21,11 +21,12 @@ import state
 from procs import STOPPED, TIMED_OUT, bounded
 
 GADFLY = Path(os.environ.get("GADFLY_CHECKOUT", Path.home() / "gadfly"))
-GADFLY_FLOOR = (0, 14, 0)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
+GADFLY_FLOOR = (0, 15, 0)  # 0.13: `--calls auto`, `--withhold`, `firm --parallel`, `standing.most`;
 # 0.13.1: UTF-8 output on Windows, which the hooks read as UTF-8
 # 0.13.2: settling with calls at once sends a trial only the calls that could fix its level
 # 0.14.0: `firm --short-of`, which ends a reading once it cannot be a firm carried one
-MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.14.0', or set GADFLY_CHECKOUT to a checkout"
+# 0.15.0: `firm --short-of any`, which ends one once no firm answer of any kind is left
+MISSING = "Gadfly is not installed: uv tool install 'midwife>=0.15.0', or set GADFLY_CHECKOUT to a checkout"
 CAP = int(os.environ.get("FRAME_LOOP_OUTPUT_TOKENS", "16000"))
 TOKEN_CAP = 150000  # a reading's tokens, what its Gadfly runs have spent together
 READING = "reading"  # the questions of one reading share a cap; each completion frame has its own

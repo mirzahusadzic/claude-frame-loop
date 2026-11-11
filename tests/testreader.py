@@ -152,7 +152,7 @@ class LauncherTest(unittest.TestCase):
         ran.assert_not_called()
         result = __import__("json").loads(done.stdout)
         self.assertTrue(gate._failed(result))
-        self.assertIn("uv tool install 'midwife>=0.14.0'", gate._failure(result))
+        self.assertIn("uv tool install 'midwife>=0.15.0'", gate._failure(result))
 
 
 class TokenCapTest(unittest.TestCase):

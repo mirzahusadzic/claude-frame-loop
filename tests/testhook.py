@@ -497,7 +497,7 @@ class AttackTests(unittest.TestCase):
         with unittest.mock.patch.object(reader, "launcher", return_value=None):
             out = hook.answer(start)
         self.assertEqual(" ".join(out["systemMessage"].split()), f"frame-loop ■ not read: {reader.MISSING}")
-        self.assertIn("uv tool install 'midwife>=0.14.0'", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIn("uv tool install 'midwife>=0.15.0'", out["hookSpecificOutput"]["additionalContext"])
         with unittest.mock.patch.object(reader, "launcher", return_value=(["gadfly"], None)):
             self.assertNotIn("systemMessage", hook.answer(start) or {})
 
