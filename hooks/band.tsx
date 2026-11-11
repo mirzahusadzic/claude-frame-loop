@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Header, Item, Live, Part, PartLine, Proposal } from '../types'
+import type { Contract, Header, Item, Live, Part, PartLine, Proposal } from '../types'
 
 // frame-loop's hooks write what they ask now to FRAME_LOOP_LIVE/<session>.json
 // (one small file, rewritten whole); this band draws it above the prompt.
@@ -74,6 +74,20 @@ const APPROVE_SCHEMA = {
         required: ['id', 'name', 'items', 'scope'],
       },
     },
+    contracts: {
+      type: 'array',
+      description:
+        "For a split only: what two or more of its parts must each keep, each written once with the parts' ids it binds; " +
+        'shown on every page it binds and approved with the split.',
+      items: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'One plain sentence every part it binds must keep.' },
+          parts: { type: 'array', minItems: 2, items: { type: 'string' }, description: 'The ids of the parts it binds.' },
+        },
+        required: ['text', 'parts'],
+      },
+    },
     leftOut: { type: 'array', items: { type: 'string' }, description: 'What the proposal leaves out on purpose.' },
     removes: {
       type: 'array',
@@ -96,7 +110,14 @@ const PART_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const HEADER_ROWS = 8
 
 // What keeps a split from being put to the person: told to Claude, which then mends it.
-const splitFaults = (given: { node?: string; items?: unknown[]; removes?: unknown[]; parent?: string; parts?: any[] }) => {
+const splitFaults = (given: {
+  node?: string
+  items?: unknown[]
+  removes?: unknown[]
+  parent?: string
+  parts?: any[]
+  contracts?: any[]
+}) => {
   const parts = given.parts ?? []
   if (given.node !== undefined || given.items !== undefined || given.removes !== undefined)
     return 'a split holds its parts alone: no node, items or removes beside them.'
@@ -113,8 +134,34 @@ const splitFaults = (given: { node?: string; items?: unknown[]; removes?: unknow
       return `part ${p.id} needs at least one line, each a sentence.`
   }
   if (new Set(ids).size !== ids.length) return 'two parts share an id.'
+  return contractFaults(given.contracts, ids)
+}
+
+// What keeps a split's contracts from being put to the person: each is one statement, written
+// once, binding two or more of the split's own parts.
+const contractFaults = (contracts: unknown, ids: string[]): string => {
+  if (contracts === undefined) return ''
+  if (!Array.isArray(contracts)) return 'contracts are a list, each a statement and the parts it binds.'
+  const seen = new Set<string>()
+  for (const c of contracts as any[]) {
+    if (typeof c?.text !== 'string' || !c.text.trim()) return 'each contract needs a statement, one plain sentence.'
+    const bound = Array.isArray(c.parts) ? c.parts : []
+    const stranger = bound.find((p: unknown) => typeof p !== 'string' || !ids.includes(p))
+    if (stranger !== undefined) return `the contract "${c.text}" names ${JSON.stringify(stranger)}, not a part of this split.`
+    if (new Set(bound).size < 2) return `the contract "${c.text}" must bind two or more of the split's parts.`
+    if (seen.has(words(c.text))) return `the contract "${c.text}" is written once, not twice.`
+    seen.add(words(c.text))
+  }
   return ''
 }
+
+// The contracts that bind a part, in the split's order.
+const bindingOf = (contracts: Contract[] | undefined, id: string) => (contracts ?? []).filter(c => c.parts.includes(id))
+// The other parts a contract binds, by their names.
+const sharers = (c: Contract, parts: Part[], id?: string) =>
+  c.parts.filter(p => p !== id).map(p => parts.find(x => x.id === p)?.name ?? p)
+const andList = (names: string[]) =>
+  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 
 const words = (text: string) => text.split(/\s+/).filter(Boolean).join(' ')
 
@@ -203,6 +250,7 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
         lines: read.lines,
         thin: Array.isArray(read.thin) ? read.thin : [],
         parts: read.parts && typeof read.parts === 'object' ? read.parts : {},
+        contracts: read.contracts && typeof read.contracts === 'object' ? read.contracts : {},
       }
   } catch {
     // the split was not read: its pages say nothing of a reading
@@ -224,10 +272,34 @@ const breaksOf = (header: Header | undefined, part: Part): string | null => {
     ? `Read before you: not settled whether ${part.name} breaks a rule.`
     : `Read before you: ${part.name} may break your rule "${said}".`
 }
-const readingOf = (header: Header | undefined, parts: Part[] = []): string[] => {
+// What the reading found of one contract, as its pages show it under the contract: kept, not
+// kept, not settled, or not read when the reading never saw it. A reading that did not finish
+// is never shown as kept.
+const contractRead = (header: Header | undefined, c: Contract): string | null => {
+  if (!header?.check) return null // the review says the split was not read
+  const said = header.check.contracts?.[c.text]
+  if (said === 'kept') return 'Read before you: their lines keep it.'
+  if (said === 'not kept') return 'Read before you: their lines do not keep it.'
+  if (said === undefined) return 'Not read before you.'
+  return 'Read before you: not settled whether their lines keep it.'
+}
+// The review's line for a contract the author should look at, or nothing when it was kept.
+const contractReview = (header: Header | undefined, c: Contract, parts: Part[]): string | null => {
+  if (!header?.check) return null
+  const said = header.check.contracts?.[c.text]
+  const whose = `the lines of ${andList(sharers(c, parts))}`
+  if (said === 'kept') return null
+  if (said === 'not kept') return `Read before you: ${whose} do not keep "${c.text}".`
+  if (said === undefined) return `Not read before you: whether ${whose} keep "${c.text}".`
+  return `Read before you: not settled whether ${whose} keep "${c.text}".`
+}
+const readingOf = (header: Header | undefined, parts: Part[] = [], contracts: Contract[] = []): string[] => {
   const found = header?.check?.requirements
   if (!found) return ['Not read before you: this split was not read against what it splits.']
-  const rules = parts.map(p => breaksOf(header, p)).filter((x): x is string => x !== null)
+  const rules = [
+    ...parts.map(p => breaksOf(header, p)),
+    ...contracts.map(c => contractReview(header, c, parts)),
+  ].filter((x): x is string => x !== null)
   const open = Object.entries(found).filter(([, said]) => said !== 'covered')
   if (open.length === 0) return ['Read before you: the parts make what they split true.', ...rules]
   return [
@@ -253,14 +325,22 @@ const splitting = (header: Header | undefined, items: Item[]): string[] => {
   })
 }
 
-// A split's answer: every part named, and each line not approved with the part it is in.
-const splitAnswer = (parts: Part[]): string => {
+// A split's answer: every part named, and each line not approved with the part it is in; a
+// contract is named once, with the parts it binds, however many pages showed it.
+const splitAnswer = (parts: Part[], contracts: Contract[] = []): string => {
   const names = parts.map(p => p.name).join(', ')
-  const all = parts.flatMap(p => p.items.map(x => ({ part: p.name, x })))
+  const all = [
+    ...parts.flatMap(p => p.items.map(x => ({ part: p.name, x: { text: itemWords(x), isChecked: x.isChecked } }))),
+    ...contracts.map(c => ({ part: `the contract between ${andList(sharers(c, parts))}`, x: c })),
+  ]
   const not = all.filter(({ x }) => !x.isChecked)
-  if (not.length === 0) return `Approved, all ${count(parts.length)} ${parts.length === 1 ? 'part' : 'parts'}: ${names}.`
+  const between = contracts.length
+    ? `, and the ${count(contracts.length)} ${contracts.length === 1 ? 'contract' : 'contracts'} between them`
+    : ''
+  if (not.length === 0)
+    return `Approved, all ${count(parts.length)} ${parts.length === 1 ? 'part' : 'parts'}: ${names}${between}.`
   const yes = all.filter(({ x }) => x.isChecked)
-  const listed = (xs: typeof all) => xs.map(({ part, x }) => `- ${part}: ${itemWords(x)}`).join('\n')
+  const listed = (xs: typeof all) => xs.map(({ part, x }) => `- ${part}: ${x.text}`).join('\n')
   return [
     yes.length ? `Approved:\n${listed(yes)}` : 'Nothing approved.',
     `Not approved:\n${listed(not)}`,
@@ -269,8 +349,8 @@ const splitAnswer = (parts: Part[]): string => {
 }
 
 // What the next turn reads: plain sentences, as the person would say them.
-const answer = ({ items, parts }: Proposal): string => {
-  if (parts) return splitAnswer(parts)
+const answer = ({ items, parts, contracts }: Proposal): string => {
+  if (parts) return splitAnswer(parts, contracts)
   const not = items.filter(x => !x.isChecked)
   if (not.length === 0) return items.length === 1 ? 'Approved.' : `Approved, all ${items.length}.`
   const yes = items.filter(x => x.isChecked)
@@ -364,11 +444,21 @@ const remember = async ($: any, held: Proposal): Promise<string> => {
   // Each part's round holds what its file is checked against: what each line narrows, by the
   // parent's requirement's id, and the files it may change, as its page showed them.
   const narrows = (items: Item[]) => Object.fromEntries(items.filter(x => x.isChecked).map(x => [x.text, x.quotes ?? null]))
+  // A split with contracts keeps, in each part's round, the approved ones that bind it and the
+  // other parts each binds; a split with none records as before.
+  const bound = (id: string) =>
+    held.contracts
+      ? {
+          contracts: bindingOf(held.contracts, id)
+            .filter(c => c.isChecked)
+            .map(c => ({ text: c.text, with: c.parts.filter(p => p !== id) })),
+        }
+      : {}
   for (const { frame, items, split } of held.parts
     ? held.parts.map(p => ({
         frame: p.id,
         items: p.items,
-        split: { split: held.parent ?? 'frame 0', name: p.name, scope: p.scope, narrows: narrows(p.items) },
+        split: { split: held.parent ?? 'frame 0', name: p.name, scope: p.scope, narrows: narrows(p.items), ...bound(p.id) },
       }))
     : [{ frame: held.node ?? 'frame 0', items: held.items, split: {} }]) {
     kept.rounds.push({
@@ -517,6 +607,7 @@ export const register: Register = on => {
       removes?: string[]
       parent?: string
       parts?: { id?: string; name?: string; items?: Omit<Item, 'isChecked'>[]; scope?: string[] }[]
+      contracts?: { text: string; parts: string[] }[]
     }
     const leftOut = given.leftOut ?? []
     const title = given.title ?? 'Approve'
@@ -531,15 +622,36 @@ export const register: Register = on => {
         isSeen: i === 0, // the first page is shown as the picker opens
         items: (p.items ?? []).map(x => ({ text: x.text, detail: x.detail, quotes: x.quotes, isChecked: true })),
       }))
+      const contracts: Contract[] | undefined = given.contracts?.map(c => ({
+        text: c.text,
+        parts: [...new Set(c.parts)],
+        isChecked: true,
+      }))
       await followTheHooks($)
       const header = await readHeader($, given.parent)
-      await update($, proposal, () => ({ title, parent: given.parent, items: [], parts, page: 0, leftOut, header }))
+      await update($, proposal, () => ({
+        title,
+        parent: given.parent,
+        items: [],
+        parts,
+        ...(contracts ? { contracts } : {}),
+        page: 0,
+        leftOut,
+        header,
+      }))
       const tallest = Math.max(
-        parts.length + leftOut.length,
-        ...parts.map(p => p.items.length + p.items.filter(x => x.detail).length + new Set(p.items.map(x => x.quotes)).size),
+        parts.length + leftOut.length + (contracts?.length ? contracts.length + 1 : 0),
+        ...parts.map(
+          p =>
+            p.items.length +
+            p.items.filter(x => x.detail).length +
+            new Set(p.items.map(x => x.quotes)).size +
+            (bindingOf(contracts, p.id).length ? 3 * bindingOf(contracts, p.id).length + 1 : 0),
+        ),
       )
       rows = Math.min(30, tallest + header.principles.length + HEADER_ROWS + 6)
     } else {
+      if (given.contracts !== undefined) return { deny: 'contracts are written only between the parts of a split.' }
       const items: Item[] = [
         ...(given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true })),
         ...(given.removes ?? []).map(text => ({ text, isChecked: true, isRemoval: true })),
@@ -642,6 +754,14 @@ export const register: Register = on => {
               }
             : p,
         )
+      // A contract has one check mark, however many pages show it: taken out on one, out on all.
+      const contracts = now.contracts ?? []
+      const toggleContract = (index: number) =>
+        update($, proposal, p =>
+          p?.contracts
+            ? { ...p, contracts: p.contracts.map((c, i) => (i === index ? { ...c, isChecked: !c.isChecked } : c)) }
+            : p,
+        )
       // The header is the code's, from the tree: where the split sits, the requirement this page
       // narrows when it is one, and which page of how many. Claude's title is only the tab's.
       const header = now.header
@@ -690,9 +810,17 @@ export const register: Register = on => {
                 </Button>
               ))}
             </Box>
-            {readingOf(header, parts).length > 0 ? (
+            {contracts.length > 0 ? (
               <Box flexDirection="column" marginTop={1}>
-                {readingOf(header, parts).map(line => (
+                <Text>Contracts between the parts:</Text>
+                {contracts.map(c => (
+                  <Text>{`  ${c.isChecked ? '·' : '(not approved)'} ${c.text}  (${sharers(c, parts).join(', ')})`}</Text>
+                ))}
+              </Box>
+            ) : null}
+            {readingOf(header, parts, contracts).length > 0 ? (
+              <Box flexDirection="column" marginTop={1}>
+                {readingOf(header, parts, contracts).map(line => (
                   <Text>{line}</Text>
                 ))}
               </Box>
@@ -700,7 +828,7 @@ export const register: Register = on => {
             {holds}
             {leftOutLines}
             {buttons(
-              parts.every(p => checked(p) === p.items.length)
+              parts.every(p => checked(p) === p.items.length) && contracts.every(c => c.isChecked)
                 ? parts.length === 1
                   ? 'Approve the part'
                   : `Approve all ${count(parts.length)}`
@@ -736,6 +864,20 @@ export const register: Register = on => {
               ) : null}
             </Box>
           ))}
+          {bindingOf(contracts, part.id).length > 0 ? (
+            <Box flexDirection="column" marginTop={1}>
+              <Text>Contracts with other parts:</Text>
+              {bindingOf(contracts, part.id).map((c, index) => (
+                <Box flexDirection="column">
+                  <Button key={`contract-${page}-${index}`} plain onPress={() => toggleContract(contracts.indexOf(c))}>
+                    {`[${c.isChecked ? 'x' : ' '}] ${c.text}`}
+                  </Button>
+                  <Text color="inactive">{`      shared with: ${sharers(c, parts, part.id).join(', ')}`}</Text>
+                  {contractRead(header, c) ? <Text color="inactive">{`      ${contractRead(header, c)}`}</Text> : null}
+                </Box>
+              ))}
+            </Box>
+          ) : null}
           {holds}
           {(header?.check?.parts?.[part.id]?.scoped ?? []).length > 0 ? (
             <Box flexDirection="column">

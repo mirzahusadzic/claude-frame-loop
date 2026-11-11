@@ -474,6 +474,51 @@ class SplitWriteTests(Approved):
                 said = self.pre(self.home / "tree" / "counting.json", held, "enforce")
                 self.assertEqual(said["hookSpecificOutput"]["permissionDecision"], "ask")
 
+    SHARED = "A client over its limit is never counted twice."
+    BOUND = [{"text": SHARED, "with": ["the-429"]}]
+
+    def test_a_part_carrying_the_contracts_approved_for_it_needs_no_one(self):
+        self.split(contracts=self.BOUND)
+        held = {
+            **PART,
+            "contracts": [{"text": "A client over its limit is never  counted twice.", "with": ["the-429"]}],
+        }
+        self.assertEqual(self.act(self.node(held)), ("changed the tree", False))
+        self.assertIsNone(self.pre(self.home / "tree" / "counting.json", held, "enforce"))
+
+    def test_a_part_whose_contracts_are_not_the_ones_approved_comes_to_the_author(self):
+        two = [*self.BOUND, {"text": "Every part reads the limit from one place.", "with": ["headers"]}]
+        for why, approved, held in (
+            ("a contract dropped", self.BOUND, []),
+            ("a contract left out of the file", self.BOUND, None),
+            ("a contract added", self.BOUND, two),
+            ("a contract reworded", self.BOUND, [{"text": "A client is never counted twice.", "with": ["the-429"]}]),
+            ("a contract binding other parts", self.BOUND, [{"text": self.SHARED, "with": ["headers"]}]),
+            ("a contract binding more parts", self.BOUND, [{"text": self.SHARED, "with": ["the-429", "headers"]}]),
+            ("a contract twice", self.BOUND, [*self.BOUND, *self.BOUND]),
+            ("a contract with no record of any", None, self.BOUND),
+            ("contracts that are no list", self.BOUND, {"text": self.SHARED}),
+            ("a contract with no parts", self.BOUND, [{"text": self.SHARED}]),
+        ):
+            with self.subTest(why):
+                (self.home / "approved.json").unlink(missing_ok=True)
+                self.split(**({} if approved is None else {"contracts": approved}))
+                file = {**PART} if held is None else {**PART, "contracts": held}
+                self.assertEqual(self.act(self.node(file)), ("changed the tree", True))
+                said = self.pre(self.home / "tree" / "counting.json", file, "enforce")
+                self.assertEqual(said["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_claude_is_told_how_a_contract_reaches_the_picker_and_each_parts_file(self):
+        told = hook.SPLIT_TOLD
+        self.assertIn("`contracts` beside `parts`", told)
+        self.assertIn("the same `parent`, `parts` and `contracts`", told)
+        self.assertIn("`with`, the other parts' ids", told)
+
+    def test_a_part_of_a_split_with_contracts_none_of_which_bind_it_holds_none(self):
+        self.split(contracts=[])
+        self.assertEqual(self.act(self.node({**PART, "contracts": []})), ("changed the tree", False))
+        self.assertEqual(self.act(self.node()), ("changed the tree", False))
+
     def test_a_part_whose_split_was_answered_again_alone_is_read_by_that_answer(self):
         """A later answer for the node, outside a split, overrules the split's: it showed no scope."""
         self.split()

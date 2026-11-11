@@ -32,6 +32,13 @@ INSTRUCTION = (
     "only, never by what you know or guess about the project."
 )
 COVERED, GAP, OPEN = "covered", "not covered", "not settled"
+CONTRACT_INSTRUCTION = (
+    "Read only the lines above and the contract below. Each line is what one part of the work "
+    "will make true, under the part's name. If every line above were made true, would each part "
+    "named keep the contract below? Answer yes, no, or unclear if the lines are too thin to say. "
+    "Judge by the lines' words only, never by what you know or guess about the project."
+)
+KEPT, BROKEN = "kept", "not kept"
 
 
 def parent_frame(parent: str | None) -> dict[str, Any]:
@@ -136,6 +143,65 @@ def frame_for(parent: str, ask: dict[str, Any], lines: list[dict[str, str]], tie
     return frame
 
 
+def contracts_of(split: dict[str, Any]) -> list[dict[str, Any]]:
+    """The split's contracts, each with the parts it binds, in the split's order: a statement
+    that two or more of the split's own parts must each keep."""
+    contracts = split.get("contracts")
+    if contracts is None:
+        return []
+    named = {str(p.get("id")): p for p in split.get("parts") or []}
+    need = "each contract of a split needs its statement and two or more of the split's parts"
+    if not isinstance(contracts, list):
+        raise SplitError(need)
+    out = []
+    for c in contracts:
+        bound = c.get("parts") if isinstance(c, dict) else None
+        if not (
+            isinstance(c, dict)
+            and isinstance(c.get("text"), str)
+            and c["text"].strip()
+            and isinstance(bound, list)
+            and len(set(map(str, bound))) >= 2
+            and all(str(p) in named for p in bound)
+        ):
+            raise SplitError(need)
+        out.append({"text": c["text"], "parts": [named[p] for p in dict.fromkeys(map(str, bound))]})
+    return out
+
+
+def contract_frame(parent: str, n: int, contract: dict[str, Any], tier: str) -> dict[str, Any]:
+    """One contract against the lines of the parts it binds, each under its part's name."""
+    steps = [
+        {
+            "id": f"P{i + 1}",
+            "label": f"{line['part']}: {line['text']}" + (f"\n   {line['detail']}" if line["detail"] else ""),
+            "diff": "",
+            "claims": ["K"],
+        }
+        for i, line in enumerate(
+            {"part": str(p.get("name") or ""), "text": str(x["text"]), "detail": str(x.get("detail") or "")}
+            for p in contract["parts"]
+            for x in p.get("items") or []
+        )
+    ]
+    ask = {"id": "K", "text": contract["text"]}
+    frame = frames.completion({"id": parent, "asks": [ask]}, "K", steps, tier, with_diffs=False)
+    frame["name"] = f"contract-{n}-{frame['name'].removeprefix('completion-')}"
+    frame["observe"]["instruction"] = CONTRACT_INSTRUCTION
+    frame["standing"]["most"] = 1  # read once, as the split is
+    frame["inputs"] = [{"id": "ask", "text": f"The contract: {contract['text']}"}]
+    frame["relation"] = "the lines of the parts a contract binds keep it"
+    return frame
+
+
+def kept(result: dict[str, Any]) -> tuple[str, str]:
+    """What a contract's reading says: kept, not kept, or not settled, with why it did not
+    settle. A reading that failed or tore is not settled, never kept."""
+    found = verdict(result, [])
+    said = {COVERED: KEPT, GAP: BROKEN}.get(found["said"], OPEN)
+    return said, str(found.get("why") or "")
+
+
 # Words that say nothing of how a line narrows: the detail's own scaffolding.
 PLAIN = frozenset(
     "narrows narrow narrowed the to of in a an its it this that part same requirement words and or is as".split()
@@ -183,8 +249,16 @@ def _short(text: str, most: int = 60) -> str:
     return flat if len(flat) <= most else flat[: most - 1].rstrip() + "…"
 
 
+def _and(names: list[str]) -> str:
+    return names[0] if len(names) < 2 else f"{', '.join(names[:-1])} and {names[-1]}"
+
+
 def told(
-    parent: str, found: list[dict[str, Any]], unsplit: list[str], parts: list[dict[str, Any]] | None = None
+    parent: str,
+    found: list[dict[str, Any]],
+    unsplit: list[str],
+    parts: list[dict[str, Any]] | None = None,
+    contracts: list[dict[str, Any]] | None = None,
 ) -> str:
     """The reading in plain words, a line a requirement: for Claude to revise the split by,
     and for the author under details."""
@@ -220,7 +294,15 @@ def told(
             out.append(
                 f"frame-loop · split of {parent} · a change in {part['name']} will owe: " + "; ".join(part["owes"])
             )
-    if any(one["said"] != COVERED for one in found):
+    for c in contracts or []:
+        head = f"frame-loop · split of {parent} · the contract “{_short(c['text'], 90)}” between {_and(c['names'])}"
+        if c["said"] == KEPT:
+            out.append(f"{head}: their lines keep it")
+        elif c["said"] == BROKEN:
+            out.append(f"{head}: their lines do not keep it")
+        else:
+            out.append(f"{head}: not settled whether their lines keep it" + (f" ({c['why']})" if c["why"] else ""))
+    if any(one["said"] != COVERED for one in found) or any(c["said"] != KEPT for c in contracts or []):
         out.append(
             "A split that is not settled is not a mismatch, and the picker shows the author which requirement "
             "it is. Tell them in plain words what stays open; if they ask for a change, say under each line "
@@ -236,6 +318,7 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     try:
         parent, asks = parent_asks(split.get("parent"))
         by = lines_of(split)
+        bound = contracts_of(split)
     except SplitError as error:
         return f"frame-loop · split · not read: {error}", None
     known = {a["id"]: a for a in asks}
@@ -254,12 +337,20 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     planned = [(known[q], by[q], frame_for(parent, known[q], by[q], tier)) for q in by]
     held = parent_frame(split.get("parent"))
     ruled = [rules_for(held, part, tier) for part in split.get("parts") or []]
+    asked = [contract_frame(parent, n + 1, c, tier) for n, c in enumerate(bound)]
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=max(1, len(planned) + len(ruled))) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, len(planned) + len(ruled) + len(asked))) as pool:
         jobs = [pool.submit(run, r["frame"], only=("baseline", "repeat")) if r["frame"] else None for r in ruled]
+        pacts = [pool.submit(run, frame) for frame in asked]
         results = list(pool.map(lambda plan: run(plan[2]), planned))
         broken = [breaks(job.result() if job else None, r["rules"]) for job, r in zip(jobs, ruled, strict=True)]
+        answered = [p.result() for p in pacts]
+    contracts_found = []
+    for c, r in zip(bound, answered, strict=True):
+        said, why = kept(r)
+        names = [str(p.get("name") or p.get("id")) for p in c["parts"]]
+        contracts_found.append({"text": c["text"], "names": names, "said": said, "why": why})
     parts_found = [
         {"id": r["id"], "name": r["name"], "breaks": b, "scoped": r["scoped"], "owes": r["owes"]}
         for r, b in zip(ruled, broken, strict=True)
@@ -274,13 +365,14 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         for (ask, lines, _), result in zip(planned, results, strict=True)
     ]
     unsplit = [a["text"] for a in asks if a["id"] not in by]
-    calls = sum(int(r.get("made") or 0) for r in [*results, *(j.result() for j in jobs if j)])
+    calls = sum(int(r.get("made") or 0) for r in [*results, *answered, *(j.result() for j in jobs if j)])
     _log(
         {
             "event": "split-read",
             "parent": parent,
             "found": [{k: one[k] for k in ("id", "said", "lines")} for one in found],
             "parts": [{k: p[k] for k in ("id", "breaks")} for p in parts_found],
+            **({"contracts": [c["said"] for c in contracts_found]} if bound else {}),
             "usage": {"calls": calls},
             "seconds": round(time.time() - started, 1),
         }
@@ -291,9 +383,10 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         "lines": {x["text"]: x["role"] for one in found for x in one["lines"] if x["role"]},
         "thin": [t for one in found for t in one["thin"]],
         "parts": {p["id"]: {k: p[k] for k in ("breaks", "scoped", "owes")} for p in parts_found},
+        **({"contracts": {c["text"]: c["said"] for c in contracts_found}} if bound else {}),
         "at": started,
     }
-    return told(parent, found, unsplit, parts_found), record
+    return told(parent, found, unsplit, parts_found, contracts_found), record
 
 
 def read(split: dict[str, Any]) -> str:

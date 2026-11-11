@@ -163,6 +163,99 @@ class FrameTests(unittest.TestCase):
         self.assertEqual(frame["node"], "greeter")
 
 
+SHARED = "A greeting never prints a name the user did not give."
+
+
+class ContractRuleTests(unittest.TestCase):
+    """A change in a part is put to the rules question with that part's contracts among its rules."""
+
+    def setUp(self):
+        sys.path.insert(0, str(ROOT / "frameloop"))
+        import state
+
+        self.project = Path(tempfile.mkdtemp(prefix="contracts-")).resolve()
+        self.home = self.project / ".frame-loop"
+        (self.home / "tree").mkdir(parents=True)
+        (self.home / "frame0.json").write_text(json.dumps(FRAME0), encoding="utf-8")
+        saved = state.CWD, state.NODE
+        self.addCleanup(lambda: (setattr(state, "CWD", saved[0]), setattr(state, "NODE", saved[1])))
+        state.CWD, state.NODE = str(self.project), "greeter"
+        patched = mock.patch.dict(
+            "os.environ",
+            {
+                "CLAUDE_PROJECT_DIR": str(self.project),
+                "FRAME_LOOP_FRAME0": str(self.home / "frame0.json"),
+                "FRAME_LOOP_TREE": str(self.home / "tree"),
+                "FRAME_LOOP_RULES": str(self.home / "none.json"),
+            },
+        )
+        patched.start()
+        self.addCleanup(patched.stop)
+
+    def part(self, contracts, approved=None):
+        (self.home / "tree" / "greeter.json").write_text(json.dumps(node(contracts=contracts)), encoding="utf-8")
+        round_ = {"frame": "greeter", "split": "frame 0", "name": "greeter", "scope": ["hello.py", "tests/*"]}
+        round_ |= {"narrows": {node()["asks"][0]["text"]: "A1"}, "approved": [node()["asks"][0]["text"]]}
+        if approved is not None:
+            round_["contracts"] = approved
+        every = [x["text"] for kind in ("asks", "principles", "triggers") for x in FRAME0[kind]]
+        rounds = [{"frame": "frame 0", "approved": every, "not_approved": []}]
+        rounds += [{**round_, "not_approved": []}]
+        (self.home / "approved.json").write_text(json.dumps({"version": 1, "rounds": rounds}), encoding="utf-8")
+
+    def test_a_parts_contracts_are_among_the_rules_its_change_is_read_against(self):
+        import frames
+        import framezero
+
+        bound = [{"text": SHARED, "with": ["readme"]}]
+        self.part(bound, bound)
+        frame = framezero.load_frame0()
+        contracts = [p for p in frame["principles"] if p["text"] == SHARED]
+        self.assertEqual(len(contracts), 1)
+        self.assertNotIn(contracts[0]["id"], {"P1", "T1", "N1"})  # an id of its own among the rules
+        step = {"id": "S1", "summary": "hello.py prints the user's login name when none is given", "facts": {}}
+        body = frames.violation(frame, step, "private")["body"]["spans"]
+        self.assertIn(f"{contracts[0]['id']}: {SHARED}", [s["text"] for s in body])
+        self.assertIn("P1: No new dependency is added.", [s["text"] for s in body])  # the rules above stay
+        self.assertEqual(framezero.unapproved(frame), [])  # approved with the split: read
+
+    def test_a_contract_broken_is_named_to_the_author_in_its_words(self):
+        import framezero
+        import lines
+
+        bound = [{"text": SHARED, "with": ["readme"]}]
+        self.part(bound, bound)
+        frame = framezero.load_frame0()
+        rule = next(p["id"] for p in frame["principles"] if p["text"] == SHARED)
+        said = lines.for_user(lines._plain({"decision": "rise", "reason": f"violation: names {rule}: x"}, frame), frame)
+        self.assertEqual(said, f"it may break your rule “{SHARED}”")
+
+    def test_a_contract_not_approved_for_the_part_keeps_its_frame_from_being_read(self):
+        import framezero
+
+        self.part([{"text": SHARED, "with": ["readme"]}], [])
+        self.assertIn(SHARED, framezero.unapproved(framezero.load_frame0()))
+        self.part([{"text": SHARED, "with": ["readme"]}], [{"text": SHARED, "with": ["elsewhere"]}])
+        self.assertIn(SHARED, framezero.unapproved(framezero.load_frame0()))
+
+    def test_a_contract_mark_in_a_parts_own_file_is_the_loops_alone(self):
+        import framezero
+
+        principle = {"id": "P7", "text": "Greetings are logged.", "contract": True, "with": ["readme"]}
+        self.part([])
+        held = json.loads((self.home / "tree" / "greeter.json").read_text(encoding="utf-8"))
+        (self.home / "tree" / "greeter.json").write_text(json.dumps({**held, "principles": [principle]}))
+        frame = framezero.load_frame0()
+        self.assertFalse(any(p.get("contract") for p in frame["principles"]))
+        self.assertIn("Greetings are logged.", framezero.unapproved(frame))
+
+    def test_a_part_with_no_contracts_has_the_same_rules_as_before(self):
+        import framezero
+
+        self.part(None)
+        self.assertEqual([p["id"] for p in framezero.load_frame0()["principles"]], ["P1"])
+
+
 class ClimbTests(unittest.TestCase):
     """The host rule (recoil 1): a carried, firm completion fills its ask; a delegated ask
     is filled when every child ask quoting it is; a node is complete when all its asks are;

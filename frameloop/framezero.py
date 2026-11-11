@@ -102,7 +102,16 @@ def unapproved(frame0: dict[str, Any]) -> list[str]:
     for frame in _frames_above(frame0):
         above |= approved_words(frame) or set()
     rules = [x for part in ("principles", "triggers") for x in frame0.get(part) or []]
-    late += [x["text"] for x in rules if not x.get("indexed") and _words(x["text"]) not in above]
+    late += [
+        x["text"] for x in rules if not x.get("indexed") and not x.get("contract") and _words(x["text"]) not in above
+    ]
+    # A part's contracts are approved with its split: each in the words, and with the parts, its
+    # round keeps for it.
+    held = [x for x in rules if x.get("contract")]
+    if held:
+        approved = set(contract_keys((_split_round(frame_name(frame0)) or {}).get("contracts")) or [])
+        late += [x["text"] for x in held if (contract_keys([x]) or [None])[0] not in approved]
+    rules = [x for x in rules if not x.get("contract")]
     every = [_words(x["text"]) for x in [*(frame0.get("asks") or []), *rules] if not x.get("indexed")]
     twice = sorted({x for x in every if every.count(x) > 1})  # one approval is not two items of its words
     return late + twice + sorted(words - set(every))
@@ -143,11 +152,37 @@ def _parent_of(held: dict[str, Any]) -> Any:
     return tree.parent_of(held)
 
 
+def contract_keys(contracts: Any) -> list[tuple[str, tuple[str, ...]]] | None:
+    """A part's contracts as they are compared: each one's words and the other parts it binds,
+    in no order. None when they are not a list of statements, each with the parts it binds."""
+    if contracts is None:
+        return []
+    if not isinstance(contracts, list):
+        return None
+    keys = []
+    for c in contracts:
+        if not (isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip()):
+            return None
+        bound = c.get("with")
+        if not (isinstance(bound, list) and bound and all(isinstance(p, str) for p in bound)):
+            return None
+        keys.append((_words(c["text"]), tuple(sorted(set(bound)))))
+    return keys
+
+
+def contracts_as_approved(held: dict[str, Any], found: dict[str, Any]) -> bool:
+    """Whether a part's file carries exactly the contracts approved for it in its split: none
+    when the split fixed none, else each approved one, in its words, binding the same parts,
+    once."""
+    kept, approved = contract_keys(held.get("contracts")), contract_keys(found.get("contracts"))
+    return kept is not None and approved is not None and len(kept) == len(set(kept)) and set(kept) == set(approved)
+
+
 def node_text_in_approved_words(text: str, node: str) -> bool:
     """Whether a node's file with this text holds what the author approved for it in a split,
-    and only that: its lines, what each narrows, the files it may change, its name and the
-    frame it splits. Its reversed sentences, promises and predictions are Claude's, as frame
-    0's inversions are, and no picker shows them."""
+    and only that: its lines, what each narrows, the files it may change, its name, the frame
+    it splits and the contracts that bind it. Its reversed sentences, promises and predictions
+    are Claude's, as frame 0's inversions are, and no picker shows them."""
     found = _split_round(node)
     words = approved_words(node)
     if not found or not words:
@@ -171,6 +206,7 @@ def node_text_in_approved_words(text: str, node: str) -> bool:
         and len(items) == len(set(items))
         and set(items) == words
         and all(narrows.get(t) == q for t, q in quotes.items())
+        and contracts_as_approved(held, found)
     )
 
 

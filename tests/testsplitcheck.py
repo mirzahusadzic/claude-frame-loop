@@ -247,6 +247,98 @@ class SplitCheckTests(unittest.TestCase):
         self.assertEqual(seen, [])
         self.assertIn("not read: each line of a split needs its text and the requirement it narrows", said)
 
+    SHARED = "A request is counted once, in the window it arrives in."
+    CONTRACTED = {
+        **SPLIT,
+        "parts": [
+            *SPLIT["parts"],
+            {
+                "id": "docs",
+                "name": "Docs",
+                "scope": ["README.md"],
+                "items": [{"text": "The README names the limit.", "quotes": "A1"}],
+            },
+        ],
+        "contracts": [{"text": SHARED, "parts": ["counting", "window"]}],
+    }
+
+    def contract_frames(self, seen):
+        return [f for f in seen if f["name"].startswith("contract-")]
+
+    def test_each_contract_is_read_once_against_the_lines_of_the_parts_it_binds(self):
+        said, seen = self.read(covered, self.CONTRACTED)
+        frames_ = self.contract_frames(seen)
+        self.assertEqual(len(frames_), 1)
+        frame = frames_[0]
+        self.assertEqual(frame["inputs"], [{"id": "ask", "text": f"The contract: {self.SHARED}"}])
+        body = json.dumps(frame["body"], ensure_ascii=False)
+        for line in ("Requests are counted per client.", "The 6th request in a window", "A window lasts one minute."):
+            self.assertIn(line, body)
+        self.assertNotIn("The README names the limit.", body)  # a part it does not bind
+        self.assertIn("Counting", body)
+        self.assertIn("The window", body)
+        self.assertEqual(frame["observe"]["instruction"], splitcheck.CONTRACT_INSTRUCTION)
+        self.assertEqual(frame["standing"]["most"], 1)
+        self.assertEqual(len(seen) - len(frames_), 1)  # the requirement's own reading as before
+        self.assertIn(f"the contract “{self.SHARED}” between Counting and The window: their lines keep it", said)
+
+    def test_a_contract_whose_lines_do_not_keep_it_says_so(self):
+        def refuting(frame, only=()):
+            if frame["name"].startswith("contract-"):
+                return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "no"}}]}
+            return covered(frame)
+
+        said, _ = self.read(refuting, self.CONTRACTED)
+        self.assertIn("between Counting and The window: their lines do not keep it", said)
+        self.assertIn("is not a mismatch", said)
+
+    def test_a_contract_reading_that_fails_or_wavers_is_not_settled_never_kept(self):
+        for reader in (failed, wavering):
+            with self.subTest(reader.__name__):
+                said, _ = self.read(
+                    lambda f, r=reader: r(f) if f["name"].startswith("contract-") else covered(f), self.CONTRACTED
+                )
+                self.assertIn("between Counting and The window: not settled whether their lines keep it", said)
+                self.assertNotIn(": their lines keep it", said)
+                self.assertIn("is not a mismatch", said)
+
+    def test_a_contract_found_is_kept_for_the_pickers_pages(self):
+        with (
+            mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(
+                splitcheck,
+                "_reader",
+                lambda: (
+                    lambda frame, only=(): (
+                        keeps(frame)
+                        if frame["name"].startswith("violation-")
+                        else failed(frame)
+                        if frame["name"].startswith("contract-")
+                        else covered(frame)
+                    )
+                ),
+            ),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+        ):
+            _, record = splitcheck.check(self.CONTRACTED)
+            _, plain = splitcheck.check(SPLIT)
+        self.assertEqual(record["contracts"], {self.SHARED: "not settled"})
+        self.assertNotIn("contracts", plain)  # a split with no contracts is read and kept as before
+
+    def test_a_contract_that_binds_fewer_than_two_parts_or_a_stranger_is_not_read(self):
+        for wrong in (
+            [{"text": self.SHARED, "parts": ["counting"]}],
+            [{"text": self.SHARED, "parts": ["counting", "billing"]}],
+            [{"text": "", "parts": ["counting", "window"]}],
+            {"text": self.SHARED},
+        ):
+            with self.subTest(wrong):
+                said, seen = self.read(covered, {**SPLIT, "contracts": wrong})
+                self.assertEqual(seen, [])
+                self.assertIn("not read: each contract of a split needs", said)
+
     def test_a_split_is_read_from_a_file_and_kept_for_the_pickers_pages(self):
         """The split first reached the check inside a shell command, and Claude Code asked the
         author to approve that command when its JSON held quotes. It is read from a file."""

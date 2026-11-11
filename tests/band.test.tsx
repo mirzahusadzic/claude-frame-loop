@@ -753,6 +753,164 @@ test('a part being split that the tree does not hold is said, and no words of Cl
   expect(shown.join('\n')).not.toContain('Each client is limited per minute')
 })
 
+// A contract: one statement two or more parts must each keep, written once beside the parts.
+const SHARED = 'A client over its limit is never counted twice.'
+const CONTRACTED = {
+  ...SPLIT,
+  contracts: [
+    { text: SHARED, parts: ['counting', 'the-429'] },
+    { text: 'Every part reads the limit from one place.', parts: ['counting', 'the-429', 'headers'] },
+  ],
+}
+
+test('a contract shows on the page of every part it binds, in the same words, naming the other parts', async ($, on) => {
+  await picking($, on)
+  await $.tool.call(CONTRACTED as any)
+  const first = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const one = await texts(first)
+  expect(one).toContain('Contracts with other parts:')
+  expect((await first.find({ key: 'contract-0-0' }))?.text).toBe(`[x] ${SHARED}`)
+  expect(one).toContain('      shared with: the 429 response')
+  expect(one).toContain('      shared with: the 429 response, headers')
+  await first.press({ key: 'next' })
+  await first.unmount()
+  const second = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await second.find({ key: 'contract-1-0' }))?.text).toBe(`[x] ${SHARED}`)
+  expect(await texts(second)).toContain('      shared with: counting')
+  await second.press({ key: 'next' })
+  await second.unmount()
+  const third = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const shown = (await third.findAll({ type: 'Button' })).filter(x => x.key?.startsWith('contract-')).map(x => x.text)
+  expect(shown).toEqual(['[x] Every part reads the limit from one place.']) // the first binds no headers
+  expect(await texts(third)).toContain('      shared with: counting, the 429 response')
+  await third.unmount()
+})
+
+test('a contract taken out on one page is out on every page, named once, and kept off the record', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(CONTRACTED as any)
+  await pressIn($, 'contract-0-0')
+  await pressIn($, 'next')
+  const second = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await second.find({ key: 'contract-1-0' }))?.text).toBe(`[ ] ${SHARED}`)
+  await second.press({ key: 'go-review' })
+  await second.unmount()
+  const review = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await review.find({ key: 'approve' }))?.text).toBe('Approve checked')
+  await review.press({ key: 'approve' })
+  await review.unmount()
+  expect(sent.submit).toContain(`Not approved:\n- the contract between counting and the 429 response: ${SHARED}`)
+  expect(sent.submit?.split(SHARED).length).toBe(2) // once, however many pages showed it
+  const rounds = JSON.parse(sent.files[RECORD]).rounds
+  const every = { text: 'Every part reads the limit from one place.' }
+  expect(rounds.map((r: any) => [r.frame, r.contracts])).toEqual([
+    ['counting', [{ ...every, with: ['the-429', 'headers'] }]],
+    ['the-429', [{ ...every, with: ['counting', 'headers'] }]],
+    ['headers', [{ ...every, with: ['counting', 'the-429'] }]],
+  ])
+})
+
+test('a split\'s one approval approves its contracts, and each part\'s round keeps the ones that bind it', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(CONTRACTED as any)
+  await pressIn($, 'go-review')
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect(await texts(ui)).toContain('Contracts between the parts:')
+  expect((await ui.find({ key: 'approve' }))?.text).toBe('Approve all three')
+  await ui.press({ key: 'approve' })
+  await ui.unmount()
+  expect(sent.submit).toBe('Approved, all three parts: counting, the 429 response, headers, and the two contracts between them.')
+  const [counting, the429, headers] = JSON.parse(sent.files[RECORD]).rounds
+  expect(counting.contracts).toEqual([
+    { text: SHARED, with: ['the-429'] },
+    { text: 'Every part reads the limit from one place.', with: ['the-429', 'headers'] },
+  ])
+  expect(the429.contracts.map((c: any) => c.with)).toEqual([['counting'], ['counting', 'headers']])
+  expect(headers.contracts).toEqual([{ text: 'Every part reads the limit from one place.', with: ['counting', 'the-429'] }])
+})
+
+test('what the split\'s reading found of each contract shows on the pages of the parts it binds', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES, {
+    '/project/.frame-loop/work/split-read.json': JSON.stringify({
+      parent: 'frame 0',
+      requirements: { A1: 'covered' },
+      lines: {},
+      parts: {},
+      contracts: { [SHARED]: 'not kept', 'Every part reads the limit from one place.': 'not settled' },
+    }),
+  })
+  await $.tool.call(CONTRACTED as any)
+  const first = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const page = await texts(first)
+  expect(page).toContain('      Read before you: their lines do not keep it.')
+  expect(page).toContain('      Read before you: not settled whether their lines keep it.')
+  await first.press({ key: 'go-review' })
+  await first.unmount()
+  const review = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(review).toContain(`Read before you: the lines of counting and the 429 response do not keep "${SHARED}".`)
+  expect(review).toContain(
+    'Read before you: not settled whether the lines of counting, the 429 response and headers keep "Every part reads the limit from one place.".',
+  )
+})
+
+test('a contract kept shows so on its pages; one the reading never saw says it was not read', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES, {
+    '/project/.frame-loop/work/split-read.json': JSON.stringify({
+      parent: 'frame 0', requirements: { A1: 'covered' }, lines: {}, parts: {}, contracts: { [SHARED]: 'kept' },
+    }),
+  })
+  await $.tool.call(CONTRACTED as any)
+  const first = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const page = await texts(first)
+  expect(page).toContain('      Read before you: their lines keep it.')
+  expect(page).toContain('      Not read before you.')
+  await first.press({ key: 'go-review' })
+  await first.unmount()
+  const review = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(review).toContain(
+    'Not read before you: whether the lines of counting, the 429 response and headers keep "Every part reads the limit from one place.".',
+  )
+  expect(review.join('\n')).not.toContain(`keep "${SHARED}"`) // a kept contract asks nothing of the author
+})
+
+test('a split with no contracts shows none, answers as before and records no contracts', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(SPLIT as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await texts(ui)).join('\n')).not.toContain('Contracts')
+  await ui.press({ key: 'go-review' })
+  await ui.unmount()
+  const review = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await texts(review)).join('\n')).not.toContain('Contracts')
+  await review.press({ key: 'approve' })
+  expect(sent.submit).toBe('Approved, all three parts: counting, the 429 response, headers.')
+  expect(JSON.parse(sent.files[RECORD]).rounds.every((r: any) => !('contracts' in r))).toBe(true)
+})
+
+for (const [why, wrong, said] of [
+  ['a contract binding one part', { contracts: [{ text: SHARED, parts: ['counting'] }] }, 'two or more'],
+  ['a contract binding one part twice', { contracts: [{ text: SHARED, parts: ['counting', 'counting'] }] }, 'two or more'],
+  ['a contract naming a part not in the split', { contracts: [{ text: SHARED, parts: ['counting', 'billing'] }] }, 'not a part of this split'],
+  ['a contract with no words', { contracts: [{ text: ' ', parts: ['counting', 'headers'] }] }, 'a statement'],
+  ['two contracts in the same words', { contracts: [{ text: SHARED, parts: ['counting', 'headers'] }, { text: SHARED, parts: ['counting', 'the-429'] }] }, 'written once'],
+] as const) {
+  test(`a split is refused for ${why}, and nothing is opened`, async ($, on) => {
+    const sent = await picking($, on)
+    const called = await $.tool.call({ ...SPLIT, ...wrong } as any)
+    expect(JSON.stringify(called)).toContain(said)
+    expect(sent.opened).toBeUndefined()
+  })
+}
+
+test('contracts with no split are refused, and nothing is opened', async ($, on) => {
+  const sent = await picking($, on)
+  const called = await $.tool.call({ ...PROPOSED, contracts: [{ text: SHARED, parts: ['a', 'b'] }] } as any)
+  expect(JSON.stringify(called)).toContain('between the parts of a split')
+  expect(sent.opened).toBeUndefined()
+})
+
 for (const [why, wrong, said] of [
   ['a part with no id', { parts: [{ name: 'x', scope: ['x'], items: [{ text: 'A line.' }] }] }, 'an id'],
   ['a part with no files it may change', { parts: [{ id: 'x', name: 'x', items: [{ text: 'A line.' }] }] }, 'its scope'],

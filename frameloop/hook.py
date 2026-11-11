@@ -895,7 +895,7 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
 # How a split reaches the author: whole, in one picker, before anything of it exists.
 SPLIT_TOLD = (
     "Before a split goes to the author, have it read: write it to a file in your scratchpad as "
-    "JSON, with the same `parent` and `parts` you will give the approve tool, and run "
+    "JSON, with the same `parent`, `parts` and `contracts` you will give the approve tool, and run "
     "`: frame-loop-read --split <that file>`. It reads the split as words against the frame it "
     "splits: whether each requirement's parts make it true, which lines are needed and which the "
     "others already cover. The picker shows the author the same on its pages, or that the split "
@@ -905,11 +905,16 @@ SPLIT_TOLD = (
     "the split at once, each with its file's `id`, its `name` in plain words, its `scope` (the "
     "paths it may change) and its `items`, "
     "each item with `quotes`, the id of the parent's requirement it narrows, and `parent`, the "
-    "node being split, left out when frame 0's requirements are split. The picker shows one page "
+    "node being split, left out when frame 0's requirements are split. What two or more parts "
+    "must each keep is a contract: give the approve tool `contracts` beside `parts`, each a `text`, "
+    "one statement written once, and `parts`, the ids of the parts it binds; a split whose parts "
+    "owe each other nothing has none. The picker shows one page "
     "per part and one approval for them all. End your turn when it opens: write no part's file "
     "and begin no code for the split until the answer arrives, then write each part's file with "
     "the Write tool, holding the lines approved for it, what each narrows, its name, its parent "
-    "and its scope as the picker showed them: such a file needs no other approval. Give a part's "
+    "and its scope as the picker showed them, and, when the split has contracts, `contracts`: each "
+    "approved one that binds the part, its `text` in the words approved and `with`, the other "
+    "parts' ids: such a file needs no other approval. Give a part's "
     "file no `grant`, `obligations` or `semantic` of its own: the picker showed none, so a file "
     "holding one goes to the author again."
 )

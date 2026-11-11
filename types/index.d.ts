@@ -37,6 +37,10 @@ export type Item = { text: string; detail?: string; isChecked: boolean; isRemova
 // whether its page was seen.
 export type Part = { id: string; name: string; items: Item[]; scope: string[]; isSeen: boolean }
 
+// A contract of a split: one statement that two or more of its parts must each keep, written
+// once, the parts it binds by their ids, and one check mark however many pages show it.
+export type Contract = { text: string; parts: string[]; isChecked: boolean }
+
 // What the picker holds until its round closes. `node` is the frame's place in the tree: a
 // node's id, or none for frame 0. A split holds its parts instead of items, the frame it splits
 // (`parent`, a node's id, or none for frame 0), and the page shown: one per part, then the
@@ -47,6 +51,7 @@ export type Proposal = {
   items: Item[]
   leftOut: string[]
   parts?: Part[]
+  contracts?: Contract[]
   parent?: string
   page?: number
   header?: Header
@@ -74,6 +79,9 @@ export type Header = {
     lines: Record<string, string>
     thin?: string[]
     parts?: Record<string, { breaks: string | null; scoped: string[]; owes: string[] }>
+    // Per contract, by its words: whether the lines of the parts it binds keep it (kept, not
+    // kept or not settled); none when the split had no contracts.
+    contracts?: Record<string, string>
   }
 }
 

@@ -31,6 +31,8 @@ A split reaches you whole, in one picker: a page for each part, then a review pa
 
 The header of every page is written by frame-loop from the tree, never by Claude: the path from frame 0 down to the requirement being split, that requirement in its words (marked when they are not the ones you approved), which page of how many this is, and, under "Holds for every part", the principles each part inherits with the level each comes from, and a count of the guide's rules. Claude writes only the lines you approve, each with what it narrows, and each part's files it may change, shown under its name. Once you approve, Claude writes each part's file, and a file that holds exactly what you approved for that part is written with no second question and no ▲; one that holds anything else comes to you. The arrows in the header, or the row of part names below the lines, move between pages; the focus starts on a page's first line, never on the approve button. The review lists each part with its number of lines and whether you have seen it; a part not seen yet does not block the approval.
 
+A split can also fix contracts between its parts: one statement that two or more parts must each keep, such as "a client over its limit is never counted twice" for counting and the 429 response. A contract shows on the page of every part it binds, in the same words, under "Contracts with other parts", naming the parts that share it; unchecking it on one page takes it out on every page, and the review lists each contract with its parts. The same one approval fixes the contracts with the parts. When the split is read before the picker, each contract is read once against the lines of the parts it binds, and each of those pages says whether their lines keep it, do not keep it, or did not settle; a reading that failed is never shown as kept.
+
 ---
 
 ### Node file
@@ -45,6 +47,7 @@ One JSON file per node in `.frame-loop/tree/`, fixed only once the user has appr
 | `grant` | paths, commands, spend | paths: the node's `scope`, held on every change, with no list of their own; commands and spend: designed, not built. A part approved in a split holds no `grant`: the picker shows none, so a file with one is asked about again |
 | `asks` | the node's requirements, each quoting one parent requirement, with `owner` set to `steps` (its own work fills it) or `children` | quotes a parent requirement; one owner; whole inversion; no two alike |
 | `principles`, `triggers` | rules added at this node | none rewords a rule above |
+| `contracts` | a part's contracts: each a `text` and `with`, the other parts of its split that keep it; a change made with the part engaged is read against them among its rules, and one it may break is named in its words | exactly the ones approved for the part, in their words and with the same parts; a split with none leaves none |
 | `promises` | one promise per concern | at least one; one per concern |
 | `predictions` | the outcome expected for each requirement | every requirement covered; names one of Gadfly's findings, such as carried |
 

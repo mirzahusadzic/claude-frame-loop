@@ -31,6 +31,9 @@ OWNERS = ("leaves", "steps", "children")
 
 ROOT_NAMES = ("root", "frame 0", "frame0", "frame-0")  # how a part under frame 0 may name its parent
 
+# What the loop alone marks on a rule: one from the index, or one of a part's contracts.
+LOOP_MARKS = ("indexed", "contract", "with")
+
 
 def parent_of(node: dict[str, Any]) -> Any:
     """A node's parent as the tree keys it: frame 0 is "root", however the file words it."""
@@ -46,10 +49,11 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
             if path.is_symlink():  # a node is a file of the tree's: a link could send anything as its words
                 continue
             raw = json.loads(path.read_text(encoding="utf-8"))
-            for part in ("principles", "triggers"):  # only the loop marks what comes from the index
-                if isinstance(raw.get(part), list):
+            for part in ("principles", "triggers"):  # only the loop marks what comes from the index,
+                if isinstance(raw.get(part), list):  # or from a part's contracts
                     raw[part] = [
-                        {k: v for k, v in x.items() if k != "indexed"} if isinstance(x, dict) else x for x in raw[part]
+                        {k: v for k, v in x.items() if k not in LOOP_MARKS} if isinstance(x, dict) else x
+                        for x in raw[part]
                     ]
             nid = raw.get("id", path.stem)
             nodes[nid] = {**raw, "id": nid}  # a file with no id is its file name's node, everywhere
@@ -201,18 +205,40 @@ def premise_faults(node: dict[str, Any]) -> list[str]:
 def frame0_for(
     node: dict[str, Any], frame0: dict[str, Any], nodes: dict[str, dict[str, Any]] | None = None
 ) -> dict[str, Any]:
-    """A node read as frame 0: its asks, and every rule above it and its own."""
+    """A node read as frame 0: its asks, every rule above it and its own, and its contracts
+    with its sibling parts among its principles, each in its words and marked as a contract."""
     nodes = {"root": {**frame0, "id": "root"}, **(nodes or {})}
     nodes.setdefault(node["id"], node)
+    principles = _rules(node, nodes, "principles")
     return {
         **{k: v for k, v in frame0.items() if k not in ("asks", "principles", "triggers")},
         "id": f"{frame0.get('id', 'root')}-{node['id']}",
         "node": node["id"],
         "asks": [{k: v for k, v in a.items() if k not in ("quotes", "owner")} for a in node["asks"]],
-        "principles": _rules(node, nodes, "principles"),
+        "principles": principles + contract_rules(node, principles + _rules(node, nodes, "triggers")),
         "triggers": _rules(node, nodes, "triggers"),
         "scope": scope_of(node, nodes),
     }
+
+
+def contract_rules(node: dict[str, Any], taken: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A part's contracts as rules of the rules question: each in its words, with an id no rule
+    above holds and the parts it is shared with. Whether they are the ones approved is the
+    approval's check (framezero.unapproved), never this one's."""
+    contracts = node.get("contracts")
+    if not isinstance(contracts, list):
+        return []
+    ids = {r.get("id") for r in taken}
+    out, n = [], 0
+    for c in contracts:
+        if not (isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip()):
+            continue
+        n += 1
+        while f"contract-{n}" in ids:
+            n += 1
+        bound = c.get("with") if isinstance(c.get("with"), list) else []
+        out.append({"id": f"contract-{n}", "text": c["text"], "contract": True, "with": bound})
+    return out
 
 
 def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:
