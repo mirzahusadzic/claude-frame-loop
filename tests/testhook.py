@@ -3886,6 +3886,73 @@ class TreeHookTests(CoreTests):
         self.assertIn("engaged node root", told)
         self.assertEqual([r["node"] for r in self.events("part-read")], ["greeter"])
 
+    def _work_in_greeter(self, with_test):
+        self.start()
+        self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n", encoding="utf-8")
+        if with_test:
+            (REPO / "tests").mkdir(exist_ok=True)
+            made = REPO / "tests" / f"test_settings_{uid_number(self)}.py"
+            made.write_text("def test_settings():\n    assert True\n", encoding="utf-8")
+            self.addCleanup(lambda: made.exists() and made.unlink())
+        self.marker(": frame-loop-declare --serves N1")
+        out = self.marker(": frame-loop-node")
+        self.end()
+        return out["hookSpecificOutput"]["additionalContext"]
+
+    def test_on_a_signal_only_a_part_inside_its_files_with_a_test_is_counted_and_not_read(self):
+        """Readings of a finished change against a requirement rarely settled, and took most
+        of the reader's cost. With FRAME_LOOP_READ=signal, work inside an approved part that
+        stays in its files and brings a test is counted by that, and its change is not read."""
+        os.environ["FRAME_LOOP_READ"] = "signal"
+        seen = loaded_seen()
+        told = self._work_in_greeter(with_test=True)
+        self.assertEqual(self.events("read-signal"), [])
+        self.assertFalse([f["name"] for f in seen if f["name"].startswith("completion-")])
+        self.assertFalse([f["name"] for f in seen if f["name"].startswith("which-ask-")])
+        self.assertIn("N1 ✓ by its tests (not read: no signal)", told)
+        self.assertEqual(
+            [r.get("routed") for r in self.events("filled") if r.get("ask") == "N1"], ["its tests, no signal"]
+        )
+
+    def test_on_a_signal_only_a_part_with_no_test_is_read(self):
+        os.environ["FRAME_LOOP_READ"] = "signal"
+        seen = loaded_seen()
+        told = self._work_in_greeter(with_test=False)
+        self.assertTrue([f for f in seen if f["name"].startswith("completion-") and "-N1-" in f["name"]])
+        self.assertNotIn("by its tests", told)
+
+    def test_reading_always_is_the_default_and_reads_the_part_whatever_it_holds(self):
+        os.environ.pop("FRAME_LOOP_READ", None)
+        seen = loaded_seen()
+        told = self._work_in_greeter(with_test=True)
+        self.assertTrue([f for f in seen if f["name"].startswith("completion-") and "-N1-" in f["name"]])
+        self.assertNotIn("by its tests", told)
+
+    def test_what_counts_as_a_test_and_what_marks_a_change_for_reading(self):
+        import reading
+
+        for path in (
+            "tests/test_a.py",
+            "test_a.py",
+            "src/a_test.go",
+            "web/a.test.tsx",
+            "pkg/__tests__/a.js",
+            "spec/a_spec.rb",
+        ):
+            self.assertTrue(reading.TEST_PATH.search(path), path)
+        for path in ("src/a.py", "contest/entry.py", "docs/testing.md", "latest.py"):
+            self.assertFalse(reading.TEST_PATH.search(path), path)
+        frame = {"scope": ["app.py", "tests/*"]}
+        step = lambda *paths: [{"paths": list(paths), "diff": "+x\n"}]  # noqa: E731
+        self.assertEqual(reading.read_signals(step("app.py", "tests/test_app.py"), frame, "", None), [])
+        self.assertEqual(reading.read_signals(step("app.py"), frame, "", None), ["no test changed with it"])
+        self.assertIn(
+            "a change outside its part's files",
+            reading.read_signals(step("other.py", "tests/test_app.py"), frame, "", None),
+        )
+        self.assertEqual(reading.read_signals([], frame, "", None), ["no change is recorded for it"])
+
     def test_a_part_left_with_no_work_or_already_read_as_it_stands_is_not_read_again(self):
         seen = loaded_seen()
         self.start()

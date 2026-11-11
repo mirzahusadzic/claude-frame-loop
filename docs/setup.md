@@ -75,6 +75,7 @@ Set these under `env` in the project's `.claude/settings.local.json`, or the use
 | `FRAME_LOOP_TIER` | `contributor` | the reader, from the table above |
 | `FRAME_LOOP_TRAINING_OK=1` | off | allows a tier that trains on its inputs, for the project |
 | `FRAME_LOOP_MODE` | `shadow` | `shadow` reports; `enforce` also asks before acts and sends Claude back on a ▲ at a turn's end |
+| `FRAME_LOOP_READ` | `always` | `always` reads every change and every finished part against the requirements; `signal` does so, for work inside an approved part, only when something marks it: a change outside the part's files, no test changed with it, a large or protected change, or a rules question that did not pass. Otherwise the part is counted by its tests and its line says it was not read. The rules question is asked of every change either way |
 | `FRAME_LOOP_EFFORT` | `low` on Muse | the reader's effort floor, `low` to `max`; a deletion, a changed dependency or a change to the loop's settings raises it to `high`, as a large change does when the reader is asked whether a requirement is done; never below the floor |
 | `FRAME_LOOP_PARALLEL` | `7` in the plugin | the reader calls Gadfly makes at once for each question; a check asks two questions at once, so up to twice that; a rules reading stops asking once two answers agree, and asks a third only when the first two differ |
 | `FRAME_LOOP_OUTPUT_TOKENS` | `16000` | the cap on each reader answer |

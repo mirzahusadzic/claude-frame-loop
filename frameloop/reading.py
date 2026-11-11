@@ -6,6 +6,7 @@ Standard library only.
 
 from __future__ import annotations
 
+import fnmatch
 import hashlib
 import importlib
 import json
@@ -20,7 +21,7 @@ import frames
 import gate
 import state
 from declare import _claimed, _declared, _marks, _masked, _without_declaration
-from effort import RANK, _effort_rules, effort_for
+from effort import RANK, _effort_rules, _rule_hits, effort_for
 from framezero import _tree_nodes, frame_name, load_frame0, load_frame0_root, route, unapproved, with_semantic
 from lines import NOT_DONE, UNSETTLED_NOTE, _reader_name, _tell, not_approved, not_approved_words, refused_line
 from live import _live_step, _on_answers, _on_tokens, _part_line, _ran
@@ -51,6 +52,48 @@ def _proposal(body: str, serves: str, effort: str | None) -> str:
 
 
 FIT_READ = "read by the end-of-work check"
+# On a signal only (FRAME_LOOP_READ=signal; the default reads always): work inside an approved part
+# is held by what the split fixed, its files by code, its rules by the rules question, and its
+# requirements by its tests. The change itself is read against a requirement only when
+# something marks it: a change outside the part's files, no test with it, a large or
+# protected change, or a rules question that did not pass.
+IN_PART = "in its part"
+IN_PART_SAID = "in its part's files (the fit was not read: no signal)"
+BY_TESTS = "✓ by its tests (not read: no signal)"
+TEST_PATH = re.compile(
+    r"(^|/)(tests?|__tests__|spec)/|(^|/)test_[^/]*$|[._-](test|spec)\.[A-Za-z0-9]+$|_test\.[A-Za-z0-9]+$"
+)
+
+
+def on_signal() -> bool:
+    return os.environ.get("FRAME_LOOP_READ", "always") == "signal"
+
+
+def _in_scope(paths: list[str], scope: list[str]) -> bool:
+    return bool(paths) and bool(scope) and all(any(fnmatch.fnmatch(p, g) for g in scope) for p in paths)
+
+
+def read_signals(claimed: list[dict[str, Any]], frame0: dict[str, Any], said: str, tier: str | None) -> list[str]:
+    """Why a part's finished work is read against its requirement after all: each a fact the
+    code finds, never a judgement. None means the split, the files, the tests and the rules
+    question hold it."""
+    paths = [p for s in claimed for p in s.get("paths") or []]
+    found = []
+    if not paths:
+        found.append("no change is recorded for it")
+    elif not _in_scope(paths, list(frame0.get("scope") or [])):
+        found.append("a change outside its part's files")
+    if paths and not any(TEST_PATH.search(p) for p in paths):
+        found.append("no test changed with it")
+    if tier and all(s.get("diff") is not None for s in claimed):
+        # The versioned rules on facts from the diff (a deleted file, a dependency manifest, the
+        # loop's own settings, a large diff): each one that fires is a reason to read.
+        facts = _diff_facts([s["diff"] for s in claimed])
+        found += [f"the change matches the rule {r['id']}" for r in _effort_rules()["rules"] if _rule_hits(r, facts)]
+    mine = [r for r in _records_all() if r.get("session") == state.SESSION and (r.get("node") or "root") == state.NODE]
+    if any(r.get("event") == "turn" and r.get("decision") in (gate.RISE, gate.UNSETTLED, gate.BLOCK) for r in mine):
+        found.append("a rules question on its work did not pass")
+    return found
 
 
 def read_step(
@@ -89,9 +132,10 @@ def read_step(
         broke = run(at(frames.violation(frame0, step, tier)), only=("baseline", "repeat"))
         _ran(broke)
         decision, reason = gate.violation(broke)
-        if decision == gate.PASS and fit_read != "done":
+        if decision == gate.PASS and fit_read not in ("done", IN_PART):
             return {"decision": gate.UNSETTLED, "reason": NOT_DONE, "usage": _spent(broke)}
-        return {"decision": decision, "reason": f"violation: {reason}", "fit": FIT_READ, "usage": _spent(broke)}
+        fit = IN_PART_SAID if fit_read == IN_PART else FIT_READ
+        return {"decision": decision, "reason": f"violation: {reason}", "fit": fit, "usage": _spent(broke)}
     if not declared:  # what it is for, as the reader reads it, twice alike
         _live_step("what is it for? (Claude didn't say)", 1, 1, "undeclared")
         read = run(at(frames.undeclared(frame0, step, tier)), only=("baseline", "repeat"))
@@ -204,7 +248,22 @@ def _read(
         return {"decision": gate.RISE, "reason": f"not read: {tier_note}"}, tier, tier_note
     if _reader() is None:  # nothing would read it: the change goes nowhere, not even to the writer
         return {"decision": gate.RISE, "reason": "not read: no reader configured"}, tier, tier_note
+    if (
+        fit_read is None
+        and on_signal()
+        and kind == "the turn's change"
+        and state.NODE not in (None, "root")
+        and declared
+        and _in_scope(list((facts or {}).get("paths") or []), list(frame0.get("scope") or []))
+    ):
+        fit_read = IN_PART  # its files are its part's: the fit is not asked, the rules question is
     if fit_read and not (frame0.get("principles") or frame0.get("triggers")):  # nothing is left to ask
+        if fit_read == IN_PART:
+            return (
+                {"decision": gate.PASS, "reason": "violation: frame 0 states no rules", "fit": IN_PART_SAID},
+                tier,
+                tier_note,
+            )
         if fit_read != "done":
             return {"decision": gate.UNSETTLED, "reason": NOT_DONE}, tier, tier_note
         return {"decision": gate.PASS, "reason": "violation: frame 0 states no rules", "fit": FIT_READ}, tier, tier_note
@@ -589,6 +648,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             "id": r["id"],
             "label": r["text"],
             "claims": r.get("claims", []),
+            "paths": r.get("paths", []),
             # whole: the writer labels all of it, to its own limit; only a diff sent itself is cut
             # (the cold review, L8)
             "diff": kept(r["id"]),
@@ -597,7 +657,10 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         if (r.get("node") or "root") == (state.NODE or "root")
     ]  # this node's leaves
     if pending:
-        steps.append({k: pending[k] for k in ("id", "claims", "diff")} | {"label": pending["text"]})
+        steps.append(
+            {k: pending[k] for k in ("id", "claims", "diff")}
+            | {"label": pending["text"], "paths": pending.get("paths", [])}
+        )
     # In a tree, a requirement that parts own is counted from them, never read again over the
     # whole work (Mirza, in a live session: the only end-of-work reading was at the top).
     by_parts = _owned_by_parts(frame0)
@@ -632,8 +695,16 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     planned: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []  # each ask's frame, or why it has none
     keys: dict[str, str] = {}  # what each requirement's answer rests on
     before: dict[str, dict[str, Any]] = {}  # the answers already read on that
+    by_tests: set[str] = set()  # on a signal only: the requirements no signal marks
     for ask in [a for a in asked if a["id"] not in by_parts]:
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
+        if on_signal() and state.NODE not in (None, "root"):
+            marks = read_signals(claimed, frame0, said, tier)
+            if not marks:
+                by_tests.add(ask["id"])
+                planned.append((ask, None, f"{ask['id']} {BY_TESTS}"))
+                continue
+            _log({"event": "read-signal", "ask": ask["id"], "signals": marks})  # why it is read after all
         if tier and not os.environ.get("FRAME_LOOP_TREE") and all(s["diff"] is not None for s in steps):
             # Before any label or call. A tree's climb reads its answers again, so it reads them.
             seen_effort, _, seen_error = effort_for(said, _diff_facts([s["diff"] for s in claimed]), tier, True)
@@ -713,6 +784,11 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
             missed += bool(kept.get("missed"))
             if kept["ok"]:
                 done_asks.append(ask["id"])
+            continue
+        if frame is None and ask["id"] in by_tests:  # held by its split, its files, its tests and its rules
+            parts.append(why)
+            done_asks.append(ask["id"])
+            _log({"event": "filled", "ask": ask["id"], "routed": "its tests, no signal"})
             continue
         if frame is None:
             parts.append(why)
@@ -809,7 +885,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         }
     )
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
-    done = sum(1 for x in parts if x.endswith((" ✓", " ✓ from its parts"))) - sum(
+    done = sum(1 for x in parts if x.endswith((" ✓", " ✓ from its parts", BY_TESTS))) - sum(
         1 for x in parts if x.startswith("climb stopped")
     )
     asks = len(asked)
