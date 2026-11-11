@@ -933,7 +933,10 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
                 parts.append(f"{ask['id']} ✗ (its parts are not all done: {ready} of {len(owners)})")
                 missed += 1
         if state.NODE and state.NODE != "root" and climbed.get(state.NODE, {}).get("complete"):
-            parts.append(f"node {state.NODE} complete")
+            named = _tree_nodes(load_frame0_root()).get(state.NODE, {}).get("name") or state.NODE
+            parts.append(
+                f"part {named} complete"
+            )  # by its name, as the picker showed it: "node" is no word of the author's
         if climbed.get("root", {}).get("complete"):
             parts.append("frame 0 complete")
         show_part(state.NODE)

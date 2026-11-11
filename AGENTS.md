@@ -40,11 +40,11 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 
 ### Preserve these behaviors
 
-- The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only.
+- The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only, and no split.
 - A refused or failed reading is never a pass.
 - Plan mode stays Claude Code's: a plan is read only to inform.
 - Shadow mode blocks nothing, and its reads run in the background; enforce mode asks before the user's acts and sends Claude back on a ▲.
-- Frame 0, `approved.json`, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user.
+- Frame 0, `approved.json`, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user, unless the file then holds exactly the words the user approved in the picker.
 - A frame is read only in the words the author approved in the picker.
 - The user reads plain words: no JSON, ids or internal terms; "requirement", never "ask".
 - An act's line is its symbol and what it acted on, no sentence; the exact command stays under details.

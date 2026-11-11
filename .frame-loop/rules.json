@@ -3,7 +3,7 @@
  "version": 2,
  "source": {
   "file": "AGENTS.md",
-  "sha256": "923e05e64f6424ec3896440bd90d884b18992d6d0b35b303a21d9ad4b384e117"
+  "sha256": "f5113ac6e6cdb46924d00906488c800828ac62c76f9920b71dc110073825ed00"
  },
  "note": "The index over this repository's AGENTS.md: each rule quotes its guide's line and is read by it; accepted with the author's OK.",
  "rules": [
@@ -15,7 +15,7 @@
    ],
    "text": "the reader sees only what privacy lists",
    "quote": [
-    "The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only."
+    "The reader sees only what `docs/privacy.md` lists: never the session (the prompts, Claude's replies) or code beyond the change. Secrets are refused; a training tier reads nothing until the project allows it, and from a repository not confirmed public it reads labels only, and no split."
    ],
    "check": null,
    "accepted": true
@@ -67,7 +67,7 @@
    ],
    "text": "frame 0, approvals, rules, tree and switch change only with the user",
    "quote": [
-    "Frame 0, `approved.json`, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user."
+    "Frame 0, `approved.json`, the rules, the tree and the switch change only with the user: Claude writing any of them rises to the user, unless the file then holds exactly the words the user approved in the picker."
    ],
    "check": null,
    "accepted": true

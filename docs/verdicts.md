@@ -52,7 +52,7 @@ Under **details**, a completion names each requirement it read, in its words, wi
 | ✗ (the reader stopped once no steady answer could be reached) | the reading ended early, once no firm answer, done or not done, was left to reach |
 | not read (a reason) | refused, out of time, or the change it rests on is missing |
 
-After them, "its rules ✗ (it may break your rule "a rule")" means the rules question on a part's change did not pass, so its requirement was read after all and the rule is yours to look at; "climb stopped: a reason" means a requirement read as done fits no single place in the tree; "node counting complete" and "frame 0 complete" mean every requirement there is filled. In large work the band also names the part the work is in, `· frame-loop in counting`, and marks a part ✓ once it is done.
+After them, "its rules ✗ (it may break your rule "a rule")" means the rules question on a part's change did not pass, so its requirement was read after all and the rule is yours to look at; "climb stopped: a reason" means a requirement read as done fits no single place in the tree; "part counting complete" and "frame 0 complete" mean every requirement there is filled. In large work the band also names the part the work is in, `· frame-loop in counting`, and marks a part ✓ once it is done.
 
 ---
 

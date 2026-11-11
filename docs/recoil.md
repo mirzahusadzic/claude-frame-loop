@@ -26,7 +26,7 @@ For routing, every node is also a Gadfly frame that is never asked. Per requirem
 | its children | every child requirement quoting it is filled, and each such child is complete |
 | frame 0's requirements | by the children that quote them, else by frame 0's own steps |
 
-A node is complete when every requirement is filled; the line then adds "node X complete", and "frame 0 complete" at the root. Depth is unlimited: each node only narrows its parent, and every rule above holds below.
+A node is complete when every requirement is filled; the line then adds "part X complete", by the part's name, and "frame 0 complete" at the root. Depth is unlimited: each node only narrows its parent, and every rule above holds below.
 
 A part is read when its work is finished, without Claude asking: when the work moves from it to another part or back to frame 0, the loop reads its requirements over its steps and what changed since the turn engaged it, unless it was read already as it stands or holds no work; presenting the work inside it reads it too. A requirement its children own is not read again over the whole work: the completion counts it from them, done when the climb has filled it, and otherwise not done, with how many of the parts quoting it are done.
 

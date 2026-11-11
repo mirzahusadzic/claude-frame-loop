@@ -3834,7 +3834,8 @@ class TreeHookTests(CoreTests):
         self.assertTrue(comps)
         self.assertTrue(all(f.get("offers", "").startswith("done-N") for f in comps))
         self.assertTrue(all(any(s.get("kind") == "ask" and "source" in s for s in f["body"]["spans"]) for f in comps))
-        self.assertIn("node greeter complete", out["systemMessage"])
+        self.assertIn("part greeter complete", out["systemMessage"])  # a part, never a "node", to the author
+        self.assertNotIn("node greeter", out["systemMessage"])
         self.assertEqual(sorted(r["ask"] for r in self.events("filled")), ["N1", "N2"])
 
     def _no_part_owns_a1_or_a2(self, test):
