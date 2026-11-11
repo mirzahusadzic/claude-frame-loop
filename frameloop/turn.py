@@ -294,11 +294,12 @@ def _since_on(starts: Any) -> list[dict[str, Any]]:
     return [r for r in starts if float(r.get("at", 0)) >= flipped]
 
 
-def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
+def turn_so_far(cwd: str, frame0: dict[str, Any], part: str | None = None) -> dict[str, Any] | None:
     """The step this turn's change will be when the turn ends, with what it has declared so
     far: work presented inside its own turn is the work (an agent's report: "nothing claims
     it" straight after declaring, and an agent cannot start a later turn by itself). Kept
-    nowhere: the turn's end records it."""
+    nowhere: the turn's end records it. With a `part`, only what changed since this turn
+    engaged it: a turn that moves from part to part leaves each with its own change."""
     if os.environ.get("FRAME_LOOP_READ_TURNS") != "1":
         return None
     path = os.environ.get("FRAME_LOOP_LOG")
@@ -307,6 +308,9 @@ def turn_so_far(cwd: str, frame0: dict[str, Any]) -> dict[str, Any] | None:
     last_stop = max((i for i, r in enumerate(records) if r.get("event") == "stop"), default=-1)
     starts = _since_on(r for r in records[last_stop + 1 :] if r.get("event") == "turn-start")
     before, after = (starts[0].get("tree") if starts else None), snapshot(cwd)
+    engaged = [r for r in records[last_stop + 1 :] if r.get("event") == "engage" and r.get("id") == part]
+    if part and engaged and engaged[-1].get("tree"):
+        before = engaged[-1]["tree"]
     if before is None or after is None or before == after:
         return None
     marked = [x for r in records[last_stop + 1 :] if r.get("event") == "declare" for x in r.get("lines", [])]

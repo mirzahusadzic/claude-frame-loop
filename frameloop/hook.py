@@ -87,9 +87,9 @@ from lines import _authors_own, _short_lines, _tell, for_user  # noqa: E402
 from live import _live, _live_interrupted  # noqa: E402
 from obligations import owed, ran  # noqa: E402
 from privacy import _short_path, _trains, _writer, real_home  # noqa: E402
-from reading import _proposal, _read, complete  # noqa: E402
+from reading import _proposal, _read, complete, show_part  # noqa: E402
 from record import _log, _records, _records_all  # noqa: E402
-from repo import _git, project_root  # noqa: E402
+from repo import _git, project_root, snapshot  # noqa: E402
 from turn import (  # noqa: E402
     WAKE,
     WAKE_NOTE,
@@ -461,10 +461,16 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
             _log({"event": "notes-told"})
             return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": NOTES_TOLD}}
         if path and touches_config(path):
-            if mode == "enforce" and _writes_what_was_approved(path, tool, tool_input):
+            approved = _writes_what_was_approved(path, tool, tool_input)
+            faults = node_file_faults(path, tool, tool_input, frame0)
+            if approved and _authors_own(path) == "the tree" and not faults:
+                # A part written as the author fixed it in the split: their approval in the picker
+                # is the only one it needs, so nothing asks or rises, in either mode.
+                _log({"event": "config", "tool": tool, "path": path, "approved": True})
+                return None
+            if mode == "enforce" and approved and _authors_own(path) == "frame 0":
                 _log({"event": "config", "tool": tool, "path": path})  # the author has said yes, in these words
                 return None
-            faults = node_file_faults(path, tool, tool_input, frame0)
             index = rules_file_faults(path, tool, tool_input)
             found = faults + index
             _log({"event": "config", "tool": tool, "path": path, **({"faults": found} if found else {})})
@@ -540,15 +546,18 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
                         "leads to frame 0; ask the author to mend the tree",
                     }
                 }
+            left = state.NODE
+            read = _leaving(left) if left and left != "root" and left != wanted and left in known else ""
             state.NODE = wanted
-            _log({"event": "engage", "id": wanted})
+            _log({"event": "engage", "id": wanted, "tree": snapshot(state.CWD or os.getcwd())})
+            show_part(wanted, finished=left if left != wanted else None)
             asks = "; ".join(f"{a['id']}: {a['text']}" for a in load_frame0()["asks"])
-            return {
-                "hookSpecificOutput": {
-                    "hookEventName": "PreToolUse",
-                    "additionalContext": f"frame-loop: engaged node {wanted}; its asks: {asks}",
-                }
-            }
+            engaged = f"frame-loop: engaged node {wanted}; its asks: {asks}"
+            if not read:
+                return {"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": engaged}}
+            out = _reading_said(read)
+            out["hookSpecificOutput"]["additionalContext"] = f"{read}\n{engaged}"
+            return out
         elif command.strip().startswith(": frame-loop-declare"):
             lines = _declare_lines(command)
             _log({"event": "declare", "lines": lines})
@@ -595,9 +604,40 @@ def _answer(event: dict[str, Any]) -> dict[str, Any] | None:
     return None
 
 
+def _leaving(node: str) -> str:
+    """The part the work moves on from is finished: its requirements are read against the work
+    claimed for them, its steps and what changed since this turn engaged it, without Claude
+    asking (Mirza, in a live session: no part was read when finished, and nothing climbed). A
+    part already read as it stands is not read again. Nothing when it holds no work."""
+    saved = state.NODE
+    state.NODE = node
+    try:
+        frame = load_frame0()
+        now = snapshot(state.CWD or os.getcwd())
+        if any(
+            r.get("node") == node and r.get("to") == now and now
+            for r in _records_all()
+            if r.get("session") == state.SESSION and r.get("event") in ("completion", "part-read")
+        ):
+            return ""
+        pending = turn_so_far(state.CWD or os.getcwd(), frame, part=node)
+        mine = [r for r in _records("step") if r.get("node") == node]
+        if not pending and not mine:
+            return ""
+        text = complete(frame, said="\n".join(_marks()), pending=pending)
+        _log({"event": "part-read", "node": node, "to": now})
+        return text
+    finally:
+        state.NODE = saved
+
+
 def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str, Any]) -> bool:
-    """Whether a write leaves frame 0 holding what the author approved, and only that."""
-    if _authors_own(path) != "frame 0":  # a node holds a scope and promises no picker has shown
+    """Whether a write leaves frame 0, or a part of a split, holding what the author approved
+    for it, and only that. A node approved alone, not in a split, holds a scope no picker has
+    shown."""
+    own = _authors_own(path)
+    node = _node_file(path) if own == "the tree" else None
+    if own != "frame 0" and node is None:
         return False
     if tool == "Write":
         text = tool_input.get("content")
@@ -610,7 +650,20 @@ def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str,
         text = held.replace(old, new) if tool_input.get("replace_all") else held.replace(old, new, 1)
     else:
         return False
-    return isinstance(text, str) and framezero.text_in_approved_words(text, framezero.FRAME_0)
+    if not isinstance(text, str):
+        return False
+    if node is not None:
+        return framezero.node_text_in_approved_words(text, node)
+    return framezero.text_in_approved_words(text, framezero.FRAME_0)
+
+
+def _node_file(path: str) -> str | None:
+    """The node a path is the file of: a JSON file directly in the tree folder, named by it."""
+    named = Path(path)
+    folder = Path(os.environ.get("FRAME_LOOP_TREE") or Path(project_dir({"cwd": state.CWD})) / ".frame-loop" / "tree")
+    if named.suffix != ".json" or named.is_symlink() or named.parent.resolve() != folder.resolve():
+        return None
+    return named.stem
 
 
 def _loop_files_at(event: dict[str, Any]) -> Path:
@@ -809,6 +862,20 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
     return changed + ([os.environ["FRAME_LOOP_LOG"]] if _record_size() < was else [])
 
 
+# How a split reaches the author: whole, in one picker, before anything of it exists.
+SPLIT_TOLD = (
+    "A split goes to the author whole: one call of the approve tool with `parts`, every part of "
+    "the split at once, each with its file's `id`, its `name` in plain words, its `scope` (the "
+    "paths it may change) and its `items`, "
+    "each item with `quotes`, the id of the parent's requirement it narrows, and `parent`, the "
+    "node being split, left out when frame 0's requirements are split. The picker shows one page "
+    "per part and one approval for them all. End your turn when it opens: write no part's file "
+    "and begin no code for the split until the answer arrives, then write each part's file with "
+    "the Write tool, holding the lines approved for it, what each narrows, its name, its parent "
+    "and its scope as the picker showed them: such a file needs no other approval."
+)
+
+
 def briefing(frame0: dict[str, Any], mode: str) -> str:
     """What a new session is told: frame-loop's way of working, frame 0, the four terms of
     engagement, crossings and authority, how to declare, and what rises."""
@@ -997,19 +1064,19 @@ def briefing(frame0: dict[str, Any], mode: str) -> str:
                 "its asks quote its parent's, its scope lies under the parent's, and every rule "
                 "above it holds. Engage the node you work in with `: frame-loop-node <id>`, a "
                 "no-op the hook reads; then readings use its asks, completion reads the ones claimed over "
-                "its own steps, and a change outside its scope is not authorized. A completed "
-                "node climbs to its parent by itself. Nodes nest to any depth: a node's ask is owned "
+                "its own steps, and a change outside its scope is not authorized. Moving to another "
+                "node, or back to frame 0, reads the node being left, so engage the next only once "
+                "its work is finished. A completed node climbs to its parent by itself. Nodes nest "
+                "to any depth: a node's ask is owned "
                 "by its own steps or by its children, never both, and one its children own is done "
                 "when every child quoting it is. Each node is one JSON file in "
-                f"{os.environ.get('FRAME_LOOP_TREE')}, its fields in {_docs('crossings.md')}."
+                f"{os.environ.get('FRAME_LOOP_TREE')}, its fields in {_docs('crossings.md')}. " + SPLIT_TOLD
             ]
             if os.environ.get("FRAME_LOOP_TREE")
             else [
                 "Large work can nest: at a crossing, with the author, split an ask too coarse for "
                 "one step into nodes, each a JSON file in the project's .frame-loop/tree/ folder, "
-                f"its fields in {_docs('crossings.md')}; nodes nest to any depth, and each node's "
-                "requirements are the author's to approve with the approve tool, naming the node, "
-                "before its file is written."
+                f"its fields in {_docs('crossings.md')}; nodes nest to any depth. " + SPLIT_TOLD
             ]
         ),
         "Pushes, releases, recursive deletes and any change to the loop's own configuration "

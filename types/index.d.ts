@@ -20,12 +20,50 @@ export type Live = {
   wake?: boolean // this reading starts a turn for Claude, once the session is free
 }
 
-// One item of a decomposition, as the picker shows it.
-export type Item = { text: string; detail?: string; isChecked: boolean; isRemoval?: boolean }
+// Where the work is, as the hooks write it beside the live state (<session>.part.json): the part
+// engaged, by its name, where it sits and whether its requirements are all done, or none at
+// frame 0; and the name of a part just left when it is done.
+export type PartLine = {
+  at: number
+  part: { name: string; where: string; done: boolean } | null
+  finished: string | null
+}
+
+// One item of a decomposition, as the picker shows it. `quotes` is the parent's requirement a
+// part's line narrows, by its id: never shown, read for the header and the record.
+export type Item = { text: string; detail?: string; isChecked: boolean; isRemoval?: boolean; quotes?: string }
+
+// One part of a split: its file's name, its plain name, its lines, the paths it may change, and
+// whether its page was seen.
+export type Part = { id: string; name: string; items: Item[]; scope: string[]; isSeen: boolean }
 
 // What the picker holds until its round closes. `node` is the frame's place in the tree: a
-// node's id, or none for frame 0.
-export type Proposal = { title: string; node?: string; items: Item[]; leftOut: string[] }
+// node's id, or none for frame 0. A split holds its parts instead of items, the frame it splits
+// (`parent`, a node's id, or none for frame 0), and the page shown: one per part, then the
+// review, numbered from 0.
+export type Proposal = {
+  title: string
+  node?: string
+  items: Item[]
+  leftOut: string[]
+  parts?: Part[]
+  parent?: string
+  page?: number
+  header?: Header
+}
+
+// Where a split sits, read by the band from the tree's files as the picker opens, never from
+// Claude's words: the frames from frame 0 down to the one split, by name; that frame's
+// requirements by id, each with whether its words are the ones approved; the principles every
+// part inherits, each with the frame it comes from; the guide's rules, counted; and what could
+// not be read.
+export type Header = {
+  path: string[]
+  requirements: Record<string, { text: string; isApproved: boolean }>
+  principles: { text: string; from: string }[]
+  guideRules: number
+  unread?: string
+}
 
 declare module 'claude-code' {
   interface PluginState {
@@ -37,6 +75,7 @@ declare module 'claude-code' {
       off: boolean
       proposal: Proposal | null
       woken: number
+      part: PartLine | null
     }
   }
 }

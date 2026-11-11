@@ -114,6 +114,90 @@ test('a rise after a check mark shows the line that needs the author', async ($,
   await ui.unmount()
 })
 
+// Where the work is: one line always names the part and where it sits, and when it is done.
+const IN_PART = { at: 40, part: { name: 'the 429 response', where: 'frame 0 › Each client is limited per minute', done: false },
+                  finished: null }
+
+const inPart = (on: any, live: unknown, where: unknown, dismissedAt = 0) => {
+  const store = seed(on, live, dismissedAt)
+  store.part = { value: where, version: 1 }
+  on('clock.now', () => ({ value: 60000 }))
+  return store
+}
+
+test('with nothing being read, one line names the part the work is in and where it sits', async ($, on) => {
+  inPart(on, null, IN_PART)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^in / }))?.text).toBe('in the 429 response')
+  expect((await ui.find({ type: 'Text', text: /›/ }))?.text).toBe(' · frame 0 › Each client is limited per minute')
+  await ui.unmount()
+})
+
+test('a part whose requirements are all done says so on that line', async ($, on) => {
+  inPart(on, null, { ...IN_PART, part: { ...IN_PART.part, done: true } })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /is done/ }))?.text).toBe('the 429 response is done')
+  expect((await ui.find({ type: 'Text', text: /^✓ $/ }))?.props.color).toBe('success')
+  await ui.unmount()
+})
+
+test('a part just left done is named, with the part the work is in now', async ($, on) => {
+  inPart(on, null, { ...IN_PART, finished: 'counting' })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /is done/ }))?.text).toBe('counting is done · now in the 429 response')
+  await ui.unmount()
+})
+
+test('while a reading runs, its one line still names the part', async ($, on) => {
+  inPart(on, { session: 's', at: 1, state: 'reading', what: 'checking the change', started: 1, tokens: 2000 }, IN_PART)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /tokens/ }))?.text).toBe(' · 0:59 · 2k tokens · in the 429 response')
+  await ui.unmount()
+})
+
+test('an outcome that needs the author names the part after it, and once seen the part line is back', async ($, on) => {
+  inPart(on, { session: 's', at: 50, state: 'done', decision: 'rise', started: 10, lines: ['frame-loop ▲ needs you: x'] }, IN_PART)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /in the 429 response/ }))?.text).toBe(' · 0:40 · in the 429 response ')
+  await ui.unmount()
+})
+
+test('an outcome already seen leaves the part line', async ($, on) => {
+  inPart(on, { session: 's', at: 50, state: 'done', decision: 'pass', started: 10 }, IN_PART, 51)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^in / }))?.text).toBe('in the 429 response')
+  await ui.unmount()
+})
+
+test('at frame 0, with no part engaged and none just done, the band is as before', async ($, on) => {
+  inPart(on, null, { at: 40, part: null, finished: null })
+  on('ui.render', ($: any, e: any) => { const { Text } = $.ui.resolve(e); return <Text>engine</Text> })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text' }))?.text).toBe('engine')
+  await ui.unmount()
+})
+
+test('the band reads where the work is from the file beside the live state', async ($, on) => {
+  const store = seed(on, null)
+  store.part = { value: null, version: 1 } // as the engine holds an atom never written: its initial value
+  const reads: string[] = []
+  on('fs.read', (_: unknown, e: { path: string }) => {
+    reads.push(posix(e.path))
+    if (posix(e.path) === '/home/u/.claude/frame-loop/live/s.part.json') return { value: JSON.stringify(IN_PART) }
+    throw new Error('no file')
+  })
+  on('command.register', () => ({ value: { command: 'frame-loop' } }))
+  on('env.get', (_: unknown, e: { name: string }) => ({ value: e.name === 'HOME' ? '/home/u' : undefined }))
+  on('session.id', () => ({ value: 's' }))
+  let periods = 0
+  on('clock.every', () => (periods++ < 2 ? { value: undefined } : { deny: 'enough periods' }))
+  on('session.start', (_: unknown, e: { cwd: string }) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/proj', surface: 'terminal', isInteractive: true })
+  for (let i = 0; i < 30 && !store.part?.value; i++) await new Promise(r => setTimeout(r, 10))
+  expect(reads).toContain('/home/u/.claude/frame-loop/live/s.part.json')
+  expect((store.part?.value as any)?.part?.name).toBe('the 429 response')
+})
+
 // The hooks read the switch under CLAUDE_PROJECT_DIR when it names a folder that is there,
 // else under the session's directory: the band writes it where they read it.
 for (const [why, projectDir, where] of [['no project folder is named', undefined, '/proj'],
@@ -392,6 +476,240 @@ test('no items is refused', async ($, on) => {
   const called = await $.tool.call({ ...PROPOSED, items: [] } as any)
   expect(JSON.stringify(called)).toContain('at least one item')
 })
+
+// A split: every part at once, one page each, and one approval on the review page.
+const SPLIT = {
+  tool: 'mcp__frame-loop__approve',
+  title: 'Split: each client is limited per minute',
+  parts: [
+    { id: 'counting', name: 'counting', scope: ['limiter/count.py'], items: [
+      { text: 'Requests are counted per client.', quotes: 'A1' },
+      { text: 'The count resets each minute.', quotes: 'A1' }] },
+    { id: 'the-429', name: 'the 429 response', scope: ['limiter/respond.py'], items: [
+      { text: 'A client over its limit gets a 429 with a Retry-After header.', quotes: 'A1',
+        detail: 'narrows: "is limited" · may change: limiter/respond.py' }] },
+    { id: 'headers', name: 'headers', scope: ['limiter/headers.py'], items: [{ text: 'Every answer says how many requests are left.', quotes: 'A1' }] },
+  ],
+}
+
+test('a split opens on its first part, one page each, with no approval before the review', async ($, on) => {
+  await picking($, on)
+  const called = await $.tool.call(SPLIT as any)
+  expect(JSON.stringify(called)).toContain('End your turn')
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^Part 1:/ }))?.text).toBe('Part 1:  counting')
+  expect(await ui.find({ key: 'item-0-1' })).toBeTruthy()
+  expect(await ui.find({ key: 'item-1-0' })).toBeUndefined() // one part a page
+  expect(await ui.find({ key: 'approve' })).toBeUndefined() // the last page closes the round
+  expect((await ui.find({ type: 'Text', text: /1 \/ 3/ }))?.text).toBe('1 / 3')
+  const row = (await ui.findAll({ type: 'Button' })).filter(x => x.key?.startsWith('go-')).map(x => x.text)
+  expect(row).toEqual(['[counting]', 'the 429 response', 'headers', 'review'])
+  await ui.unmount()
+})
+
+test('right and left page between the parts, and the focus starts on each page\'s first line', async ($, on) => {
+  // The move of the ring itself ($.ui.focus) needs a site holding the keyboard, which no test
+  // mount does: what is drawn is checked here, the move in a real session.
+  await picking($, on)
+  await $.tool.call(SPLIT as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ key: 'item-0-0' }))?.props.autoFocus).toBe(true)
+  await ui.press({ key: 'next' })
+  expect((await ui.find({ key: 'item-1-0' }))?.props.autoFocus).toBe(true) // the same pane, drawn again
+  await ui.unmount()
+  const two = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await two.find({ type: 'Text', text: /^Part 2:/ }))?.text).toBe('Part 2:  the 429 response')
+  expect((await two.find({ type: 'Text', text: /may change/ }))?.text).toContain('limiter/respond.py')
+  expect((await two.find({ key: 'item-1-0' }))?.props.autoFocus).toBe(true)
+  await two.press({ key: 'prev' })
+  await two.unmount()
+  const back = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await back.find({ type: 'Text', text: /^Part 1:/ }))?.text).toBe('Part 1:  counting')
+  await back.unmount()
+})
+
+// One press in a freshly drawn picker, as the person moves through it.
+const pressIn = async ($: any, key: string) => {
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await ui.press({ key })
+  await ui.unmount()
+}
+
+test('the review lists each part, its lines and whether it was seen, and one approval fixes them all', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(SPLIT as any)
+  for (const key of ['next', 'next', 'next']) await pressIn($, key)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^review$/ }))?.text).toBe('review')
+  const rows = (await ui.findAll({ type: 'Button' })).filter(x => x.key?.startsWith('part-')).map(x => x.text)
+  expect(rows.length).toBe(3)
+  expect(rows[0]).toMatch(/^counting\s+2 lines\s+seen$/)
+  expect(rows[1]).toMatch(/^the 429 response\s+1 line\s+seen$/)
+  expect(rows[2]).toMatch(/^headers\s+1 line\s+seen$/)
+  expect((await ui.find({ key: 'part-0' }))?.props.autoFocus).toBe(true) // never the approve button
+  expect((await ui.find({ key: 'approve' }))?.props.autoFocus).toBeUndefined()
+  expect((await ui.find({ key: 'approve' }))?.text).toBe('Approve all three')
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toBe('Approved, all three parts: counting, the 429 response, headers.')
+  const rounds = JSON.parse(sent.files[RECORD]).rounds
+  expect(rounds.map((r: any) => [r.frame, r.split, r.name, r.approved])).toEqual([
+    ['counting', 'frame 0', 'counting', ['Requests are counted per client.', 'The count resets each minute.']],
+    ['the-429', 'frame 0', 'the 429 response', ['A client over its limit gets a 429 with a Retry-After header.']],
+    ['headers', 'frame 0', 'headers', ['Every answer says how many requests are left.']],
+  ])
+  await ui.unmount()
+})
+
+test('each part\'s page shows the files it may change, and its round records them and what each line narrows', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(SPLIT as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ type: 'Text', text: /^May change:/ }))?.text).toBe('May change:  limiter/count.py')
+  await ui.press({ key: 'item-0-1' }) // a line not approved is no part of what the file may hold
+  await ui.press({ key: 'go-review' })
+  await ui.unmount()
+  const review = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  await review.press({ key: 'approve' })
+  await review.unmount()
+  const [first, second] = JSON.parse(sent.files[RECORD]).rounds
+  expect(first.scope).toEqual(['limiter/count.py'])
+  expect(first.narrows).toEqual({ 'Requests are counted per client.': 'A1' })
+  expect(second.scope).toEqual(['limiter/respond.py'])
+  expect(second.narrows).toEqual({ 'A client over its limit gets a 429 with a Retry-After header.': 'A1' })
+})
+
+test('a part not yet seen shows so on the review and does not block the approval', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call({ ...SPLIT, parent: 'limits' } as any)
+  await pressIn($, 'go-review')
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const rows = (await ui.findAll({ type: 'Button' })).filter(x => x.key?.startsWith('part-')).map(x => x.text)
+  expect(rows[0]).toMatch(/seen$/)
+  expect(rows[0]).not.toMatch(/not seen/)
+  expect(rows[1]).toMatch(/not seen yet$/)
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toBe('Approved, all three parts: counting, the 429 response, headers.')
+  expect(JSON.parse(sent.files[RECORD]).rounds.map((r: any) => r.split)).toEqual(['limits', 'limits', 'limits'])
+  await ui.unmount()
+})
+
+test('from the review a part\'s row opens its page, and a line not approved is named with its part', async ($, on) => {
+  const sent = await picking($, on)
+  await $.tool.call(SPLIT as any)
+  await pressIn($, 'go-review')
+  await pressIn($, 'part-1')
+  const page = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await page.find({ type: 'Text', text: /^Part 2:/ }))?.text).toBe('Part 2:  the 429 response')
+  await page.press({ key: 'item-1-0' })
+  await page.press({ key: 'go-review' })
+  await page.unmount()
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect((await ui.find({ key: 'part-1' }))?.text).toMatch(/1 not approved/)
+  expect((await ui.find({ key: 'approve' }))?.text).toBe('Approve checked')
+  await ui.press({ key: 'approve' })
+  expect(sent.submit).toContain('Not approved:\n- the 429 response: A client over its limit gets a 429')
+  expect(sent.submit).toContain('Ask me what is wrong')
+  const [, second] = JSON.parse(sent.files[RECORD]).rounds
+  expect(second.not_approved).toEqual(['A client over its limit gets a 429 with a Retry-After header.'])
+  await ui.unmount()
+})
+
+// The tree's files as the hooks keep them, for the header to read.
+const TREE_FILES = {
+  '/project/.frame-loop/frame0.json': JSON.stringify({
+    asks: [{ id: 'A1', text: 'Each client is limited per minute' }, { id: 'A2', text: 'Limits are set per plan' }],
+    principles: [{ id: 'P1', text: 'A request that is not limited is answered as today' }],
+  }),
+  '/project/.frame-loop/tree/counting.json': JSON.stringify({
+    parent: 'root', name: 'counting', scope: ['limiter/*'],
+    asks: [{ id: 'C1', text: 'Requests are counted per client', quotes: 'A1', owner: 'children' }],
+    principles: [{ id: 'P9', text: 'Counting adds no new store' }],
+  }),
+  '/project/.frame-loop/rules.json': JSON.stringify({ rules: [
+    { id: 'R1', kind: 'principle', accepted: true }, { id: 'R2', kind: 'principle', accepted: true },
+    { id: 'R3', kind: 'obligation', accepted: true }] }),
+}
+
+const texts = async (ui: any) => (await ui.findAll({ type: 'Text' })).map((x: any) => x.text)
+
+test('each page\'s header is read from the tree: path, requirement split, principles and page', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES)
+  await $.tool.call(SPLIT as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const shown = await texts(ui)
+  expect(shown).toContain('frame 0 › Each client is limited per minute')
+  expect(shown).toContain('Splitting:  "Each client is limited per minute"')
+  expect(shown).toContain('Holds for every part:')
+  expect(shown).toContain('  · A request that is not limited is answered as today  (frame 0)')
+  expect(shown).toContain("  · and the project's two rules from its guide")
+  expect(shown).toContain('1 / 3')
+  expect(shown.join('\n')).not.toContain(SPLIT.title) // Claude's words name the tab alone
+  await ui.press({ key: 'go-review' })
+  await ui.unmount()
+  const review = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(review).toContain('frame 0 › Each client is limited per minute')
+  expect(review).toContain('  · A request that is not limited is answered as today  (frame 0)')
+})
+
+test('a split below frame 0 shows the path through the parts and the principles each adds', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES)
+  const parts = [{ id: 'per-client', name: 'per client', scope: ['limiter/count.py'], items: [{ text: 'Each client has its own count.', quotes: 'C1' }] }]
+  await $.tool.call({ ...SPLIT, parent: 'counting', parts } as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const shown = await texts(ui)
+  expect(shown).toContain('frame 0 › counting › Requests are counted per client')
+  expect(shown).toContain('  · A request that is not limited is answered as today  (frame 0)')
+  expect(shown).toContain('  · Counting adds no new store  (counting)')
+  expect(shown).toContain('1 / 1')
+  await ui.unmount()
+})
+
+test('a requirement whose words are not the approved ones, or none at all, is said, never filled in', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES)
+  sent.files[RECORD] = JSON.stringify({ version: 1, rounds: [
+    { frame: 'frame 0', approved: ['Each client is limited per hour'], not_approved: [] }] })
+  const parts = [
+    { id: 'a', name: 'a', scope: ['a.py'], items: [{ text: 'A line.', quotes: 'A1' }] },
+    { id: 'b', name: 'b', scope: ['b.py'], items: [{ text: 'A line.', quotes: 'A9' }] },
+  ]
+  await $.tool.call({ ...SPLIT, parts } as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  expect(await texts(ui)).toContain('Splitting:  "Each client is limited per minute"  (not in the words you approved)')
+  await ui.press({ key: 'next' })
+  await ui.unmount()
+  const two = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(two).toContain('Splitting:  (a line narrows no requirement of frame 0)')
+  expect(two).toContain('frame 0')
+})
+
+test('a part being split that the tree does not hold is said, and no words of Claude\'s stand in', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES)
+  await $.tool.call({ ...SPLIT, parent: 'gone' } as any)
+  const shown = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(shown).toContain('Splitting:  (not shown: the part being split is not in the tree)')
+  expect(shown).toContain('frame 0')
+  expect(shown.join('\n')).not.toContain('Each client is limited per minute')
+})
+
+for (const [why, wrong, said] of [
+  ['a part with no id', { parts: [{ name: 'x', scope: ['x'], items: [{ text: 'A line.' }] }] }, 'an id'],
+  ['a part with no files it may change', { parts: [{ id: 'x', name: 'x', items: [{ text: 'A line.' }] }] }, 'its scope'],
+  ['two parts sharing an id', { parts: [SPLIT.parts[0], SPLIT.parts[0]] }, 'share an id'],
+  ['a part with no lines', { parts: [{ id: 'x', name: 'x', scope: ['x'], items: [] }] }, 'at least one line'],
+  ['parts beside items', { items: [{ text: 'A line.' }] }, 'its parts alone'],
+  ['a part named by a path', { parts: [{ id: '../frame0', name: 'x', scope: ['x'], items: [{ text: 'A line.' }] }] }, 'an id'],
+] as const) {
+  test(`a split is refused for ${why}, and nothing is opened`, async ($, on) => {
+    const sent = await picking($, on)
+    const called = await $.tool.call({ ...SPLIT, ...wrong } as any)
+    expect(JSON.stringify(called)).toContain(said)
+    expect(sent.opened).toBeUndefined()
+  })
+}
 
 test('an act that needs the author shows as the act, after its mark', async ($, on) => {
   seed(on, { session: 's', at: 50, state: 'done', decision: 'rise', started: 10,

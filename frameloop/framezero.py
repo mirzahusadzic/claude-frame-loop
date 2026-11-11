@@ -121,6 +121,61 @@ def text_in_approved_words(text: str, frame: str) -> bool:
     return bool(words) and not unshown and set(items) == words
 
 
+def _split_round(node: str) -> dict[str, Any] | None:
+    """The last answer that fixed a node as a part of a split: its name, the frame it splits,
+    what each line narrows and the files it may change, as the picker showed them."""
+    from config import project_dir
+
+    path = Path(project_dir({"cwd": state.CWD})) / ".frame-loop" / "approved.json"
+    try:
+        rounds = json.loads(path.read_text(encoding="utf-8"))["rounds"]
+        mine = [r for r in rounds if isinstance(r, dict) and r.get("frame") == node]
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if not mine or "split" not in mine[-1]:  # a later answer of its own overrules the split's
+        return None
+    return mine[-1]
+
+
+def node_text_in_approved_words(text: str, node: str) -> bool:
+    """Whether a node's file with this text holds what the author approved for it in a split,
+    and only that: its lines, what each narrows, the files it may change, its name and the
+    frame it splits. Its reversed sentences, promises and predictions are Claude's, as frame
+    0's inversions are, and no picker shows them."""
+    found = _split_round(node)
+    words = approved_words(node)
+    if not found or not words:
+        return False
+    try:
+        held = json.loads(text)
+        asks = held.get("asks") or []
+        items = [_words(x["text"]) for part in ("asks", "principles", "triggers") for x in held.get(part) or []]
+        quotes = {_words(a["text"]): a.get("quotes") for a in asks}
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return False
+    narrows = {_words(k): v for k, v in (found.get("narrows") or {}).items()}
+    parent = "root" if found.get("split") == FRAME_0 else found.get("split")
+    return (
+        held.get("id", node) == node
+        and held.get("parent") == parent
+        and held.get("name") == found.get("name")
+        and isinstance(held.get("scope"), list)
+        and sorted(held["scope"]) == sorted(found.get("scope") or [])
+        and not (held.get("obligations") or held.get("semantic") or held.get("grant"))
+        and len(items) == len(set(items))
+        and set(items) == words
+        and all(narrows.get(t) == q for t, q in quotes.items())
+    )
+
+
+def node_file_in_approved_words(path: str) -> bool:
+    """Whether a node's file, as it stands, holds what the author approved for it in a split."""
+    try:
+        return node_text_in_approved_words(Path(path).read_text(encoding="utf-8"), Path(path).stem)
+    except OSError:
+        return False
+
+
 def file_in_approved_words(path: str, frame: str) -> bool:
     """Whether a frame's file, as it stands, holds what the author approved, and only that."""
     try:

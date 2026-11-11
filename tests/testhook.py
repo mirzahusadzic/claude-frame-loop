@@ -17,6 +17,7 @@ import declare  # noqa: E402
 import facts  # noqa: E402
 import frames  # noqa: E402
 import framezero  # noqa: E402
+import gate  # noqa: E402
 import hook  # noqa: E402
 import lines  # noqa: E402
 import live as live_module  # noqa: E402
@@ -547,6 +548,31 @@ class AttackTests(unittest.TestCase):
                 self.assertIn(flag, nested)
         for marker in (": frame-loop-read", ": frame-loop-declare", ": frame-loop-node", "/frame-loop"):
             self.assertIn(marker, nested)
+
+    def test_the_briefing_puts_a_split_whole_in_one_picker_before_anything_is_written(self):
+        """Mirza, in a live session: each part came in its own picker, one after another, with
+        code written between them, so the split was never seen whole. With a tree or without,
+        the briefing says to put every part in one picker and to write nothing before the answer."""
+        unwritten = {"asks": [], "principles": [], "triggers": [], "unwritten": True}
+        os.environ.update(env(FRAME_LOOP_FRAME0=str(WORK / "frame0-unwritten.json")))
+        os.environ.pop("FRAME_LOOP_TREE", None)
+        flat = hook.briefing(unwritten, "shadow")
+        tree = WORK / f"tree-{uid(self)}"
+        tree.mkdir()
+        os.environ["FRAME_LOOP_TREE"] = str(tree)
+        nested = hook.briefing(unwritten, "shadow")
+        for said in (flat, nested):
+            for part in (
+                "A split goes to the author whole",
+                "`parts`",
+                "`quotes`",
+                "`parent`",
+                "`scope`",
+                "write no part's file",
+                "needs no other approval",
+            ):
+                self.assertIn(part, said)
+            self.assertNotIn("naming the node", said)
 
     def test_the_briefing_says_how_to_compile_frame0(self):
         """An agent's report: a user's agent could not tell from the briefing which kind a line
@@ -3801,6 +3827,168 @@ class TreeHookTests(CoreTests):
         self.assertTrue(all(any(s.get("kind") == "ask" and "source" in s for s in f["body"]["spans"]) for f in comps))
         self.assertIn("node greeter complete", out["systemMessage"])
         self.assertEqual(sorted(r["ask"] for r in self.events("filled")), ["N1", "N2"])
+
+    def _no_part_owns_a1_or_a2(self, test):
+        """Under a tree, frame 0's requirements that parts own are counted from them, not read
+        again (Mirza's split: the behaviour asked to change). The core completion tests read A1
+        and A2 at frame 0, so here they run with the greeter quoting A3 alone."""
+        node = {**self.GREETER, "asks": [{**a, "quotes": "A3"} for a in self.GREETER["asks"]]}
+        (self.tree / "greeter.json").write_text(json.dumps(node), encoding="utf-8")
+        test(self)
+
+    def test_completion_inside_the_turn_reads_that_turns_claims(self):
+        self._no_part_owns_a1_or_a2(CoreTests.test_completion_inside_the_turn_reads_that_turns_claims)
+
+    @unittest.skipUnless(HAS_GADFLY, "the climb runs Gadfly's walk: install Gadfly")
+    def test_completion_reads_each_claimed_ask_with_its_claimed_diffs(self):
+        self._no_part_owns_a1_or_a2(CoreTests.test_completion_reads_each_claimed_ask_with_its_claimed_diffs)
+
+    def test_completion_with_a_step_change_missing_is_not_read(self):
+        self._no_part_owns_a1_or_a2(CoreTests.test_completion_with_a_step_change_missing_is_not_read)
+
+    def test_completion_masks_ids_and_marks_its_cut_like_every_other_reading(self):
+        self._no_part_owns_a1_or_a2(CoreTests.test_completion_masks_ids_and_marks_its_cut_like_every_other_reading)
+
+    def start(self):
+        hook.answer(
+            {"hook_event_name": "UserPromptSubmit", "session_id": self.session, "cwd": str(REPO), "prompt": "go"}
+        )
+
+    def end(self):
+        hook.answer(
+            {
+                "hook_event_name": "Stop",
+                "session_id": self.session,
+                "cwd": str(REPO),
+                "last_assistant_message": "done",
+                "stop_hook_active": False,
+            }
+        )
+        git("add", "-A")
+        git("commit", "-q", "--allow-empty", "-m", "turn")
+
+    def test_moving_on_from_a_part_reads_it_without_claude_asking(self):
+        """Mirza, in a live session: no part was read when it was finished; the plugin reminded
+        Claude once after each part, and Claude went on. Moving to another part, or back to
+        frame 0, reads the part being left, over what changed since it was engaged."""
+        seen = loaded_seen()
+        self.start()
+        self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n", encoding="utf-8")
+        self.marker(": frame-loop-declare --serves N1")
+        out = self.marker(": frame-loop-node")
+        self.end()
+        comps = [f for f in seen if f["name"].startswith("completion-")]
+        self.assertTrue(comps, [f["name"] for f in seen])
+        self.assertTrue(all("-N1-" in f["name"] for f in comps), [f["name"] for f in comps])
+        told = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("completion", told)
+        self.assertIn("engaged node root", told)
+        self.assertEqual([r["node"] for r in self.events("part-read")], ["greeter"])
+
+    def test_a_part_left_with_no_work_or_already_read_as_it_stands_is_not_read_again(self):
+        seen = loaded_seen()
+        self.start()
+        self.marker(": frame-loop-node greeter")
+        self.marker(": frame-loop-node")  # nothing done there
+        self.assertFalse([f for f in seen if f["name"].startswith("completion-")])
+        self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('again {uid(self)}')\n", encoding="utf-8")
+        self.marker(": frame-loop-declare --serves N1")
+        self.marker(": frame-loop-read --complete")
+        read = len([f for f in seen if f["name"].startswith("completion-")])
+        self.marker(": frame-loop-node")
+        self.end()
+        self.assertEqual(len([f for f in seen if f["name"].startswith("completion-")]), read)
+
+    def test_without_a_tree_moving_on_reads_nothing(self):
+        """A project without a tree behaves exactly as it does today."""
+        os.environ.pop("FRAME_LOOP_TREE")
+        seen = loaded_seen()
+        self.start()
+        out = self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('no tree {uid(self)}')\n", encoding="utf-8")
+        self.marker(": frame-loop-node")
+        self.end()
+        self.assertIn("no tree set", out["hookSpecificOutput"]["additionalContext"])
+        self.assertFalse([f for f in seen if f["name"].startswith("completion-")])
+        self.assertEqual(self.events("part-read"), [])
+
+    def filled(self, *asks):
+        state.SESSION = self.session
+        for ask in asks:
+            record._log({"event": "filled", "node": "greeter", "ask": ask, "routed": "gadfly walk"})
+
+    def test_the_line_of_where_the_work_is_names_the_part_where_it_sits_and_when_it_is_done(self):
+        """Mirza: one line always tells me which part the work is in, and when a part is done."""
+        folder = WORK / f"live-{uid(self)}"
+        os.environ["FRAME_LOOP_LIVE"] = str(folder)
+        named = {**self.GREETER, "name": "the greeting", "asks": [{**self.GREETER["asks"][0], "quotes": "A1"}]}
+        named["predictions"] = [{"for": "N1", "text": "carried and firm within 3 runs"}]
+        (self.tree / "greeter.json").write_text(json.dumps(named), encoding="utf-8")
+
+        def shown():
+            return json.loads((folder / f"{self.session}.part.json").read_text(encoding="utf-8"))
+
+        self.marker(": frame-loop-node greeter")
+        self.assertEqual(
+            shown()["part"],
+            {"name": "the greeting", "where": "frame 0 › the tool reads its settings from one file", "done": False},
+        )
+        self.filled("N1")
+        self.marker(": frame-loop-node")
+        self.assertEqual(shown(), {"at": shown()["at"], "part": None, "finished": "the greeting"})
+        self.marker(": frame-loop-node greeter")
+        self.assertTrue(shown()["part"]["done"])
+
+    def test_without_a_tree_no_line_of_where_the_work_is_is_written(self):
+        folder = WORK / f"live-{uid(self)}"
+        os.environ["FRAME_LOOP_LIVE"] = str(folder)
+        os.environ.pop("FRAME_LOOP_TREE")
+        self.marker(": frame-loop-node greeter")
+        self.assertFalse((folder / f"{self.session}.part.json").exists())
+
+    def test_frame_0s_requirement_that_parts_own_is_counted_from_them_not_read_again(self):
+        """Mirza, in a live session: the only end-of-work reading was at the top, over the
+        whole work, and nothing climbed."""
+        self.filled("N1", "N2")
+        seen = loaded_seen()
+        self.start()
+        (REPO / "README.md").write_text(f"usage {uid(self)}\n", encoding="utf-8")
+        self.marker(": frame-loop-declare --serves A1,A2")
+        out = self.marker(": frame-loop-read --complete")
+        decision = state.LIVE.get("decision")
+        self.end()
+        self.assertFalse([f for f in seen if f["name"].startswith("completion-")], [f["name"] for f in seen])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✓ from its parts", said)
+        self.assertIn("A2 ✓ from its parts", said)
+        self.assertEqual(decision, gate.PASS)
+
+    def test_a_requirement_whose_parts_are_not_done_is_not_done_and_says_how_many_are(self):
+        self.filled("N1")
+        seen = loaded_seen()
+        self.start()
+        (REPO / "README.md").write_text(f"usage {uid(self)}\n", encoding="utf-8")
+        self.marker(": frame-loop-declare --serves A1,A2")
+        out = self.marker(": frame-loop-read --complete")
+        decision = state.LIVE.get("decision")
+        self.end()
+        self.assertFalse([f for f in seen if f["name"].startswith("completion-")])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        # a part counts toward its parent once all its requirements are done, not one of them
+        self.assertIn("A1 ✗ (its parts are not all done: 0 of 1)", said)
+        self.assertIn("A2 ✗ (its parts are not all done: 0 of 1)", said)
+        self.assertEqual(decision, gate.RISE)
+
+    def test_a_requirement_no_part_owns_is_still_read_at_frame_0(self):
+        seen = loaded_seen()
+        self.start()
+        (REPO / "README.md").write_text(f"usage {uid(self)}\n", encoding="utf-8")
+        self.marker(": frame-loop-declare --serves A3")
+        self.marker(": frame-loop-read --complete")
+        self.end()
+        self.assertTrue([f for f in seen if f["name"].startswith("completion-") and "-A3-" in f["name"]])
 
 
 class SnapshotTests(unittest.TestCase):

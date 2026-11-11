@@ -389,6 +389,109 @@ class WriteTests(Approved):
         self.assertEqual(said[:2], ("changed your approvals", True))
 
 
+# A part of a split, as Claude writes its file after the one approval.
+PART = {
+    "parent": "root",
+    "name": "counting",
+    "scope": ["limiter/count.py"],
+    "asks": [
+        {"id": "C1", "text": ONE, "quotes": "A1", "owner": "leaves", "inversion": {ONE: "Requests are not counted."}}
+    ],
+    "promises": [{"concern": "speed", "text": "counting adds under a millisecond"}],
+    "predictions": [{"for": ["C1"], "text": "carried and firm within 3 runs"}],
+}
+
+
+class SplitWriteTests(Approved):
+    """Mirza, in a live session: after he approved a part in the picker, Claude Code asked again
+    whether to create its file, showed its JSON, and the band said the tree changed, with a ▲.
+    His approval in the picker is the only one a part needs."""
+
+    def split(self, approved=(ONE,), node="counting", **round_):
+        path = self.home / "approved.json"
+        kept = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"version": 1, "rounds": []}
+        kept["rounds"].append(
+            {
+                "frame": node,
+                "split": "frame 0",
+                "name": "counting",
+                "scope": ["limiter/count.py"],
+                "narrows": {ONE: "A1"},
+                "approved": list(approved),
+                "not_approved": [],
+                **round_,
+            }
+        )
+        path.write_text(json.dumps(kept), encoding="utf-8")
+
+    def node(self, held=PART, name="counting"):
+        path = self.home / "tree" / f"{name}.json"
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps(held), encoding="utf-8")
+        return path
+
+    def act(self, path):
+        return lines.act_words({"event": "config", "path": str(path), "at": path.stat().st_mtime})[:2]
+
+    def pre(self, path, held, mode):
+        os.environ["FRAME_LOOP_MODE"] = mode
+        event = {
+            "hook_event_name": "PreToolUse",
+            "session_id": "approved",
+            "cwd": str(self.project),
+            "tool_name": "Write",
+            "tool_input": {"file_path": str(path), "content": json.dumps(held)},
+        }
+        return hook.answer(event)
+
+    def test_a_part_written_as_approved_in_the_split_needs_no_one(self):
+        self.split()
+        self.assertEqual(self.act(self.node()), ("changed the tree", False))
+
+    def test_a_part_written_as_approved_asks_nothing_and_says_nothing_in_either_mode(self):
+        self.split()
+        path = self.home / "tree" / "counting.json"
+        path.parent.mkdir()
+        for mode in ("enforce", "shadow"):
+            with self.subTest(mode):
+                self.assertIsNone(self.pre(path, PART, mode))
+
+    def test_a_part_holding_anything_not_approved_still_comes_to_the_author(self):
+        other = {**PART["asks"][0], "quotes": "A2"}
+        for why, held in (
+            ("another scope", {**PART, "scope": ["limiter/*"]}),
+            ("a line narrowing another requirement", {**PART, "asks": [other]}),
+            ("another name", {**PART, "name": "counts"}),
+            ("another parent", {**PART, "parent": "elsewhere"}),
+            ("a principle no picker showed", {**PART, "principles": [{"id": "P7", "text": "No new store."}]}),
+            ("other words", {**PART, "asks": [{**PART["asks"][0], "text": "Requests are tallied."}]}),
+            ("a grant", {**PART, "grant": {"commands": ["make"]}}),
+        ):
+            with self.subTest(why):
+                self.split()
+                self.assertEqual(self.act(self.node(held)), ("changed the tree", True))
+                os.environ["FRAME_LOOP_MODE"] = "enforce"
+                said = self.pre(self.home / "tree" / "counting.json", held, "enforce")
+                self.assertEqual(said["hookSpecificOutput"]["permissionDecision"], "ask")
+
+    def test_a_part_whose_split_was_answered_again_alone_is_read_by_that_answer(self):
+        """A later answer for the node, outside a split, overrules the split's: it showed no scope."""
+        self.split()
+        self.answer([ONE], frame="counting")
+        self.assertEqual(self.act(self.node()), ("changed the tree", True))
+
+    def test_a_part_under_another_name_is_not_excused_by_its_neighbours_answer(self):
+        self.split()
+        self.assertEqual(self.act(self.node(name="headers")), ("changed the tree", True))
+
+    def test_a_file_in_a_folder_below_the_tree_is_no_part(self):
+        self.split()
+        path = self.home / "tree" / "deeper" / "counting.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(PART), encoding="utf-8")
+        self.assertEqual(self.act(path), ("changed the tree", True))
+
+
 class EnforceWriteTests(Approved):
     """Sparky's fourth review: in enforce mode, a write in the words just approved asked again."""
 

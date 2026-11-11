@@ -25,6 +25,14 @@ The counting node, which Claude saves to `.frame-loop/tree/counting.json` on con
 
 ---
 
+### The split picker
+
+A split reaches you whole, in one picker: a page for each part, then a review page whose one approval fixes them all. Nothing of the split is written, and no code for it begun, before that approval.
+
+The header of every page is written by frame-loop from the tree, never by Claude: the path from frame 0 down to the requirement being split, that requirement in its words (marked when they are not the ones you approved), which page of how many this is, and, under "Holds for every part", the principles each part inherits with the level each comes from, and a count of the guide's rules. Claude writes only the lines you approve, each with what it narrows, and each part's files it may change, shown under its name. Once you approve, Claude writes each part's file, and a file that holds exactly what you approved for that part is written with no second question and no ▲; one that holds anything else comes to you. The arrows in the header, or the row of part names below the lines, move between pages; the focus starts on a page's first line, never on the approve button. The review lists each part with its number of lines and whether you have seen it; a part not seen yet does not block the approval.
+
+---
+
 ### Node file
 
 One JSON file per node in `.frame-loop/tree/`, fixed only once the user has approved its requirements in the picker.

@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { Register } from 'claude-code'
 
-import type { Item, Live, Proposal } from '../types'
+import type { Header, Item, Live, Part, PartLine, Proposal } from '../types'
 
 // frame-loop's hooks write what they ask now to FRAME_LOOP_LIVE/<session>.json
 // (one small file, rewritten whole); this band draws it above the prompt.
@@ -15,6 +15,9 @@ const off = atom({ plugin: 'frame-loop', key: 'off' } as const, false)
 // The picker: what is being approved, until its round closes.
 const proposal = atom({ plugin: 'frame-loop', key: 'proposal' } as const, null as Proposal | null)
 
+// Where the work is in the tree, mirrored from <live folder>/<session>.part.json; none without one.
+const part = atom({ plugin: 'frame-loop', key: 'part' } as const, null as PartLine | null)
+
 // The reading that last started a turn, by its time: one wake a reading, across a reload.
 const woken = atom({ plugin: 'frame-loop', key: 'woken' } as const, 0)
 // What the band starts that turn with; the hooks know a wake by these words (WAKE, turn.py).
@@ -24,21 +27,51 @@ const WAKE_WITHIN = 3600 // seconds: a session resumed later is told at its next
 
 const PICKER = 'approve'
 const APPROVE = /^mcp__frame-loop__approve$/
+const ITEM_SCHEMA = {
+  type: 'object',
+  properties: {
+    text: { type: 'string', description: 'One plain sentence, in the words to be written; never JSON or an id.' },
+    detail: { type: 'string', description: 'What it narrows and what it may change, if anything.' },
+  },
+  required: ['text'],
+}
+const PART_ITEM_SCHEMA = {
+  ...ITEM_SCHEMA,
+  properties: {
+    ...ITEM_SCHEMA.properties,
+    quotes: { type: 'string', description: "The id of the parent's requirement this line narrows; never shown." },
+  },
+}
 const APPROVE_SCHEMA = {
   type: 'object',
   properties: {
     title: { type: 'string', description: 'What is being approved, in plain words.' },
     node: { type: 'string', description: "The node's id, for a node of the tree; left out for frame 0." },
-    items: {
+    items: { type: 'array', minItems: 1, items: ITEM_SCHEMA },
+    parent: {
+      type: 'string',
+      description: "For a split: the id of the node being split; left out when frame 0's requirements are split.",
+    },
+    parts: {
       type: 'array',
       minItems: 1,
+      description:
+        'A split, whole: every part at once, one page each, approved together; in place of items and node. ' +
+        'Nothing of the split is written before its answer.',
       items: {
         type: 'object',
         properties: {
-          text: { type: 'string', description: 'One plain sentence, in the words to be written; never JSON or an id.' },
-          detail: { type: 'string', description: 'What it narrows and what it may change, if anything.' },
+          id: { type: 'string', description: "The part's file name in the tree, lowercase words joined by '-'." },
+          name: { type: 'string', description: "The part's name in plain words, as the person reads it." },
+          items: { type: 'array', minItems: 1, items: PART_ITEM_SCHEMA },
+          scope: {
+            type: 'array',
+            minItems: 1,
+            items: { type: 'string' },
+            description: 'The paths the part may change, as its file holds them: shown on its page, and approved.',
+          },
         },
-        required: ['text'],
+        required: ['id', 'name', 'items', 'scope'],
       },
     },
     leftOut: { type: 'array', items: { type: 'string' }, description: 'What the proposal leaves out on purpose.' },
@@ -48,13 +81,149 @@ const APPROVE_SCHEMA = {
       description: 'Words approved before that this takes out or rewords: each is an item of its own, to approve.',
     },
   },
-  required: ['title', 'items'],
+  required: ['title'],
 }
 
 const itemWords = (x: Item) => (x.isRemoval ? `Remove: ${x.text}` : x.text)
 
+const NUMBERS = ['no', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten']
+const count = (n: number) => NUMBERS[n] ?? String(n)
+const lines = (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`
+const PART_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
+
+// The path and the page, the requirement being split, a blank, the part's name and its files;
+// then a blank, the principles' heading and the guide's rules, besides the principles themselves.
+const HEADER_ROWS = 8
+
+// What keeps a split from being put to the person: told to Claude, which then mends it.
+const splitFaults = (given: { node?: string; items?: unknown[]; removes?: unknown[]; parent?: string; parts?: any[] }) => {
+  const parts = given.parts ?? []
+  if (given.node !== undefined || given.items !== undefined || given.removes !== undefined)
+    return 'a split holds its parts alone: no node, items or removes beside them.'
+  if (parts.length === 0) return 'a split needs at least one part.'
+  if (given.parent !== undefined && !PART_ID.test(given.parent)) return `the split's parent ${JSON.stringify(given.parent)} is no node's id.`
+  const ids = parts.map(p => p?.id)
+  for (const p of parts) {
+    if (typeof p?.id !== 'string' || !PART_ID.test(p.id) || p.id === 'root')
+      return `each part needs an id of lowercase words joined by '-' (not ${JSON.stringify(p?.id)}).`
+    if (typeof p.name !== 'string' || !p.name.trim()) return `part ${p.id} needs a name in plain words.`
+    if (!Array.isArray(p.scope) || p.scope.length === 0 || p.scope.some((x: unknown) => typeof x !== 'string' || !x.trim()))
+      return `part ${p.id} needs the paths it may change, as its scope.`
+    if (!Array.isArray(p.items) || p.items.length === 0 || p.items.some((x: any) => typeof x?.text !== 'string' || !x.text.trim()))
+      return `part ${p.id} needs at least one line, each a sentence.`
+  }
+  if (new Set(ids).size !== ids.length) return 'two parts share an id.'
+  return ''
+}
+
+const words = (text: string) => text.split(/\s+/).filter(Boolean).join(' ')
+
+// The words approved for a frame, round by round, a later round overruling an earlier one, as
+// the hooks read them (framezero.approved_words); null when the frame has had no answer.
+const approvedWords = (record: any, frame: string): Set<string> | null => {
+  const rounds = Array.isArray(record?.rounds) ? record.rounds.filter((r: any) => r?.frame === frame) : []
+  if (rounds.length === 0) return null
+  const kept = new Set<string>()
+  for (const r of rounds) {
+    for (const x of Array.isArray(r.approved) ? r.approved : []) kept.add(words(String(x)))
+    for (const x of Array.isArray(r.not_approved) ? r.not_approved : []) kept.delete(words(String(x)))
+  }
+  return kept
+}
+
+// Where a split sits, from the files the hooks read: frame 0, the tree's nodes up from the one
+// split, the approvals, and the guide's rules index. What cannot be read is said, never filled in.
+const readHeader = async ($: any, parent: string | undefined): Promise<Header> => {
+  const home = switchPath.replace(/[\\/]switch$/, '')
+  const set = async (value: Promise<string | undefined>) => (await Promise.resolve(value).catch(() => '')) || ''
+  const json = async (path: string) => JSON.parse(await $.fs.read(path))
+  const header: Header = { path: ['frame 0'], requirements: {}, principles: [], guideRules: 0 }
+  let record: any = null
+  try {
+    record = await json(`${home}/approved.json`)
+  } catch {
+    // no answer yet: every frame's words are read as before
+  }
+  const asks = (frame: any, name: string) => {
+    const kept = approvedWords(record, name)
+    for (const a of Array.isArray(frame?.asks) ? frame.asks : []) {
+      if (typeof a?.id === 'string' && typeof a?.text === 'string')
+        header.requirements[a.id] = { text: a.text, isApproved: kept === null || kept.has(words(a.text)) }
+    }
+  }
+  const rules = (frame: any, from: string) => {
+    for (const r of Array.isArray(frame?.principles) ? frame.principles : []) {
+      if (typeof r?.text === 'string' && !r.indexed && !header.principles.some(x => x.text === r.text))
+        header.principles.push({ text: r.text, from })
+    }
+  }
+  let frame0: any
+  try {
+    frame0 = await json((await set($.env.get('FRAME_LOOP_FRAME0'))) || `${home}/frame0.json`)
+  } catch {
+    return { ...header, unread: 'frame 0 could not be read' }
+  }
+  // The frames from the one split up to frame 0, each read once: a circle stops the walk.
+  const chain: any[] = []
+  const tree = (await set($.env.get('FRAME_LOOP_TREE'))) || `${home}/tree`
+  for (let at = parent, seen = new Set<string>(); at && at !== 'root'; ) {
+    if (seen.has(at) || !PART_ID.test(at)) return { ...header, unread: 'the parts above this split do not lead to frame 0' }
+    seen.add(at)
+    let node: any
+    try {
+      node = await json(`${tree}/${at}.json`)
+    } catch {
+      return { ...header, unread: 'the part being split is not in the tree' }
+    }
+    chain.unshift({ ...node, id: at })
+    at = typeof node?.parent === 'string' ? node.parent : undefined
+  }
+  rules(frame0, 'frame 0')
+  for (const node of chain) rules(node, typeof node.name === 'string' ? node.name : 'a part')
+  header.path.push(...chain.map(n => (typeof n.name === 'string' ? n.name : 'a part')))
+  const split = chain.length ? chain[chain.length - 1] : frame0
+  asks(split, chain.length ? split.id : 'frame 0')
+  try {
+    const index = await json((await set($.env.get('FRAME_LOOP_RULES'))) || `${home}/rules.json`)
+    header.guideRules = (Array.isArray(index?.rules) ? index.rules : []).filter(
+      (r: any) => r?.kind === 'principle' && r?.accepted !== false,
+    ).length
+  } catch {
+    // no rules index: no guide's rules to count
+  }
+  return header
+}
+
+// The requirements a part's lines narrow, in the frame's words, or what is wrong with them.
+const splitting = (header: Header | undefined, items: Item[]): string[] => {
+  if (!header) return []
+  if (header.unread) return [`(not shown: ${header.unread})`]
+  const quoted = [...new Set(items.map(x => x.quotes ?? ''))]
+  return quoted.map(id => {
+    const found = header.requirements[id]
+    if (!found) return `(a line narrows no requirement of ${header.path[header.path.length - 1]})`
+    return found.isApproved ? `"${found.text}"` : `"${found.text}"  (not in the words you approved)`
+  })
+}
+
+// A split's answer: every part named, and each line not approved with the part it is in.
+const splitAnswer = (parts: Part[]): string => {
+  const names = parts.map(p => p.name).join(', ')
+  const all = parts.flatMap(p => p.items.map(x => ({ part: p.name, x })))
+  const not = all.filter(({ x }) => !x.isChecked)
+  if (not.length === 0) return `Approved, all ${count(parts.length)} ${parts.length === 1 ? 'part' : 'parts'}: ${names}.`
+  const yes = all.filter(({ x }) => x.isChecked)
+  const listed = (xs: typeof all) => xs.map(({ part, x }) => `- ${part}: ${itemWords(x)}`).join('\n')
+  return [
+    yes.length ? `Approved:\n${listed(yes)}` : 'Nothing approved.',
+    `Not approved:\n${listed(not)}`,
+    'Ask me what is wrong with each one I did not approve, before anything of the split is written.',
+  ].join('\n\n')
+}
+
 // What the next turn reads: plain sentences, as the person would say them.
-const answer = ({ items }: Proposal): string => {
+const answer = ({ items, parts }: Proposal): string => {
+  if (parts) return splitAnswer(parts)
   const not = items.filter(x => !x.isChecked)
   if (not.length === 0) return items.length === 1 ? 'Approved.' : `Approved, all ${items.length}.`
   const yes = items.filter(x => x.isChecked)
@@ -91,6 +260,15 @@ const outcome = (decision: string | undefined) =>
     : decision === 'block'
       ? { mark: '■', color: 'error', word: 'not read', wordColor: 'error' }
       : null
+
+// Where the work is, as held; a store that has never held it (a session before trees) has none.
+const partNow = async ($: any): Promise<PartLine | null> => {
+  try {
+    return (await read($, part)) ?? null
+  } catch {
+    return null
+  }
+}
 
 let switchPath = ''
 let busy = false // Claude is working, or a survey holds the prompt: as the band was last drawn
@@ -133,14 +311,28 @@ const remember = async ($: any, held: Proposal): Promise<string> => {
     }
   }
   // A removal approved takes its words out; one not approved leaves them as they were.
-  const texts = (keep: (x: Item) => boolean) => held.items.filter(keep).map((x: Item) => x.text)
-  kept.rounds.push({
-    frame: held.node ?? 'frame 0',
-    title: held.title,
-    approved: texts(x => x.isChecked && !x.isRemoval),
-    not_approved: texts(x => x.isChecked === !!x.isRemoval),
-    at: (await $.clock.now()) / 1000,
-  })
+  const texts = (items: Item[], keep: (x: Item) => boolean) => items.filter(keep).map((x: Item) => x.text)
+  const at = (await $.clock.now()) / 1000
+  // A split is one answer and a round for each part, as each part's file is checked by its own.
+  // Each part's round holds what its file is checked against: what each line narrows, by the
+  // parent's requirement's id, and the files it may change, as its page showed them.
+  const narrows = (items: Item[]) => Object.fromEntries(items.filter(x => x.isChecked).map(x => [x.text, x.quotes ?? null]))
+  for (const { frame, items, split } of held.parts
+    ? held.parts.map(p => ({
+        frame: p.id,
+        items: p.items,
+        split: { split: held.parent ?? 'frame 0', name: p.name, scope: p.scope, narrows: narrows(p.items) },
+      }))
+    : [{ frame: held.node ?? 'frame 0', items: held.items, split: {} }]) {
+    kept.rounds.push({
+      frame,
+      title: held.title,
+      ...split,
+      approved: texts(items, x => x.isChecked && !x.isRemoval),
+      not_approved: texts(items, x => x.isChecked === !!x.isRemoval),
+      at,
+    })
+  }
   try {
     await $.fs.write(path, `${JSON.stringify(kept, null, 1)}\n`)
     return ''
@@ -169,7 +361,8 @@ export const register: Register = on => {
       await $.tool.register({
         name: 'approve',
         description:
-          'Ask the person to approve a decomposition item by item, in a picker with every item checked. ' +
+          'Ask the person to approve a decomposition item by item, in a picker with every item checked; ' +
+          'a split goes whole, every part at once in `parts`, one page each and one approval. ' +
           'End your turn after calling it: their answer arrives as their next message.',
         inputSchema: APPROVE_SCHEMA,
         isDeferred: false,
@@ -203,6 +396,15 @@ export const register: Register = on => {
         shownFor = id
         seen = 0
         if ((await read($, live)) !== null) await update($, live, () => null)
+        if ((await partNow($)) !== null) await update($, part, () => null)
+      }
+      // Where the work is: its own file, so a reading's outcome and the part never overwrite.
+      try {
+        const where = JSON.parse(await $.fs.read(`${folder}/${id}.part.json`)) as PartLine
+        const held = await partNow($)
+        if (where?.at !== held?.at) await update($, part, () => where)
+      } catch {
+        // no tree, or no part engaged yet in this session
       }
       const path = `${folder}/${id}.json`
       let now: Live | null = null
@@ -266,23 +468,47 @@ export const register: Register = on => {
       items?: Omit<Item, 'isChecked'>[]
       leftOut?: string[]
       removes?: string[]
+      parent?: string
+      parts?: { id?: string; name?: string; items?: Omit<Item, 'isChecked'>[]; scope?: string[] }[]
     }
-    const items: Item[] = [
-      ...(given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true })),
-      ...(given.removes ?? []).map(text => ({ text, isChecked: true, isRemoval: true })),
-    ]
-    if (items.length === 0) return { deny: 'approve needs at least one item.' }
     const leftOut = given.leftOut ?? []
     const title = given.title ?? 'Approve'
-    await update($, proposal, () => ({ title, node: given.node, items, leftOut }))
-    const details = items.filter(x => x.detail).length
+    let rows: number
+    if (given.parts !== undefined) {
+      const refused = splitFaults(given)
+      if (refused) return { deny: refused }
+      const parts: Part[] = given.parts.map((p, i) => ({
+        id: p.id as string,
+        name: p.name as string,
+        scope: p.scope as string[],
+        isSeen: i === 0, // the first page is shown as the picker opens
+        items: (p.items ?? []).map(x => ({ text: x.text, detail: x.detail, quotes: x.quotes, isChecked: true })),
+      }))
+      await followTheHooks($)
+      const header = await readHeader($, given.parent)
+      await update($, proposal, () => ({ title, parent: given.parent, items: [], parts, page: 0, leftOut, header }))
+      const tallest = Math.max(
+        parts.length + leftOut.length,
+        ...parts.map(p => p.items.length + p.items.filter(x => x.detail).length + new Set(p.items.map(x => x.quotes)).size),
+      )
+      rows = Math.min(30, tallest + header.principles.length + HEADER_ROWS + 6)
+    } else {
+      const items: Item[] = [
+        ...(given.items ?? []).map(x => ({ text: x.text, detail: x.detail, isChecked: true })),
+        ...(given.removes ?? []).map(text => ({ text, isChecked: true, isRemoval: true })),
+      ]
+      if (items.length === 0) return { deny: 'approve needs at least one item.' }
+      await update($, proposal, () => ({ title, node: given.node, items, leftOut }))
+      const details = items.filter(x => x.detail).length
+      rows = Math.min(30, items.length + details + leftOut.length + 7)
+    }
     const opened = await $.ui.open({
       id: PICKER,
       title,
       focus: true,
       closeOnEscape: true,
       holdToasts: true,
-      rows: Math.min(30, items.length + details + leftOut.length + 7),
+      rows,
     })
     if (!opened.isPlaced) {
       await update($, proposal, () => null)
@@ -322,6 +548,151 @@ export const register: Register = on => {
         closing = false
       }
     }
+    const buttons = (approve: string) => (
+      <Box marginTop={1} gap={2}>
+        <Button key="approve" variant="primary" onPress={() => finish(text => $.prompt.submit({ text }))}>
+          {approve}
+        </Button>
+        <Button key="missing" onPress={() => finish(text => $.prompt.fill({ text: `${text}\n\nMissing: ` }))}>
+          Add what's missing
+        </Button>
+      </Box>
+    )
+    const leftOutLines =
+      now.leftOut.length > 0 ? (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="inactive">Left out, on purpose:</Text>
+          {now.leftOut.map(line => (
+            <Text color="inactive">{` - ${line}`}</Text>
+          ))}
+        </Box>
+      ) : null
+    if (now.parts) {
+      const parts = now.parts
+      const review = parts.length
+      const page = Math.min(Math.max(now.page ?? 0, 0), review)
+      // A page turned shows that part as seen, and the focus starts on its first line.
+      const turn = async (to: number) => {
+        await update($, proposal, p => {
+          if (!p?.parts) return p
+          const at = Math.min(Math.max(to, 0), p.parts.length)
+          return { ...p, page: at, parts: p.parts.map((x, i) => (i === at ? { ...x, isSeen: true } : x)) }
+        })
+        void Promise.resolve($.ui.focus({ requestId: PICKER, key: to >= review ? 'part-0' : `item-${to}-0` })).catch(
+          () => undefined,
+        )
+      }
+      const toggleIn = (at: number, index: number) =>
+        update($, proposal, p =>
+          p?.parts
+            ? {
+                ...p,
+                parts: p.parts.map((x, i) =>
+                  i === at
+                    ? { ...x, items: x.items.map((y, j) => (j === index ? { ...y, isChecked: !y.isChecked } : y)) }
+                    : x,
+                ),
+              }
+            : p,
+        )
+      // The header is the code's, from the tree: where the split sits, the requirement this page
+      // narrows when it is one, and which page of how many. Claude's title is only the tab's.
+      const header = now.header
+      const shown = splitting(header, page < review ? parts[page].items : parts.flatMap(p => p.items))
+      const where = [...(header?.path ?? ['frame 0'])]
+      const quoted = [...new Set((page < review ? parts[page].items : parts.flatMap(p => p.items)).map(x => x.quotes))]
+      const one = quoted.length === 1 && !header?.unread ? header?.requirements[quoted[0] ?? ''] : undefined
+      if (one) where.push(one.text)
+      const top = (
+        <Box flexDirection="column">
+          <Box gap={2}>
+            <Text bold>{where.join(' › ')}</Text>
+            <Button key="prev" plain label="←" onPress={() => turn(page - 1)} />
+            <Text>{page < review ? `${page + 1} / ${review}` : 'review'}</Text>
+            <Button key="next" plain label="→" onPress={() => turn(page + 1)} />
+          </Box>
+          {shown.map((line, i) => (
+            <Text>{`${i === 0 ? 'Splitting:  ' : '            '}${line}`}</Text>
+          ))}
+        </Box>
+      )
+      const holds =
+        header && (header.principles.length > 0 || header.guideRules > 0) ? (
+          <Box flexDirection="column" marginTop={1}>
+            <Text>Holds for every part:</Text>
+            {header.principles.map(r => (
+              <Text>{`  · ${r.text}  (${r.from})`}</Text>
+            ))}
+            {header.guideRules > 0 ? (
+              <Text color="inactive">{`  · and the project's ${count(header.guideRules)} rules from its guide`}</Text>
+            ) : null}
+          </Box>
+        ) : null
+      if (page === review) {
+        const checked = (p: Part) => p.items.filter(x => x.isChecked).length
+        const wide = Math.max(...parts.map(p => p.name.length))
+        return (
+          <Box flexDirection="column">
+            {top}
+            <Box flexDirection="column" marginTop={1}>
+              {parts.map((p, i) => (
+                <Button key={`part-${i}`} plain autoFocus={i === 0 ? true : undefined} onPress={() => turn(i)}>
+                  {`${p.name.padEnd(wide)}   ${lines(p.items.length).padEnd(9)}`}
+                  {checked(p) < p.items.length ? `${p.items.length - checked(p)} not approved   ` : ''}
+                  {p.isSeen ? 'seen' : 'not seen yet'}
+                </Button>
+              ))}
+            </Box>
+            {holds}
+            {leftOutLines}
+            {buttons(
+              parts.every(p => checked(p) === p.items.length)
+                ? parts.length === 1
+                  ? 'Approve the part'
+                  : `Approve all ${count(parts.length)}`
+                : 'Approve checked',
+            )}
+          </Box>
+        )
+      }
+      const part = parts[page]
+      return (
+        <Box flexDirection="column">
+          {top}
+          <Box marginTop={1} flexDirection="column">
+            <Text bold>{`Part ${page + 1}:  ${part.name}`}</Text>
+            <Text color="inactive">{`May change:  ${part.scope.join(', ')}`}</Text>
+          </Box>
+          {part.items.map((item, index) => (
+            <Box flexDirection="column">
+              <Button
+                key={`item-${page}-${index}`}
+                plain
+                autoFocus={index === 0 ? true : undefined}
+                onPress={() => toggleIn(page, index)}
+              >
+                {`[${item.isChecked ? 'x' : ' '}] ${item.text}`}
+              </Button>
+              {item.detail ? <Text color="inactive">{`      ${item.detail}`}</Text> : null}
+            </Box>
+          ))}
+          {holds}
+          <Box marginTop={1}>
+            {parts.map((p, i) => (
+              <Box>
+                <Button key={`go-${i}`} plain dimColor={i !== page} onPress={() => turn(i)}>
+                  {i === page ? `[${p.name}]` : p.name}
+                </Button>
+                <Text color="inactive">{'  ·  '}</Text>
+              </Box>
+            ))}
+            <Button key="go-review" plain dimColor onPress={() => turn(review)}>
+              review
+            </Button>
+          </Box>
+        </Box>
+      )
+    }
     return (
       <Box flexDirection="column">
         {now.items.map((item, index) => (
@@ -332,22 +703,8 @@ export const register: Register = on => {
             {item.detail ? <Text color="inactive">{`    ${item.detail}`}</Text> : null}
           </Box>
         ))}
-        {now.leftOut.length > 0 ? (
-          <Box flexDirection="column" marginTop={1}>
-            <Text color="inactive">Left out, on purpose:</Text>
-            {now.leftOut.map(line => (
-              <Text color="inactive">{` - ${line}`}</Text>
-            ))}
-          </Box>
-        ) : null}
-        <Box marginTop={1} gap={2}>
-          <Button key="approve" variant="primary" onPress={() => finish(text => $.prompt.submit({ text }))}>
-            Approve checked
-          </Button>
-          <Button key="missing" onPress={() => finish(text => $.prompt.fill({ text: `${text}\n\nMissing: ` }))}>
-            Add what's missing
-          </Button>
-        </Box>
+        {leftOutLines}
+        {buttons('Approve checked')}
       </Box>
     )
   })
@@ -371,15 +728,38 @@ export const register: Register = on => {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     busy = e.props.isWorking || e.props.hasSurvey
     const now = await read($, live)
-    if (e.props.hasSurvey || now === null || (await read($, off))) {
+    // A store that has never held a part (a session before trees) reads as none.
+    const where = await partNow($)
+    if (e.props.hasSurvey || (now === null && !where?.part && !where?.finished) || (await read($, off))) {
       return next(e)
     }
     const t = (await $.clock.now()) / 1000
     const { Box, Button, Text } = $.ui.resolve(e)
+    // The part the work is in, after any line: one line always says it, in the author's words.
+    const inPart = where?.part ? ` · ${where.part.done ? `${where.part.name} is done` : `in ${where.part.name}`}` : ''
+    const partLine = () => {
+      const here = where?.part
+      const finished = where?.finished && where.finished !== here?.name ? where.finished : null
+      const done = here?.done ? here.name : finished
+      const said = here
+        ? done
+          ? `${done} is done${here.done ? '' : ` · now in ${here.name}`}`
+          : `in ${here.name}`
+        : `${finished} is done`
+      return (
+        <Box>
+          <Text color={done ? 'success' : 'inactive'}>{done ? '✓ ' : '· '}</Text>
+          <Text bold>frame-loop </Text>
+          <Text>{said}</Text>
+          {here ? <Text color="inactive">{` · ${here.where}`}</Text> : null}
+        </Box>
+      )
+    }
+    if (now === null) return partLine()
 
     if (now.state === 'reading') {
       if (t - now.at > STALE) {
-        return next(e)
+        return where?.part || where?.finished ? partLine() : next(e)
       }
       const f = await read($, frame)
       const spent = now.started ? clock(t - now.started) : ''
@@ -400,14 +780,14 @@ export const register: Register = on => {
           <Text color="permission">{SPIN[f % SPIN.length]} </Text>
           <Text bold>frame-loop </Text>
           <Text>{said}</Text>
-          <Text color="inactive"> · {when}{spentTokens(now.tokens)}</Text>
+          <Text color="inactive"> · {when}{spentTokens(now.tokens)}{inPart}</Text>
         </Box>
       )
     }
 
     const shown = outcome(now.decision)
     if (shown === null || now.at < (await read($, dismissedAt))) {
-      return next(e)
+      return where?.part || where?.finished ? partLine() : next(e)
     }
     const { mark, color, word, wordColor } = shown
     const spent = now.started ? ` · ${clock(now.at - now.started)}` : ''
@@ -423,7 +803,7 @@ export const register: Register = on => {
           <Text color={color}>{mark} </Text>
           <Text bold>frame-loop </Text>
           {wordColor ? <Text color={wordColor} bold>{said}</Text> : <Text bold>{said}</Text>}
-          <Text color="inactive">{spent}{spentTokens(now.tokens)} </Text>
+          <Text color="inactive">{spent}{spentTokens(now.tokens)}{inPart} </Text>
           {detail.length > 0 ? (
             <Button
               key="details"

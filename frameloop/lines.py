@@ -237,7 +237,17 @@ def _needs_the_author(path: str, own: str | None) -> bool:
     """A write to what is the author's needs them, unless it holds only words they approved."""
     if own == "frame 0":
         return not framezero.file_in_approved_words(path, framezero.FRAME_0)
-    return own is not None  # a node holds more than its words, a scope and promises, which no picker has shown
+    if own == "the tree" and _in_the_tree_folder(path):  # a part as the author fixed it in a split
+        return not framezero.node_file_in_approved_words(path)
+    return own is not None  # a node approved alone holds a scope no picker has shown
+
+
+def _in_the_tree_folder(path: str) -> bool:
+    """A node's own file: JSON, directly in the tree folder, and no link."""
+    named = Path(path)
+    home = Path(os.environ.get("CLAUDE_PROJECT_DIR") or state.CWD or os.getcwd()) / ".frame-loop" / "tree"
+    folder = Path(os.environ.get("FRAME_LOOP_TREE") or home)
+    return named.suffix == ".json" and not named.is_symlink() and named.parent.resolve() == folder.resolve()
 
 
 def act_words(record: dict[str, Any]) -> tuple[str, bool, str]:

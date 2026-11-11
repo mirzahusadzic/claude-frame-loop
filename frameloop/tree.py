@@ -229,6 +229,26 @@ def node_frame(node: dict[str, Any], battery: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def quoting(nid: str, ask: str, nodes: dict[str, dict[str, Any]]) -> list[tuple[str, str]]:
+    """The (child, ask) pairs of a node's children that quote one of its asks."""
+    return [
+        (c["id"], a["id"])
+        for c in nodes.values()
+        if c.get("parent") == nid and c.get("id") != nid
+        for a in c.get("asks") or []
+        if a.get("quotes") == ask
+    ]
+
+
+def owned_by_parts(nid: str, ask: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> bool:
+    """Whether a node's ask is filled by its children, as the climb counts it: the root's when a
+    child quotes it, a node's when it says so."""
+    if nid == "root":
+        return bool(quoting(nid, ask["id"], nodes))
+    # The node's own file says, by the ask's id: a frame read for a node holds no owner.
+    return any(a.get("id") == ask["id"] and a.get("owner") == "children" for a in nodes.get(nid, {}).get("asks") or [])
+
+
 def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> dict[str, dict[str, Any]]:
     """Each node's asks filled and whether it is complete, from the completions that read
     carried and firm, as (node, ask) pairs."""

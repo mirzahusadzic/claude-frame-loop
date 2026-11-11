@@ -113,6 +113,25 @@ def _live(**fields: Any) -> None:
             _LIVE_LOCK.release()
 
 
+def _part_line(shown: dict[str, Any]) -> None:
+    """Where the work is, for the band's line: <session>.part.json beside the live state, kept
+    apart so that a reading's outcome is never written over. Off unless set; never fails a hook."""
+    folder = os.environ.get("FRAME_LOOP_LIVE")
+    if not folder or not state.SESSION:
+        return
+    path = Path(folder) / f"{state.SESSION}.part.json"
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        Path(folder).mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps({"at": time.time(), **shown}, ensure_ascii=False), encoding="utf-8")
+        _replace(tmp, path)
+    except OSError:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _live_interrupted() -> None:
     """A read the user interrupted never wrote its end: at the next prompt or session
     start, its state is closed, so the band never shows a check that is not running."""

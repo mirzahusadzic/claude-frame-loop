@@ -23,7 +23,7 @@ from declare import _claimed, _declared, _marks, _masked, _without_declaration
 from effort import RANK, _effort_rules, effort_for
 from framezero import _tree_nodes, frame_name, load_frame0, load_frame0_root, route, unapproved, with_semantic
 from lines import NOT_DONE, UNSETTLED_NOTE, _reader_name, _tell, not_approved, not_approved_words, refused_line
-from live import _live_step, _on_answers, _on_tokens, _ran
+from live import _live_step, _on_answers, _on_tokens, _part_line, _ran
 from obligations import obligations_line, outside_scope
 from privacy import _short_path, _writer, mask_frame, outgoing, tier_for, withhold_file
 from procs import within
@@ -520,6 +520,48 @@ def _what_for(
     return tell(short, why, usage=used)
 
 
+def show_part(node: str | None, finished: str | None = None) -> None:
+    """The band's line of where the work is, in plain words: the part engaged, where it sits
+    (the parts above it from frame 0, and the requirement it splits when it is one), and whether
+    its requirements are all done; and a part just left, when it is done. Nothing without a tree."""
+    if not os.environ.get("FRAME_LOOP_TREE"):
+        return
+    import tree
+
+    nodes = _tree_nodes(load_frame0_root())
+    filled = {((r.get("node") or "root"), r["ask"]) for r in _records_all() if r.get("event") == "filled"}
+    climbed = tree.climb(nodes, filled)
+
+    def name(nid: str) -> str:
+        given = nodes.get(nid, {}).get("name")
+        return given if isinstance(given, str) and given.strip() else "a part"
+
+    shown = None
+    if node and node != "root" and node in nodes:
+        here = nodes[node]
+        path = ["frame 0"] + [name(n["id"]) for n in reversed(tree._ancestors(here, nodes)) if n["id"] != "root"]
+        quoted = {a.get("quotes") for a in here.get("asks") or []}
+        splits = [a["text"] for a in nodes.get(here.get("parent"), {}).get("asks") or [] if a.get("id") in quoted]
+        if len(splits) == 1:
+            path.append(splits[0])
+        shown = {"name": name(node), "where": " › ".join(path), "done": bool(climbed.get(node, {}).get("complete"))}
+    left = name(finished) if finished in nodes and climbed.get(finished, {}).get("complete") else None
+    _part_line({"part": shown, "finished": left})
+
+
+def _owned_by_parts(frame0: dict[str, Any]) -> set[str]:
+    """The asks of the frame engaged that its parts own, in a tree; none without one."""
+    if not os.environ.get("FRAME_LOOP_TREE"):
+        return set()
+    import tree
+
+    nodes = _tree_nodes(load_frame0_root())
+    here = state.NODE or "root"
+    if here not in nodes:
+        return set()
+    return {a["id"] for a in frame0.get("asks") or [] if tree.owned_by_parts(here, a, nodes)}
+
+
 def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | None = None, whole: bool = False) -> str:
     """When the agent presents its work: each ask the work claimed is read once with the diffs
     of the steps that claim it, or of all the session's steps when only a declaration does
@@ -556,7 +598,10 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     ]  # this node's leaves
     if pending:
         steps.append({k: pending[k] for k in ("id", "claims", "diff")} | {"label": pending["text"]})
-    if not steps:
+    # In a tree, a requirement that parts own is counted from them, never read again over the
+    # whole work (Mirza, in a live session: the only end-of-work reading was at the top).
+    by_parts = _owned_by_parts(frame0)
+    if not steps and not (by_parts & (set(_declared("\n".join(_marks()), frame0)) | (by_parts if whole else set()))):
         return "frame-loop · completion · nothing to read: no step was labelled in this session"
     faults = frames.frame0_faults(frame0)
     if faults:  # no requirement can be done against a frame 0 that cannot be read
@@ -587,7 +632,7 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     planned: list[tuple[dict[str, Any], dict[str, Any] | None, str]] = []  # each ask's frame, or why it has none
     keys: dict[str, str] = {}  # what each requirement's answer rests on
     before: dict[str, dict[str, Any]] = {}  # the answers already read on that
-    for ask in asked:
+    for ask in [a for a in asked if a["id"] not in by_parts]:
         claimed = [s for s in steps if ask["id"] in s["claims"]] or steps
         if tier and not os.environ.get("FRAME_LOOP_TREE") and all(s["diff"] is not None for s in steps):
             # Before any label or call. A tree's climb reads its answers again, so it reads them.
@@ -715,10 +760,24 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
 
         filled = {((r.get("node") or "root"), r["ask"]) for r in _records_all() if r.get("event") == "filled"}
         climbed = tree.climb(_tree_nodes(load_frame0_root()), filled)
+        here = climbed.get(state.NODE or "root", {}).get("filled", {})
+        for ask in [a for a in asked if a["id"] in by_parts]:
+            if here.get(ask["id"]):
+                parts.append(f"{ask['id']} ✓ from its parts")
+                done_asks.append(ask["id"])
+            else:  # not done: the parts that own it are not, which no reading of the whole settles
+                nodes = _tree_nodes(load_frame0_root())
+                owners = tree.quoting(state.NODE or "root", ask["id"], nodes)
+                ready = sum(  # a part counts once it is done whole, as the climb counts it
+                    1 for c, a in owners if climbed.get(c, {}).get("complete") and climbed[c]["filled"].get(a)
+                )
+                parts.append(f"{ask['id']} ✗ (its parts are not all done: {ready} of {len(owners)})")
+                missed += 1
         if state.NODE and state.NODE != "root" and climbed.get(state.NODE, {}).get("complete"):
             parts.append(f"node {state.NODE} complete")
         if climbed.get("root", {}).get("complete"):
             parts.append("frame 0 complete")
+        show_part(state.NODE)
     # What the turn's end need not ask again, for the change still running.
     covers = (
         {
@@ -739,9 +798,20 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
     read_ids = {a["id"] for a in asked}
     unclaimed = [a["id"] for a in frame0["asks"] if a["id"] not in read_ids]
     left = f" · not read, not claimed: {' · '.join(unclaimed)}" if unclaimed else ""
-    _log({"event": "completion", "parts": parts, "usage": used, "unclaimed": unclaimed, **covers})
+    _log(
+        {
+            "event": "completion",
+            "parts": parts,
+            "usage": used,
+            "unclaimed": unclaimed,
+            "node": state.NODE or "root",
+            **covers,
+        }
+    )
     # a requirement read as done whose climb stopped is not done: the tree holds no fit for it
-    done = sum(1 for x in parts if x.endswith(" ✓")) - sum(1 for x in parts if x.startswith("climb stopped"))
+    done = sum(1 for x in parts if x.endswith((" ✓", " ✓ from its parts"))) - sum(
+        1 for x in parts if x.startswith("climb stopped")
+    )
     asks = len(asked)
     # Only a firm "not done", or what only the author can clear, reaches them: all else did not
     # settle, and Claude looks first (seen: 1 of 9 read as done said "needs you", with no mismatch).
