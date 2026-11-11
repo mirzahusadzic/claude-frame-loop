@@ -67,7 +67,14 @@ export type Header = {
   // requirement split, by id, as covered, not covered or not settled, and each line that was
   // found needed, or one the other lines already cover.
   // and the lines whose detail says which words they narrow and not how.
-  check?: { requirements: Record<string, string>; lines: Record<string, string>; thin?: string[] }
+  // Per part, by its id: the rule its lines may break (or "not settled"), the guide's rules that
+  // hold for its files, and what a change there will owe.
+  check?: {
+    requirements: Record<string, string>
+    lines: Record<string, string>
+    thin?: string[]
+    parts?: Record<string, { breaks: string | null; scoped: string[]; owes: string[] }>
+  }
 }
 
 declare module 'claude-code' {

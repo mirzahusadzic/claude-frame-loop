@@ -198,7 +198,12 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
     const work = (await set($.env.get('FRAME_LOOP_WORK'))) || `${home}/work`
     const read = await json(`${work}/split-read.json`)
     if (read?.parent === (parent ?? 'frame 0') && read.requirements && read.lines)
-      header.check = { requirements: read.requirements, lines: read.lines, thin: Array.isArray(read.thin) ? read.thin : [] }
+      header.check = {
+        requirements: read.requirements,
+        lines: read.lines,
+        thin: Array.isArray(read.thin) ? read.thin : [],
+        parts: read.parts && typeof read.parts === 'object' ? read.parts : {},
+      }
   } catch {
     // the split was not read: its pages say nothing of a reading
   }
@@ -211,17 +216,29 @@ const ROLE: Record<string, string> = {
   overlaps: 'the other lines already cover this one',
 }
 // What it found of each requirement split, a line each: only what the author should look at.
-const readingOf = (header: Header | undefined): string[] => {
+// What the reading found of one part against the rules that hold for its files, or nothing.
+const breaksOf = (header: Header | undefined, part: Part): string | null => {
+  const said = header?.check?.parts?.[part.id]?.breaks
+  if (!said) return null
+  return said === 'not settled'
+    ? `Read before you: not settled whether ${part.name} breaks a rule.`
+    : `Read before you: ${part.name} may break your rule "${said}".`
+}
+const readingOf = (header: Header | undefined, parts: Part[] = []): string[] => {
   const found = header?.check?.requirements
   if (!found) return ['Not read before you: this split was not read against what it splits.']
+  const rules = parts.map(p => breaksOf(header, p)).filter((x): x is string => x !== null)
   const open = Object.entries(found).filter(([, said]) => said !== 'covered')
-  if (open.length === 0) return ['Read before you: the parts make what they split true.']
-  return open.map(([id, said]) => {
-    const text = header?.requirements[id]?.text ?? 'a requirement'
-    return said === 'not covered'
-      ? `Read before you: the parts do not make "${text}" true. Something is missing.`
-      : `Read before you: not settled whether the parts make "${text}" true.`
-  })
+  if (open.length === 0) return ['Read before you: the parts make what they split true.', ...rules]
+  return [
+    ...open.map(([id, said]) => {
+      const text = header?.requirements[id]?.text ?? 'a requirement'
+      return said === 'not covered'
+        ? `Read before you: the parts do not make "${text}" true. Something is missing.`
+        : `Read before you: not settled whether the parts make "${text}" true.`
+    }),
+    ...rules,
+  ]
 }
 
 // The requirements a part's lines narrow, in the frame's words, or what is wrong with them.
@@ -673,9 +690,9 @@ export const register: Register = on => {
                 </Button>
               ))}
             </Box>
-            {readingOf(header).length > 0 ? (
+            {readingOf(header, parts).length > 0 ? (
               <Box flexDirection="column" marginTop={1}>
-                {readingOf(header).map(line => (
+                {readingOf(header, parts).map(line => (
                   <Text>{line}</Text>
                 ))}
               </Box>
@@ -720,6 +737,23 @@ export const register: Register = on => {
             </Box>
           ))}
           {holds}
+          {(header?.check?.parts?.[part.id]?.scoped ?? []).length > 0 ? (
+            <Box flexDirection="column">
+              <Text>{"For this part's files, from the project's guide:"}</Text>
+              {(header?.check?.parts?.[part.id]?.scoped ?? []).map(line => (
+                <Text>{`  · ${line}`}</Text>
+              ))}
+            </Box>
+          ) : null}
+          {(header?.check?.parts?.[part.id]?.owes ?? []).length > 0 ? (
+            <Box flexDirection="column">
+              <Text>A change here will owe:</Text>
+              {(header?.check?.parts?.[part.id]?.owes ?? []).map(line => (
+                <Text>{`  · ${line}`}</Text>
+              ))}
+            </Box>
+          ) : null}
+          {breaksOf(header, part) ? <Text>{breaksOf(header, part)}</Text> : null}
           <Box marginTop={1}>
             {parts.map((p, i) => (
               <Box>

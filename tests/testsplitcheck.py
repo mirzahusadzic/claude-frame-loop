@@ -80,16 +80,58 @@ def failed(frame, only=()):
     return {"error": {"message": "the reader gave no answer within 300 s, so it was stopped"}}
 
 
+FRAME = {
+    "id": "frame 0",
+    "asks": PARENT,
+    "principles": [{"id": "P1", "text": "A request under the limit is answered as today."}],
+    "triggers": [],
+    "semantic": [
+        {
+            "id": "R7",
+            "kind": "semantic",
+            "scope": ["app.py"],
+            "text": "the handler stays pure",
+            "quote": ["The handler stays pure."],
+        }
+    ],
+    "obligations": [
+        {
+            "id": "O1",
+            "scope": ["app.py"],
+            "text": "app.py changes come with README.md",
+            "check": {"changed": ["README.md"]},
+        }
+    ],
+}
+
+
+def keeps(frame, only=()):
+    return {"exit": 0, "findings": [{"levels": {"baseline": "none", "repeat": "none"}}], "made": 6}
+
+
+def breaks_p1(frame, only=()):
+    return {"exit": 0, "findings": [{"levels": {"baseline": "P1", "repeat": "P1"}}], "made": 6}
+
+
+def torn(frame, only=()):
+    return {"exit": 0, "findings": [{"levels": {"baseline": "P1", "repeat": "none"}}], "made": 6}
+
+
 class SplitCheckTests(unittest.TestCase):
-    def read(self, reader, split=SPLIT):
+    def read(self, reader, split=SPLIT, rules=keeps):
         seen = []
+        self.rule_frames = []
 
         def run(frame, only=()):
+            if frame["name"].startswith("violation-"):
+                self.rule_frames.append((frame, only))
+                return rules(frame)
             seen.append(frame)
             return reader(frame)
 
         with (
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
             mock.patch.object(splitcheck, "_reader", lambda: run),
             mock.patch.object(splitcheck, "_log", lambda row: None),
@@ -135,6 +177,50 @@ class SplitCheckTests(unittest.TestCase):
             said,
         )
         self.assertNotIn("not how: “Requests are counted per client.”", said)
+
+    def test_each_part_is_read_against_the_rules_that_hold_for_its_files(self):
+        """The rules were shown on a split as a count and read only against finished changes.
+        Each part's lines are now read against the frame's rules and the guide's rules whose
+        scope its files touch, when the split is made."""
+        said, _ = self.read(covered)
+        self.assertEqual(len(self.rule_frames), 2)  # one reading a part
+        frame, only = self.rule_frames[0]
+        self.assertEqual(only, ("baseline", "repeat"))
+        text = json.dumps(frame, ensure_ascii=False)
+        for held in (
+            "A request under the limit is answered as today.",
+            "The handler stays pure.",
+            "Requests are counted per client.",
+        ):
+            self.assertIn(held, text)
+        self.assertIn("a change in Counting will owe: app.py changes come with README.md", said)
+        self.assertNotIn("may break", said)
+
+    def test_a_part_that_may_break_a_rule_is_named_with_the_rule(self):
+        said, _ = self.read(covered, rules=breaks_p1)
+        self.assertIn(
+            "▲ split of frame 0 · Counting may break your rule “A request under the limit is answered as today.”", said
+        )
+        with (
+            mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(
+                splitcheck,
+                "_reader",
+                lambda: lambda frame, only=(): breaks_p1(frame) if "violation" in frame["name"] else covered(frame),
+            ),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+        ):
+            _, record = splitcheck.check(SPLIT)
+        self.assertEqual(record["parts"]["counting"]["breaks"], "A request under the limit is answered as today.")
+        self.assertEqual(record["parts"]["counting"]["scoped"], ["The handler stays pure."])
+        self.assertEqual(record["parts"]["counting"]["owes"], ["app.py changes come with README.md"])
+
+    def test_a_rule_reading_that_tears_or_fails_is_not_settled_and_never_a_pass(self):
+        for reader in (torn, failed):
+            said, _ = self.read(covered, rules=reader)
+            self.assertIn("Counting: not settled whether its lines break a rule", said)
 
     def test_a_reading_that_does_not_settle_is_no_pass_and_no_mismatch(self):
         said, _ = self.read(wavering)

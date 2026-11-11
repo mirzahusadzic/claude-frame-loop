@@ -660,6 +660,10 @@ test('the split\'s reading shows on its pages: which lines are needed, which ove
       requirements: { A1: 'covered' },
       lines: { 'Requests are counted per client.': 'overlaps', 'The count resets each minute.': 'needed' },
       thin: ['The count resets each minute.'],
+      parts: {
+        counting: { breaks: 'A request that is not limited is answered as today', scoped: ['The limiter keeps no state on disk'], owes: ['limiter changes come with docs'] },
+        headers: { breaks: 'not settled', scoped: [], owes: [] },
+      },
     }),
   })
   await $.tool.call(SPLIT as any)
@@ -668,11 +672,17 @@ test('the split\'s reading shows on its pages: which lines are needed, which ove
   expect(shown).toContain('      the other lines already cover this one')
   expect(shown).toContain('      needed: without it the requirement is not met')
   expect(shown).toContain('      says which words it narrows, not how')
+  expect(shown).toContain("For this part's files, from the project's guide:")
+  expect(shown).toContain('  · The limiter keeps no state on disk')
+  expect(shown).toContain('A change here will owe:')
+  expect(shown).toContain('  · limiter changes come with docs')
+  expect(shown).toContain('Read before you: counting may break your rule "A request that is not limited is answered as today".')
   await ui.press({ key: 'go-review' })
   await ui.unmount()
-  expect(await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))).toContain(
-    'Read before you: the parts make what they split true.',
-  )
+  const review = await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))
+  expect(review).toContain('Read before you: the parts make what they split true.')
+  expect(review).toContain('Read before you: counting may break your rule "A request that is not limited is answered as today".')
+  expect(review).toContain('Read before you: not settled whether headers breaks a rule.')
 })
 
 test('a split that did not settle, or was read for another frame, says so or says nothing', async ($, on) => {

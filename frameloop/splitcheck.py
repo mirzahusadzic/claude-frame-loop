@@ -17,8 +17,10 @@ import time
 from typing import Any
 
 import frames
+import gate
 import state
-from framezero import FRAME_0, _tree_nodes, load_frame0_root
+from framezero import FRAME_0, _tree_nodes, load_frame0_root, with_semantic
+from obligations import owed
 from privacy import SECRETS, tier_for
 from reading import _reader
 from record import _log
@@ -30,6 +32,54 @@ INSTRUCTION = (
     "only, never by what you know or guess about the project."
 )
 COVERED, GAP, OPEN = "covered", "not covered", "not settled"
+
+
+def parent_frame(parent: str | None) -> dict[str, Any]:
+    """The frame being split as a frame 0: its own rules, every rule above it and the guide's."""
+    import tree
+
+    root = load_frame0_root()
+    if parent in (None, "", "root", FRAME_0):
+        return root
+    nodes = _tree_nodes(root)
+    return tree.frame0_for(nodes[parent], root, nodes) if parent in nodes else root
+
+
+def rules_for(frame: dict[str, Any], part: dict[str, Any], tier: str) -> dict[str, Any]:
+    """One part against the rules that hold for its files: the frame's own, every rule above
+    it, and the guide's rules whose scope the part's paths touch. Its lines are read as a step
+    is, twice: do they break a rule. What a change there will owe is listed by code."""
+    paths = [str(p) for p in part.get("scope") or []]
+    scoped = with_semantic(frame, paths)
+    ruled = {r["id"]: r["text"] for kind in ("principles", "triggers") for r in scoped.get(kind) or []}
+    lines = "\n".join(f"- {item['text']}" for item in part.get("items") or [])
+    step = {
+        "id": f"part-{part.get('id')}",
+        "summary": f"A part of the work, named {part.get('name')}, will make these true:\n{lines}",
+        "facts": {},
+    }
+    return {
+        "id": str(part.get("id")),
+        "name": str(part.get("name") or ""),
+        "rules": ruled,
+        "scoped": [r["text"] for r in scoped.get("principles") or [] if r not in (frame.get("principles") or [])],
+        "owes": [str(ob.get("text") or ob["id"]) for ob in owed(frame, paths)],
+        "frame": frames.violation({**scoped, "id": f"split-{part.get('id')}"}, step, tier) if ruled else None,
+    }
+
+
+def breaks(result: dict[str, Any] | None, ruled: dict[str, str]) -> str | None:
+    """What a part's reading against its rules says: nothing when it breaks none, the rule it
+    may break, or that it did not settle. A reading that failed is not settled, never a pass."""
+    if result is None:
+        return None
+    decision, reason = gate.violation(result)
+    if decision == gate.PASS:
+        return None
+    if decision == gate.RISE:
+        named = reason.removeprefix("names ").split(":", 1)[0]
+        return ruled.get(named, named)
+    return OPEN
 
 
 class SplitError(ValueError):
@@ -133,7 +183,9 @@ def _short(text: str, most: int = 60) -> str:
     return flat if len(flat) <= most else flat[: most - 1].rstrip() + "…"
 
 
-def told(parent: str, found: list[dict[str, Any]], unsplit: list[str]) -> str:
+def told(
+    parent: str, found: list[dict[str, Any]], unsplit: list[str], parts: list[dict[str, Any]] | None = None
+) -> str:
     """The reading in plain words, a line a requirement: for Claude to revise the split by,
     and for the author under details."""
     out = []
@@ -157,6 +209,17 @@ def told(parent: str, found: list[dict[str, Any]], unsplit: list[str]) -> str:
         out.append(f"frame-loop · split of {parent} · these say which words they narrow, not how: " + ", ".join(thin))
     if unsplit:
         out.append(f"frame-loop · split of {parent} · no part narrows: " + "; ".join(f"“{_short(t)}”" for t in unsplit))
+    for part in parts or []:
+        if part["breaks"] == OPEN:
+            out.append(f"frame-loop · split of {parent} · {part['name']}: not settled whether its lines break a rule")
+        elif part["breaks"]:
+            out.append(
+                f"frame-loop ▲ split of {parent} · {part['name']} may break your rule “{_short(part['breaks'], 90)}”"
+            )
+        if part["owes"]:
+            out.append(
+                f"frame-loop · split of {parent} · a change in {part['name']} will owe: " + "; ".join(part["owes"])
+            )
     if any(one["said"] != COVERED for one in found):
         out.append(
             "A split that is not settled is not a mismatch, and the picker shows the author which requirement "
@@ -189,10 +252,18 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         return f"frame-loop · split · not read: {note or 'no reader configured'}", None
     state.LIVE["what"] = "checking the split"
     planned = [(known[q], by[q], frame_for(parent, known[q], by[q], tier)) for q in by]
+    held = parent_frame(split.get("parent"))
+    ruled = [rules_for(held, part, tier) for part in split.get("parts") or []]
     from concurrent.futures import ThreadPoolExecutor
 
-    with ThreadPoolExecutor(max_workers=max(1, len(planned))) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, len(planned) + len(ruled))) as pool:
+        jobs = [pool.submit(run, r["frame"], only=("baseline", "repeat")) if r["frame"] else None for r in ruled]
         results = list(pool.map(lambda plan: run(plan[2]), planned))
+        broken = [breaks(job.result() if job else None, r["rules"]) for job, r in zip(jobs, ruled, strict=True)]
+    parts_found = [
+        {"id": r["id"], "name": r["name"], "breaks": b, "scoped": r["scoped"], "owes": r["owes"]}
+        for r, b in zip(ruled, broken, strict=True)
+    ]
     found = [
         {
             "requirement": ask["text"],
@@ -203,12 +274,13 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         for (ask, lines, _), result in zip(planned, results, strict=True)
     ]
     unsplit = [a["text"] for a in asks if a["id"] not in by]
-    calls = sum(int(r.get("made") or 0) for r in results)
+    calls = sum(int(r.get("made") or 0) for r in [*results, *(j.result() for j in jobs if j)])
     _log(
         {
             "event": "split-read",
             "parent": parent,
             "found": [{k: one[k] for k in ("id", "said", "lines")} for one in found],
+            "parts": [{k: p[k] for k in ("id", "breaks")} for p in parts_found],
             "usage": {"calls": calls},
             "seconds": round(time.time() - started, 1),
         }
@@ -218,9 +290,10 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
         "requirements": {one["id"]: one["said"] for one in found},
         "lines": {x["text"]: x["role"] for one in found for x in one["lines"] if x["role"]},
         "thin": [t for one in found for t in one["thin"]],
+        "parts": {p["id"]: {k: p[k] for k in ("breaks", "scoped", "owes")} for p in parts_found},
         "at": started,
     }
-    return told(parent, found, unsplit), record
+    return told(parent, found, unsplit, parts_found), record
 
 
 def read(split: dict[str, Any]) -> str:
