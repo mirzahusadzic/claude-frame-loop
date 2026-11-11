@@ -32,6 +32,7 @@ A Claude Code plugin that checks the work the user and Claude share against the 
 | free signals and effort | `frameloop/signals.py`, `frameloop/signals.json`, `frameloop/effort.py`, `frameloop/effort.json` |
 | acts that are the user's | `frameloop/facts.py` |
 | the tree and the climb | `frameloop/tree.py` |
+| a split read as words against its parent | `frameloop/splitcheck.py` |
 | a reading Claude asks for | `frameloop/ondemand.py` |
 | what an install lacks | `frameloop/doctor.py` |
 

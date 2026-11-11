@@ -201,6 +201,25 @@ def _read_on_demand(command: str) -> dict[str, Any]:
 
     first, _, rest = command.strip().partition("\n")
     words = shlex.split(first)
+    if "--split" in words:  # a split, as the picker takes it, read as words before the author sees it
+        import splitcheck
+
+        found = HEREDOC.search(first)
+        body: list[str] = []
+        for line in rest.split("\n") if found else []:
+            if (line.lstrip("\t") if found.group(1) else line) == found.group(3):
+                break
+            body.append(line)
+        try:
+            split = json.loads("\n".join(body))
+        except ValueError:
+            split = None
+        if not isinstance(split, dict):
+            return _reading_said(
+                "frame-loop · split · not read: usage: : frame-loop-read --split <<'EOF' "
+                '{"parent": ..., "parts": [...]} EOF, the split as the picker takes it'
+            )
+        return _reading_said(splitcheck.read(split))
     if "--complete" in words:
         frame0 = load_frame0()
         # What the turn declared holds here too: a stricter reader, a harder reading.
@@ -864,6 +883,12 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
 
 # How a split reaches the author: whole, in one picker, before anything of it exists.
 SPLIT_TOLD = (
+    "Before a split goes to the author, read it: `: frame-loop-read --split <<'EOF'` then the same "
+    "`parent` and `parts` you will give the approve tool, as JSON, then `EOF`. It says, a requirement "
+    "at a time, whether its parts make it true, which lines are needed and which could go. Each "
+    "item's `detail` says how the line narrows the requirement, not only which words. Revise and "
+    "read again, twice at most; what stays open, tell the author in plain words when the picker "
+    "opens. "
     "A split goes to the author whole: one call of the approve tool with `parts`, every part of "
     "the split at once, each with its file's `id`, its `name` in plain words, its `scope` (the "
     "paths it may change) and its `items`, "
