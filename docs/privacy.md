@@ -55,8 +55,7 @@ A refused reading sends nothing and is never counted as a fit; its line says "no
 | a tier that trains on its inputs | every reading | refused unless `FRAME_LOOP_TRAINING_OK=1` for the project | frame-loop |
 | no writer, and a repository not confirmed public | a training tier | refused: the change itself would go | frame-loop |
 | private names, from `~/.config/frame-loop/private-names.txt` | a training tier | masked as "[private]" in file names, labels and frame 0, as a whole word in any case | frame-loop |
-| a label naming an id or quoting a requirement, so the reader's question is not answered for it | labels on | taken out, and the rest goes | frame-loop |
-| a change over 40,000 characters | labels on | labelled from its first 40,000 characters; the list of files stays whole | frame-loop |
+| a change over 400,000 characters | labels on | labelled from its first 400,000 characters; the list of files stays whole | frame-loop |
 
 ---
 

@@ -1,8 +1,7 @@
 """What a reading sends. Nothing here can keep a private repository's content private: the
 reader gets the writer's summary of the change, and the user chooses to allow that. What
-this does is basic: no secret leaves, the author's private names are masked, and a summary
-does not name frame 0's ids or repeat its requirements, which would answer the reader's
-question for it.
+this does is basic: no secret leaves, and the author's private names are masked. A summary
+goes as the writer wrote it: only the private-names file decides what is taken out of it.
 
 Standard library only.
 """
@@ -64,17 +63,6 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
         import writer
 
         given = _masked(_without_declaration(text, kind), frame0)
-        ids = [x["id"] for part in ("asks", "principles", "triggers", "obligations") for x in frame0.get(part, [])]
-
-        def clean(label: str) -> str:
-            """The summary without an id or a requirement's words: the reader must judge the
-            change, not find its question answered in the summary."""
-            if ids:
-                label = re.sub(r"\b(" + "|".join(map(re.escape, ids)) + r")\b", "[…]", label)
-            for ask in frame0.get("asks", []):
-                label = writer.mask_ask(label, ask["text"])
-            return label
-
         # The writer reads the whole change on the user's own login: a secret never reaches it.
         secret = next((name for name, pattern in SECRETS if pattern.search(text)), None)
         if secret:
@@ -82,7 +70,7 @@ def outgoing(text: str, kind: str, tier: str, frame0: dict[str, Any]) -> tuple[s
             return None, f"it looks like it holds a secret ({secret}), so it was not labelled"
         made = write(given)
         refusal = f"no label: {made['error']}" if made.get("error") else None
-        label = clean(made.get("label") or "")
+        label = made.get("label") or ""
         names = next((r.get("names", []) for r in _effort_rules()["rules"] if r["id"] == "dependency-manifest"), [])
         facts = writer.facts_line(text, names)
         sent = f"{facts}\n{label}" if facts else label

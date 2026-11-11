@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import subprocess
 import time
 from pathlib import Path
@@ -21,8 +20,10 @@ from procs import within
 MODEL = os.environ.get("FRAME_LOOP_WRITER_MODEL", "claude-haiku-5-5")
 INSIDE_WRITER = "FRAME_LOOP_INSIDE_WRITER"  # set in the writer's own `claude -p`
 # A longer change is labelled from its first LIMIT characters and says where it was cut; the
-# list of its files, written by code, stays whole.
-LIMIT = 40000
+# list of its files, written by code, stays whole. The limit is about 100,000 tokens, a tenth
+# of the writer's window: a cut hides the files that sort last, and in one kept reading of
+# 98,000 characters those were the source and the tests, so no requirement could be settled.
+LIMIT = 400000
 WIDTH = 24  # a label sharing this many characters in a row with the change quotes it
 
 INSTRUCTION = (
@@ -31,9 +32,13 @@ INSTRUCTION = (
     "rules; the reader never sees the code. In plain words and at most five sentences, say "
     "what behaviour the change adds, removes or alters, and what it changes in tests and in "
     "docs. If it changes no behaviour (formatting, comments, renaming), say so. Never quote "
-    "code, a line of the change, an identifier, a file path, an ask or rule id, or a name of "
-    "a project or person; describe instead. Write the label only."
+    "code, a line of the change, an identifier, a file path, or an ask or rule id; describe "
+    "instead. Name each product, service, project and person the change concerns by its own "
+    "name. Write the label only."
 )
+# The writer names what the change names: which names stay out is not its decision but the
+# author's, in the private-names file, and code masks those in everything a training reader
+# gets. Told to name nothing, the writer wrote "the aggregator route" for OpenRouter.
 
 
 def facts_line(text: str, manifests: list[str]) -> str:
@@ -139,23 +144,6 @@ def haiku(text: str) -> dict[str, Any]:
     if keep:
         cached.write_text(json.dumps(made), encoding="utf-8")
     return made
-
-
-def _mask_runs(label: str, text: str) -> str:
-    """The label without the runs it shares with `text`."""
-    flat = " ".join(label.split())
-    for run in sorted(copied(flat, text), key=len, reverse=True):
-        flat = flat.replace(run, "[…]")
-    return flat
-
-
-def mask_ask(label: str, ask: str) -> str:
-    """The label without a requirement's words: a run of WIDTH characters, or a short one whole."""
-    flat = _mask_runs(label, ask)
-    words = re.findall(r"\w+", ask.casefold())
-    if len(" ".join(ask.split())) >= WIDTH or len(words) < 3:
-        return flat
-    return re.sub(r"\b" + r"\W+".join(map(re.escape, words)) + r"\b", "[…]", flat, flags=re.I)
 
 
 def copied(label: str, text: str) -> list[str]:

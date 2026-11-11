@@ -174,6 +174,26 @@ class ReviewSecretTests(unittest.TestCase):
         self.assertIn("secret", refusal)
 
 
+class SummaryWholeTests(unittest.TestCase):
+    """A summary reaches the reader as the writer wrote it. Words it shares with a requirement
+    used to be taken out, so the reader's question was not answered for it; in a real
+    end-of-work reading that removed "Claude's progress notes" from the one sentence about
+    them. Only the author's private-names file decides what is masked."""
+
+    def test_a_summary_that_shares_a_requirements_words_goes_whole(self):
+        label = "Claude's progress notes between tool calls now reach Codex as summaries."
+        frame0 = {"asks": [{"id": "A2", "text": "Claude's progress notes between tool calls reach Codex."}]}
+        diff = "--- a/x\n+++ b/x\n@@ -0,0 +1 @@\n+notes = True\n"
+        with mock.patch.dict(os.environ, {"FRAME_LOOP_WRITER": "writer:haiku"}):
+            import writer
+
+            with mock.patch.object(writer, "haiku", lambda text: {"label": label}):
+                state.CWD = PUBLIC
+                sent, refusal = privacy.outgoing(diff, "the turn's change", "private", frame0)
+        self.assertIsNone(refusal)
+        self.assertIn(label, sent)
+
+
 class ReviewDiffLineTests(unittest.TestCase):
     """The cold review, L3: diff lines whose words begin `reader:`, `serves:` or `effort:` were cut as
     a declaration before the writer saw the change, so a YAML change lost its lines."""

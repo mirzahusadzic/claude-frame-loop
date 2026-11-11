@@ -28,7 +28,6 @@ import record  # noqa: E402
 import repo  # noqa: E402
 import state  # noqa: E402
 import turn  # noqa: E402
-import writer as writer_module  # noqa: E402
 
 SEEN = []
 FIXTURE = ROOT / "tests/fixtures/frame0.json"
@@ -1712,21 +1711,25 @@ class WriterTests(unittest.TestCase):
         self.assertNotIn("Serves", loaded.WRITTEN[0])
         self.assertNotRegex(loaded.WRITTEN[0], r"\bA[23]\b")
 
-    def test_a_label_naming_an_id_or_quoting_an_ask_is_not_sent(self):
+    def test_a_label_quoting_an_ask_is_sent_as_the_writer_wrote_it(self):
+        """A summary is no longer cut where it shares words with a requirement: only the
+        author's private-names file takes anything out of it. An id is still masked, with
+        the rest of the frame."""
         frame0 = framezero.load_frame0()
-        for spec in ("testhook:id_naming", "testhook:ask_quoting"):
-            os.environ["FRAME_LOOP_WRITER"] = spec
-            seen = loaded_seen()
-            hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
-            self.assertTrue(seen, spec)
-            sent = self.sent(seen)
-            self.assertNotRegex(sent, r"\bA[0-9]\b", spec)
-            for ask in frame0["asks"]:
-                self.assertFalse(writer_module.quotes(sent, ask["text"]), spec)
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:ask_quoting"
+        seen = loaded_seen()
+        hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
+        self.assertTrue(seen)
+        self.assertIn("it does what was wanted: " + frame0["asks"][1]["text"], self.sent(seen))
+        os.environ["FRAME_LOOP_WRITER"] = "testhook:id_naming"
+        seen = loaded_seen()
+        hook.answer(plan_event("Serves: A2\nAdd the greeting helper and its unit test.", cwd=self.private))
+        self.assertTrue(seen)
+        self.assertNotRegex(self.sent(seen), r"\bA[0-9]\b")
 
-    def test_a_label_carrying_a_short_requirement_whole_is_not_sent(self):
-        """The claims ledger: a requirement under the copy guard's 24 characters rode in a
-        label whole, since only 24 characters in a row counted as a quote."""
+    def test_a_label_carrying_a_short_requirement_is_sent_as_written(self):
+        """A short requirement's words in a summary go as the writer wrote them, as a long
+        one's do: nothing but the private-names file takes words out of a summary."""
         short = json.loads(Path(FIXTURE).read_text(encoding="utf-8"))
         short["asks"][1] = {
             "id": "A2",
@@ -1739,7 +1742,7 @@ class WriterTests(unittest.TestCase):
         seen = loaded_seen()
         hook.answer(plan_event("Serves: A2\nAdd the limit and its unit test.", cwd=self.private))
         self.assertTrue(seen)
-        self.assertNotIn("HTTP 429", self.sent(seen))
+        self.assertIn("so that it will return http 429 when over", self.sent(seen))
 
     def test_code_states_the_files_and_the_copy_guard_reads_only_the_writers_part(self):
         import writer
@@ -1796,6 +1799,43 @@ class WriterTests(unittest.TestCase):
             made = writer.haiku("x" * (writer.LIMIT + 1))
         self.assertNotIn("error", made)
         self.assertIn(f"cut here, at {writer.LIMIT} of {writer.LIMIT + 1}", told["text"])
+
+    def test_a_change_of_a_real_sessions_size_is_labelled_whole(self):
+        """A change of 98,305 characters, the size of one a real session made, reaches the
+        writer whole: cut at 40,000, its label left out the source and the tests, which sort
+        last, and the end-of-work reading settled no requirement."""
+        import writer
+
+        told = {}
+
+        class Done:
+            returncode = 0
+            stdout = json.dumps({"result": "a label", "total_cost_usd": 0.0})
+            stderr = ""
+
+        def run(command, **kwargs):
+            told["text"] = kwargs.get("input") or " ".join(command)
+            return Done()
+
+        change = "catalog\n" * 5000 + "router/anthropic.mjs: the last file of the change\n" + "x" * 58255
+        self.assertEqual(len(change), 98305)
+        os.environ["FRAME_LOOP_WRITER_CACHE"] = "0"
+        with unittest.mock.patch.object(writer.subprocess, "run", run):
+            made = writer.haiku(change)
+        self.assertNotIn("error", made)
+        self.assertEqual(told["text"], change)
+
+    def test_the_writer_names_what_the_change_names(self):
+        """The writer is asked to name the products, projects and people a change concerns,
+        never to describe them instead: which names stay out is the author's decision, in
+        the private-names file, masked by code. Told never to name a project, the writer
+        wrote "the aggregator route" for OpenRouter."""
+        import writer
+
+        never = writer.INSTRUCTION.split("Never quote", 1)[1].split("describe instead", 1)[0]
+        self.assertNotIn("project", never)
+        self.assertNotIn("person", never)
+        self.assertIn("by its own name", writer.INSTRUCTION)
 
     def test_quotes_is_exact(self):
         import writer
