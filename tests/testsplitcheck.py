@@ -151,6 +151,7 @@ class SplitCheckTests(unittest.TestCase):
         ):
             self.assertIn(line, body)
         self.assertEqual(frame["standing"]["most"], 1)
+        self.assertEqual(frame["battery"]["reasoning"], "low")  # words against words, and under the cap
         self.assertEqual(frame["observe"]["instruction"], splitcheck.INSTRUCTION)
         self.assertTrue(frame["name"].startswith("split-"))
         self.assertIn("eachAnchor", frame["interventions"])  # each line removed alone: needed, or it overlaps
@@ -214,7 +215,7 @@ class SplitCheckTests(unittest.TestCase):
         ):
             _, record = splitcheck.check(SPLIT)
         self.assertEqual(record["parts"]["counting"]["breaks"], "A request under the limit is answered as today.")
-        self.assertEqual(record["parts"]["counting"]["scoped"], ["The handler stays pure."])
+        self.assertEqual(record["parts"]["counting"]["scoped"], ["the handler stays pure"])
         self.assertEqual(record["parts"]["counting"]["owes"], ["app.py changes come with README.md"])
 
     def test_a_rule_reading_that_tears_or_fails_is_not_settled_and_never_a_pass(self):

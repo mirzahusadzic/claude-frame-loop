@@ -11,8 +11,10 @@ Standard library only.
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
+import sys
 import time
 from typing import Any
 
@@ -32,6 +34,7 @@ INSTRUCTION = (
     "only, never by what you know or guess about the project."
 )
 COVERED, GAP, OPEN = "covered", "not covered", "not settled"
+EFFORT = "low"
 CONTRACT_INSTRUCTION = (
     "Read only the lines above and the contract below. Each line is what one part of the work "
     "will make true, under the part's name. If every line above were made true, would each part "
@@ -69,7 +72,12 @@ def rules_for(frame: dict[str, Any], part: dict[str, Any], tier: str) -> dict[st
         "id": str(part.get("id")),
         "name": str(part.get("name") or ""),
         "rules": ruled,
-        "scoped": [r["text"] for r in scoped.get("principles") or [] if r not in (frame.get("principles") or [])],
+        # by its short name in the index, as the author wrote it: the guide's own words run to a paragraph
+        "scoped": [
+            str(r.get("text") or r["id"])
+            for r in frame.get("semantic") or []
+            if any(fnmatch.fnmatch(p, g) for p in paths for g in r.get("scope") or [])
+        ],
         "owes": [str(ob.get("text") or ob["id"]) for ob in owed(frame, paths)],
         "frame": frames.violation({**scoped, "id": f"split-{part.get('id')}"}, step, tier) if ruled else None,
     }
@@ -340,6 +348,14 @@ def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
     asked = [contract_frame(parent, n + 1, c, tier) for n, c in enumerate(bound)]
     from concurrent.futures import ThreadPoolExecutor
 
+    # Words against words: every frame of a split is read at low effort, and the split's reading
+    # counts its own tokens from here. A split of five requirements and four parts, read at the
+    # reader's default effort under a count already running, hit the cap and settled nothing.
+    module = sys.modules.get(getattr(run, "__module__", "") or "")
+    if module is not None and hasattr(module, "new_reading"):
+        module.new_reading()
+    for frame in [plan[2] for plan in planned] + [r["frame"] for r in ruled if r["frame"]] + asked:
+        frame["battery"]["reasoning"] = EFFORT
     with ThreadPoolExecutor(max_workers=max(1, len(planned) + len(ruled) + len(asked))) as pool:
         jobs = [pool.submit(run, r["frame"], only=("baseline", "repeat")) if r["frame"] else None for r in ruled]
         pacts = [pool.submit(run, frame) for frame in asked]

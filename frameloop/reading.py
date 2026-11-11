@@ -55,8 +55,9 @@ FIT_READ = "read by the end-of-work check"
 # On a signal only (FRAME_LOOP_READ=signal; the default reads always): work inside an approved part
 # is held by what the split fixed, its files by code, its rules by the rules question, and its
 # requirements by its tests. The change itself is read against a requirement only when
-# something marks it: a change outside the part's files, no test with it, a large or
-# protected change, or a rules question that did not pass.
+# something marks it: a change outside the part's files, no test with it, a protected change
+# (a deleted file, a dependency manifest, the loop's settings), or a rules question that did
+# not pass. Its size alone never marks it.
 IN_PART = "in its part"
 IN_PART_SAID = "in its part's files (the fit was not read: no signal)"
 BY_TESTS = "✓ by its tests (not read: no signal)"
@@ -89,7 +90,13 @@ def read_signals(claimed: list[dict[str, Any]], frame0: dict[str, Any], said: st
         # The versioned rules on facts from the diff (a deleted file, a dependency manifest, the
         # loop's own settings, a large diff): each one that fires is a reason to read.
         facts = _diff_facts([s["diff"] for s in claimed])
-        found += [f"the change matches the rule {r['id']}" for r in _effort_rules()["rules"] if _rule_hits(r, facts)]
+        # Size is no signal: every part of a real feature is a large change, so in a live build
+        # each part was read for it, and no such reading settled.
+        found += [
+            f"the change matches the rule {r['id']}"
+            for r in _effort_rules()["rules"]
+            if r["id"] != "large-diff" and _rule_hits(r, facts)
+        ]
     mine = [r for r in _records_all() if r.get("session") == state.SESSION and (r.get("node") or "root") == state.NODE]
     if any(r.get("event") == "turn" and r.get("decision") in (gate.RISE, gate.UNSETTLED, gate.BLOCK) for r in mine):
         found.append("a rules question on its work did not pass")

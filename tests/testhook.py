@@ -3952,6 +3952,32 @@ class TreeHookTests(CoreTests):
             reading.read_signals(step("other.py", "tests/test_app.py"), frame, "", None),
         )
         self.assertEqual(reading.read_signals([], frame, "", None), ["no change is recorded for it"])
+        # Seen in a live build: every part of a real feature is large, so size marked each one
+        # for a reading and none settled. Size alone is no signal; a deleted file still is.
+        large = [
+            {"paths": ["app.py", "tests/test_app.py"], "diff": "diff --git a/app.py b/app.py\n" + "+x = 1\n" * 20000}
+        ]
+        self.assertEqual(reading.read_signals(large, frame, "", "contributor"), [])
+        gone = (
+            "diff --git a/app.py b/app.py\ndeleted file mode 100644\n--- a/app.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n"
+        )
+        deleted = [{"paths": ["app.py", "tests/test_app.py"], "diff": gone}]
+        self.assertIn(
+            "the change matches the rule deleted-file", reading.read_signals(deleted, frame, "", "contributor")
+        )
+        # Seen in a live build: every part of a real feature is large, so size marked each one
+        # for a reading and none settled. Size alone is no signal; a deleted file still is.
+        large = [
+            {"paths": ["app.py", "tests/test_app.py"], "diff": "diff --git a/app.py b/app.py\n" + "+x = 1\n" * 20000}
+        ]
+        self.assertEqual(reading.read_signals(large, frame, "", "contributor"), [])
+        gone = (
+            "diff --git a/app.py b/app.py\ndeleted file mode 100644\n--- a/app.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n"
+        )
+        deleted = [{"paths": ["app.py", "tests/test_app.py"], "diff": gone}]
+        self.assertIn(
+            "the change matches the rule deleted-file", reading.read_signals(deleted, frame, "", "contributor")
+        )
 
     def test_a_part_left_with_no_work_or_already_read_as_it_stands_is_not_read_again(self):
         seen = loaded_seen()
