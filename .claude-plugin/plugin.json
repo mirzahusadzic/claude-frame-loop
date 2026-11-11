@@ -1,6 +1,6 @@
 {
   "name": "frame-loop",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Checks the work you and Claude do together against what you asked for, and comes to you only when something doesn't fit",
   "author": {
     "name": "Mirza Husadzic"
