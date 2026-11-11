@@ -133,6 +133,7 @@ class SplitCheckTests(unittest.TestCase):
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
             mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
             mock.patch.object(splitcheck, "_reader", lambda: run),
             mock.patch.object(splitcheck, "_log", lambda row: None),
         ):
@@ -206,6 +207,7 @@ class SplitCheckTests(unittest.TestCase):
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
             mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
             mock.patch.object(
                 splitcheck,
                 "_reader",
@@ -308,6 +310,7 @@ class SplitCheckTests(unittest.TestCase):
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
             mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
             mock.patch.object(
                 splitcheck,
                 "_reader",
@@ -447,6 +450,7 @@ class SplitCheckTests(unittest.TestCase):
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
             mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
+            mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
             mock.patch.object(
                 splitcheck, "_reader", lambda: lambda frame, only=(): seen.append(frame) or covered(frame)
             ),
