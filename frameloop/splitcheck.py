@@ -46,12 +46,20 @@ CONTRACT_INSTRUCTION = (
 KEPT, BROKEN = "kept", "not kept"
 
 
+def _is_root(parent: str | None) -> bool:
+    """Whether a split names frame 0 as what it splits, however it words it: as the tree reads a
+    part's parent, so a split of "frame0" is not refused where its parts' files are accepted."""
+    import tree
+
+    return parent in (None, "") or str(parent).strip().lower() in tree.ROOT_NAMES
+
+
 def parent_frame(parent: str | None) -> dict[str, Any]:
     """The frame being split as a frame 0: its own rules, every rule above it and the guide's."""
     import tree
 
     root = load_frame0_root()
-    if parent in (None, "", "root", FRAME_0):
+    if _is_root(parent):
         return root
     nodes = _tree_nodes(root)
     return tree.frame0_for(nodes[parent], root, nodes) if parent in nodes else root
@@ -132,7 +140,7 @@ class SplitError(ValueError):
 def parent_asks(parent: str | None) -> tuple[str, list[dict[str, Any]]]:
     """The frame being split, by its name, and its requirements."""
     root = load_frame0_root()
-    if parent in (None, "", "root", FRAME_0):
+    if _is_root(parent):
         return FRAME_0, list(root.get("asks") or [])
     node = _tree_nodes(root).get(parent)
     if node is None:

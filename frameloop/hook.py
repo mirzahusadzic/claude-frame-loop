@@ -915,8 +915,8 @@ SPLIT_TOLD = (
     "and its scope as the picker showed them, and, when the split has contracts, `contracts`: each "
     "approved one that binds the part, its `text` in the words approved and `with`, the other "
     "parts' ids: such a file needs no other approval. Give a part's "
-    "file no `grant`, `obligations` or `semantic` of its own: the picker showed none, so a file "
-    "holding one goes to the author again."
+    "file no `grant`, `obligations`, `semantic`, `principles` or `triggers` of its own: the picker showed none, so a "
+    "file holding one goes to the author again."
 )
 
 

@@ -378,7 +378,14 @@ class SplitCheckTests(unittest.TestCase):
     def test_claude_is_told_a_parts_file_holds_no_grant_of_its_own(self):
         """Seen in a live session: each part's file carried a grant the picker had not shown,
         so it was not what was approved, and the author was asked about every file again."""
-        self.assertIn("no `grant`, `obligations` or `semantic`", hook.SPLIT_TOLD)
+        self.assertIn("no `grant`, `obligations`, `semantic`, `principles` or `triggers`", hook.SPLIT_TOLD)
+
+    def test_a_split_that_words_frame_0_as_the_tree_does_is_read(self):
+        """The tree reads "frame0" as frame 0, and the split check refused a split so worded:
+        "no part named frame0 is in the tree"."""
+        for worded in (None, "", "root", "frame 0", "frame0", "Frame-0"):
+            self.assertTrue(splitcheck._is_root(worded), worded)
+        self.assertFalse(splitcheck._is_root("counting"))
 
     def test_a_requirement_owned_by_its_steps_is_no_fault(self):
         """Seen live: the docs say a requirement is owned by its steps, Claude wrote that word,
