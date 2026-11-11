@@ -455,17 +455,20 @@ class FailedRunTests(unittest.TestCase):
         done = subprocess.CompletedProcess([], status, stdout, "")
         return reader, gate, done
 
-    def test_only_the_fit_is_asked_to_end_once_it_cannot_be_a_firm_one(self):
+    def test_each_reading_is_asked_to_end_once_no_answer_it_reads_is_left(self):
         """A fit that could no longer pass was asked to the end, on calls that changed nothing.
-        Whether a requirement is done is still read whole."""
+        Whether a requirement is done counts a firm "no" too, so that reading ends only once
+        no firm answer of any kind is left; a rule check is asked whole."""
         reader, gate, done = self.run_with(0, json.dumps({"exit": 0, "firm": False, "short": "carried"}))
         asked = []
         with mock.patch.object(reader, "_gadfly", lambda args, **k: asked.append(args) or done):
             ended = reader.run({"name": "which-ask-f-t", "battery": {}})
             reader.run({"name": "completion-f-A1-diffs", "battery": {}})
-        fit, completion = asked
+            reader.run({"name": "violation-f-t", "battery": {}})
+        fit, completion, violation = asked
         self.assertEqual(fit[fit.index("--short-of") + 1], "carried")
-        self.assertNotIn("--short-of", completion)
+        self.assertEqual(completion[completion.index("--short-of") + 1], "any")
+        self.assertNotIn("--short-of", violation)
         self.assertEqual(gate.which_ask(ended, ["A1"])[0], gate.UNSETTLED)
 
     def test_a_status_other_than_0_is_no_verdict(self):

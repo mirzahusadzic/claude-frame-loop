@@ -419,8 +419,15 @@ def run(frame: dict[str, Any], only: tuple[str, ...] = ()) -> dict[str, Any]:
         }
     parallel = int(os.environ.get("FRAME_LOOP_PARALLEL", "1"))  # the frame names its most runs
     # The fit passes or rises only on a firm carried answer (`gate.which_ask`): once none is left
-    # to reach, Gadfly asks no more. Whether a requirement is done is read whole, as before.
-    short = ["--short-of", "carried"] if name.startswith("which-ask-") else []
+    # to reach, Gadfly asks no more. Whether a requirement is done also counts a firm "no", so
+    # that reading ends only once no firm answer of any kind is left to reach.
+    short = (
+        ["--short-of", "carried"]
+        if name.startswith("which-ask-")
+        else ["--short-of", "any"]
+        if name.startswith("completion-")
+        else []
+    )
     ran = _gadfly(
         [
             "firm",

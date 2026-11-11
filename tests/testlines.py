@@ -217,6 +217,10 @@ class PlainTests(unittest.TestCase):
                 "A1 ✗ (unresolved, not firm, stopped after a whole run)",
                 "and it stopped at its limit after one whole run",
             ),
+            (
+                "A1 ✗ (stopped: no firm answer was left to reach)",
+                "✗ (the reader stopped once no steady answer could be reached)",
+            ),
             ("A1 not read (the reader reached its token cap of 150000, so it was stopped)", "limit of 150000 tokens"),
         ):
             shown = lines.for_user(said, None)

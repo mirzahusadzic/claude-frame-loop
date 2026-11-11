@@ -167,6 +167,12 @@ def firm_but_doubted(frame, only=()):
     return {"exit": 0, "firm": True, "category": "cooled", "findings": [{"levels": {"baseline": "yes"}}]}
 
 
+def stopped_short(frame, only=()):
+    """As the reader gives a reading Gadfly ended once no firm answer was left to reach."""
+    testhook.SEEN.append(frame)
+    return {"exit": 0, "firm": False, "short": "any", "category": None, "findings": [], "made": 19}
+
+
 def stopped_after_a_whole_run(frame, only=()):
     """As the reader gives a reading stopped at its cap in its second run."""
     testhook.SEEN.append(frame)
@@ -322,6 +328,18 @@ class CompletionTests(Isolated):
         record.step_diff("S2").unlink()
         out, _ = self.asked()
         self.assertIn("▲ needs you: 0 of 2 claimed", out["systemMessage"])
+
+    def test_a_reading_ended_early_says_so_and_names_no_category(self):
+        """A reading ended once no firm answer was left has no category: it must not read
+        "✗ (None, not firm)", and it is a doubt, never a requirement left unread."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:stopped_short"
+        self.claim("S1", ["A1"], self.A_FILE)
+        out, read = self.asked()
+        self.assertEqual(read, ["A1"])
+        said = out["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("A1 ✗ (stopped: no firm answer was left to reach)", said)
+        self.assertNotIn("None", said)
+        self.assertNotIn("A1 not read", said)
 
     def test_a_reading_stopped_after_a_whole_run_says_what_it_found_and_is_kept(self):
         """Seen: four readings were called "not read" with a whole run in hand, then read again."""

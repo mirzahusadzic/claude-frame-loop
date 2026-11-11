@@ -466,6 +466,7 @@ def _cut(text: str, cap: int) -> str:
     return text if len(text) <= cap else text[:cap] + f"\n[diff cut at {cap} characters]"
 
 
+SHORT = "stopped: no firm answer was left to reach"  # Gadfly's `firm --short-of any`
 NOTHING_CLAIMED = "frame-loop ▲ needs you: Claude didn't say which of your requirements this work serves"
 DECLARE = (
     "Declare what it serves with `: frame-loop-declare --serves <ids>` and run this again; `--complete --all` "
@@ -688,6 +689,8 @@ def complete(frame0: dict[str, Any], said: str = "", pending: dict[str, Any] | N
         parts.append(
             f"{ask['id']} ✓"
             if ok
+            else f"{ask['id']} ✗ ({SHORT})"  # ended early: it has no category to name
+            if result.get("short")
             else f"{ask['id']} ✗ ({result.get('category')}{'' if result.get('firm') else ', not firm'}{stopped})"
         )
         if ok:

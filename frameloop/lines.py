@@ -481,6 +481,7 @@ RESULT_WORDS = (
     ("carried", "its answer rests on these words"),
     (", not firm", ", not yet steady"),
     (", stopped after a whole run", ", and it stopped at its limit after one whole run"),
+    ("stopped: no firm answer was left to reach", "the reader stopped once no steady answer could be reached"),
 )
 
 
