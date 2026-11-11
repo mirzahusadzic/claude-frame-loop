@@ -258,7 +258,10 @@ if __name__ == "__main__":
 @unittest.skipUnless(shutil.which("jq") and shutil.which("sh") and shutil.which("git"), "needs sh, git and jq")
 class StatusLineTests(unittest.TestCase):
     """Setup's status line script, run as Claude Code runs it: it says what the switch says,
-    and nothing while the plugin is not enabled."""
+    "frame-loop" in the line's own colour when on and dim when off, and nothing while the
+    plugin is not enabled."""
+
+    ON, OFF = " · frame-loop", " · \x1b[2mframe-loop\x1b[0m"
 
     def setUp(self):
         setup = (ROOT / "docs/setup.md").read_text(encoding="utf-8")
@@ -298,12 +301,13 @@ class StatusLineTests(unittest.TestCase):
             ["sh", "-c", command], input=event, capture_output=True, text=True, encoding="utf-8", env=env
         )
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertTrue(done.stdout.endswith(" · frame-loop on"), done.stdout)
+        self.assertTrue(done.stdout.endswith(self.ON), done.stdout)
 
     def test_the_line_says_the_switch_the_hooks_read_and_whose_it_is(self):
         """Seen: the session started in one repository and worked in another; `/frame-loop on`
         and the line said on, for a switch the session's hooks never read, and nothing was
-        checked. The line reads the session's project and names it when it is not the folder."""
+        checked. The line reads the session's project, not the folder's; it no longer names that
+        project, which it did only while the switch was being debugged."""
         started = self.home / "started"
         (started / ".frame-loop").mkdir(parents=True)
         (started / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
@@ -325,15 +329,15 @@ class StatusLineTests(unittest.TestCase):
             )
             return done.stdout
 
-        said = line(event)  # Windows prints the path its own way
-        self.assertIn(" · frame-loop off for ", said)
-        self.assertTrue(said.endswith("started"), said)
+        said = line(event)
+        self.assertTrue(said.endswith(self.OFF), said)
+        self.assertNotIn("started", said)
         event["workspace"]["project_dir"] = str(self.repo)
-        self.assertTrue(line(event).endswith(" · frame-loop on"), line(event))
+        self.assertTrue(line(event).endswith(self.ON), line(event))
 
     def test_the_line_says_what_the_switch_says(self):
-        self.assertTrue(self.line(True).endswith(" · frame-loop on"))
+        self.assertTrue(self.line(True).endswith(self.ON))
         (self.repo / ".frame-loop" / "switch").write_text("off\n", encoding="utf-8")
-        self.assertTrue(self.line(True).endswith(" · frame-loop off"))
+        self.assertTrue(self.line(True).endswith(self.OFF))
         self.assertNotIn("frame-loop", self.line(False))
         self.assertEqual(self.settings["statusLine"]["refreshInterval"], 5)

@@ -100,7 +100,7 @@ The plugin sets `FRAME_LOOP_PLUGIN=1`, `FRAME_LOOP_READ_TURNS=1` (read turns at 
 
 ### Status line
 
-Claude Code's status line can show whether frame-loop is on for the session's project, the switch its hooks read, and names that project when the folder shown is outside it: on while the plugin is enabled and the switch that `/frame-loop` writes does not say off. Save this script as `~/.claude/statusline.sh`, with `jq` installed:
+Claude Code's status line can show whether frame-loop is on for the session's project, the switch its hooks read: "frame-loop" after the folder, in the line's own colour while the plugin is enabled and the switch that `/frame-loop` writes does not say off, dim when it does. Save this script as `~/.claude/statusline.sh`, with `jq` installed:
 
 ```sh
 #!/bin/sh
@@ -119,11 +119,9 @@ done
 loop=""
 if [ "$enabled" = "true" ]; then
   switch=$(cat "$repo/.frame-loop/switch" 2>/dev/null | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-  if [ "$switch" = "off" ]; then loop=" · frame-loop off"; else loop=" · frame-loop on"; fi
-  said=$(printf '%s' "$input" | jq -r '.workspace.project_dir // empty')
-  if [ -n "$said" ]; then case "$dir/" in "$repo"/*) ;; *) loop="$loop for $(printf '%s' "$repo" | sed "s#^$HOME#~#")" ;; esac; fi
+  if [ "$switch" = "off" ]; then loop=$(printf '\033[2mframe-loop\033[0m'); else loop=frame-loop; fi
 fi
-printf '%s%s' "$(printf '%s' "$dir" | sed "s#^$HOME#~#")" "$loop"
+printf '%s%s' "$(printf '%s' "$dir" | sed "s#^$HOME#~#")" "${loop:+ · $loop}"
 ```
 
 Then point the status line at it in `~/.claude/settings.json`; `refreshInterval` reruns it every five seconds, so an idle session shows a switch flipped elsewhere:
