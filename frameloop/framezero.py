@@ -137,6 +137,12 @@ def _split_round(node: str) -> dict[str, Any] | None:
     return mine[-1]
 
 
+def _parent_of(held: dict[str, Any]) -> Any:
+    import tree  # here, not at the top: tree is loaded only where a tree is
+
+    return tree.parent_of(held)
+
+
 def node_text_in_approved_words(text: str, node: str) -> bool:
     """Whether a node's file with this text holds what the author approved for it in a split,
     and only that: its lines, what each narrows, the files it may change, its name and the
@@ -157,7 +163,7 @@ def node_text_in_approved_words(text: str, node: str) -> bool:
     parent = "root" if found.get("split") == FRAME_0 else found.get("split")
     return (
         held.get("id", node) == node
-        and held.get("parent") == parent
+        and _parent_of(held) == parent
         and held.get("name") == found.get("name")
         and isinstance(held.get("scope"), list)
         and sorted(held["scope"]) == sorted(found.get("scope") or [])

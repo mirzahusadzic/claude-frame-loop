@@ -210,6 +210,33 @@ class SplitCheckTests(unittest.TestCase):
         self.assertEqual(owner_faults("children"), [])
         self.assertEqual(len(owner_faults("both")), 1)
 
+    def test_a_part_that_names_frame_0_as_its_parent_is_under_the_root(self):
+        """Seen live: the docs call a part's parent "frame 0", Claude wrote "frame0", the tree
+        knew only "root", and so no part owned frame 0's requirement: it was read over the
+        whole work and came back done while its parts had not."""
+        import tempfile
+
+        import tree
+
+        with tempfile.TemporaryDirectory() as folder:
+            for name, parent in (("counting", "frame0"), ("window", "frame 0"), ("sub", "counting")):
+                ask = {
+                    "id": name[0].upper() + "1",
+                    "quotes": "A1" if parent != "counting" else "C1",
+                    "owner": "steps",
+                    "text": name,
+                }
+                (Path(folder) / f"{name}.json").write_text(
+                    json.dumps({"parent": parent, "asks": [ask]}), encoding="utf-8"
+                )
+            nodes = tree.load(folder, {"asks": [{"id": "A1", "text": "the whole"}]})
+        self.assertEqual(
+            {n: nodes[n]["parent"] for n in ("counting", "window", "sub")},
+            {"counting": "root", "window": "root", "sub": "counting"},
+        )
+        self.assertEqual(sorted(tree.quoting("root", "A1", nodes)), [("counting", "C1"), ("window", "W1")])
+        self.assertTrue(tree.owned_by_parts("root", {"id": "A1"}, nodes))
+
 
 if __name__ == "__main__":
     os.environ.setdefault("FRAME_LOOP_WORK", str(ROOT / "tests/.work"))

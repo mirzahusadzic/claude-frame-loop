@@ -133,6 +133,7 @@ const approvedWords = (record: any, frame: string): Set<string> | null => {
 
 // Where a split sits, from the files the hooks read: frame 0, the tree's nodes up from the one
 // split, the approvals, and the guide's rules index. What cannot be read is said, never filled in.
+const ROOT_NAMES = ['root', 'frame 0', 'frame0', 'frame-0']
 const readHeader = async ($: any, parent: string | undefined): Promise<Header> => {
   const home = switchPath.replace(/[\\/]switch$/, '')
   const set = async (value: Promise<string | undefined>) => (await Promise.resolve(value).catch(() => '')) || ''
@@ -176,7 +177,8 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
       return { ...header, unread: 'the part being split is not in the tree' }
     }
     chain.unshift({ ...node, id: at })
-    at = typeof node?.parent === 'string' ? node.parent : undefined
+    // Frame 0 is the root, however the part's file words it (tree.parent_of).
+    at = typeof node?.parent === 'string' && !ROOT_NAMES.includes(node.parent.trim().toLowerCase()) ? node.parent : undefined
   }
   rules(frame0, 'frame 0')
   for (const node of chain) rules(node, typeof node.name === 'string' ? node.name : 'a part')

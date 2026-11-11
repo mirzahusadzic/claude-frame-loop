@@ -14,7 +14,7 @@ The counting node, which Claude saves to `.frame-loop/tree/counting.json` on con
 
 | Field | Value |
 | --- | --- |
-| parent | frame 0 |
+| parent | frame 0, written `root` in the file |
 | grain | the limiter |
 | scope | `api/limits.py`, `tests/test_limits.py` |
 | grant | those paths, through its scope; the file holds no grant of its own |

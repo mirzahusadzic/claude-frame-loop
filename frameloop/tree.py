@@ -29,6 +29,15 @@ import frames
 OWNERS = ("leaves", "steps", "children")
 
 
+ROOT_NAMES = ("root", "frame 0", "frame0", "frame-0")  # how a part under frame 0 may name its parent
+
+
+def parent_of(node: dict[str, Any]) -> Any:
+    """A node's parent as the tree keys it: frame 0 is "root", however the file words it."""
+    named = node.get("parent")
+    return "root" if isinstance(named, str) and named.strip().lower() in ROOT_NAMES else named
+
+
 def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]]:
     """The nodes in a tree folder, by id, with frame 0 as "root"."""
     nodes = {"root": {**frame0, "id": "root"}}
@@ -44,6 +53,8 @@ def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]
                     ]
             nid = raw.get("id", path.stem)
             nodes[nid] = {**raw, "id": nid}  # a file with no id is its file name's node, everywhere
+            if "parent" in raw:  # "frame 0", as the docs word it, is the root
+                nodes[nid]["parent"] = parent_of(raw)
     for nid in _circling(nodes):  # a node whose parents run in a circle never reaches the root
         nodes[nid] = {**nodes[nid], "circle": True}
     return nodes
