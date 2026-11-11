@@ -4018,19 +4018,24 @@ class TreeHookTests(CoreTests):
         self.assertIn(
             "the change matches the rule deleted-file", reading.read_signals(deleted, frame, "", "contributor")
         )
-        # Seen in a live build: every part of a real feature is large, so size marked each one
-        # for a reading and none settled. Size alone is no signal; a deleted file still is.
-        large = [
-            {"paths": ["app.py", "tests/test_app.py"], "diff": "diff --git a/app.py b/app.py\n" + "+x = 1\n" * 20000}
-        ]
-        self.assertEqual(reading.read_signals(large, frame, "", "contributor"), [])
-        gone = (
-            "diff --git a/app.py b/app.py\ndeleted file mode 100644\n--- a/app.py\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n"
-        )
-        deleted = [{"paths": ["app.py", "tests/test_app.py"], "diff": gone}]
-        self.assertIn(
-            "the change matches the rule deleted-file", reading.read_signals(deleted, frame, "", "contributor")
-        )
+        # Seen live: a sibling's test, changed in the same turn, marked this part as changed outside
+        # its files. Another part's files are not this part's to answer for; a stray file still is.
+        nodes = {"root": {}, "greeter": {"scope": ["app.py"]}, "other": {"scope": ["other.py", "tests/test_other.py"]}}
+        with (
+            unittest.mock.patch.object(reading, "_tree_nodes", lambda root: nodes),
+            unittest.mock.patch.object(reading, "load_frame0_root", dict),
+        ):
+            saved, state.NODE = state.NODE, "greeter"
+            try:
+                mixed = step("app.py", "tests/test_app.py", "other.py", "tests/test_other.py")
+                self.assertEqual(reading.read_signals(mixed, frame, "", None), [])
+                stray = step("app.py", "tests/test_app.py", "stray.py")
+                self.assertIn("a change outside its part's files", reading.read_signals(stray, frame, "", None))
+                self.assertIn(
+                    "no change of its own is recorded for it", reading.read_signals(step("other.py"), frame, "", None)
+                )
+            finally:
+                state.NODE = saved
 
     def test_a_part_left_with_no_work_or_already_read_as_it_stands_is_not_read_again(self):
         seen = loaded_seen()

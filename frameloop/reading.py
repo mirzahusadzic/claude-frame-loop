@@ -93,7 +93,33 @@ def _rules_hold(
         facts={"paths": paths},
         fit_read=IN_PART,
     )
-    return result.get("decision") == gate.PASS, str(result.get("reason") or "not read"), dict(result.get("usage") or {})
+    why = str(result.get("reason") or "not read")
+    named = re.search(r"names (\S+?):", why)  # the author reads the rule's words, never its id
+    words = {r["id"]: r["text"] for kind in ("principles", "triggers") for r in frame0.get(kind) or []}
+    if named and named.group(1) in words:
+        why = f"it may break your rule “{words[named.group(1)]}”"
+    return result.get("decision") == gate.PASS, why, dict(result.get("usage") or {})
+
+
+def _its_own(paths: list[str], scope: list[str]) -> list[str]:
+    """The paths that are this part's to answer for: those in its files, and those in no other
+    part's. A turn's change holds everything changed since the last commit, so a part read
+    after its sibling was worked on in the same turn sees the sibling's files too: seen live,
+    that marked a part for a reading over a sibling's test. A path in no part's files still
+    marks it, and the scope check on every change still names what lies outside."""
+    if not os.environ.get("FRAME_LOOP_TREE"):
+        return paths
+    others = [
+        g
+        for nid, node in _tree_nodes(load_frame0_root()).items()
+        if nid not in ("root", state.NODE)
+        for g in node.get("scope") or []
+    ]
+
+    def mine(path: str) -> bool:
+        return any(fnmatch.fnmatch(path, g) for g in scope) or not any(fnmatch.fnmatch(path, g) for g in others)
+
+    return [p for p in paths if mine(p)]
 
 
 def read_signals(claimed: list[dict[str, Any]], frame0: dict[str, Any], said: str, tier: str | None) -> list[str]:
@@ -104,8 +130,13 @@ def read_signals(claimed: list[dict[str, Any]], frame0: dict[str, Any], said: st
     found = []
     if not paths:
         found.append("no change is recorded for it")
-    elif not _in_scope(paths, list(frame0.get("scope") or [])):
-        found.append("a change outside its part's files")
+    else:
+        scope = list(frame0.get("scope") or [])
+        own = _its_own(paths, scope)
+        if not own:
+            found.append("no change of its own is recorded for it")
+        elif not _in_scope(own, scope):
+            found.append("a change outside its part's files")
     if paths and not any(TEST_PATH.search(p) for p in paths):
         found.append("no test changed with it")
     if tier and all(s.get("diff") is not None for s in claimed):
