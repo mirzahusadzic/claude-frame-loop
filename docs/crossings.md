@@ -17,7 +17,7 @@ The counting node, which Claude saves to `.frame-loop/tree/counting.json` on con
 | parent | frame 0 |
 | grain | the limiter |
 | scope | `api/limits.py`, `tests/test_limits.py` |
-| grant | those paths; the command `python3 -m unittest`; no spend beyond the loop's reads |
+| grant | those paths, through its scope; the file holds no grant of its own |
 | requirement | "Requests are counted per client", quoting "Each client is limited per minute"; owned by its children, so filled when the reset window is |
 | inversion | "Requests are not counted per client" |
 | promise, latency | counting adds under a millisecond to a request |
@@ -42,8 +42,8 @@ One JSON file per node in `.frame-loop/tree/`, fixed only once the user has appr
 | `parent` | the node it narrows | the parent exists |
 | `grain` | the level of the talk | |
 | `scope` | path globs the node may change | each glob lies under the parent's |
-| `grant` | paths, commands, spend | paths: the node's `scope`, held on every change, with no list of their own; commands and spend: designed, not built |
-| `asks` | the node's requirements, each quoting one parent requirement, owned by its steps or its children | quotes a parent requirement; one owner; whole inversion; no two alike |
+| `grant` | paths, commands, spend | paths: the node's `scope`, held on every change, with no list of their own; commands and spend: designed, not built. A part approved in a split holds no `grant`: the picker shows none, so a file with one is asked about again |
+| `asks` | the node's requirements, each quoting one parent requirement, with `owner` set to `steps` (its own work fills it) or `children` | quotes a parent requirement; one owner; whole inversion; no two alike |
 | `principles`, `triggers` | rules added at this node | none rewords a rule above |
 | `promises` | one promise per concern | at least one; one per concern |
 | `predictions` | the outcome expected for each requirement | every requirement covered; names one of Gadfly's findings, such as carried |

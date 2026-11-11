@@ -63,6 +63,10 @@ export type Header = {
   principles: { text: string; from: string }[]
   guideRules: number
   unread?: string
+  // The split's own reading, when the hooks read this split before the picker opened: each
+  // requirement split, by id, as covered, not covered or not settled, and each line that was
+  // found needed, or one the other lines already cover.
+  check?: { requirements: Record<string, string>; lines: Record<string, string> }
 }
 
 declare module 'claude-code' {

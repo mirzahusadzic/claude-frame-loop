@@ -146,23 +146,69 @@ class SplitCheckTests(unittest.TestCase):
         self.assertEqual(seen, [])
         self.assertIn("not read: each line of a split needs its text and the requirement it narrows", said)
 
-    def test_the_marker_reads_the_split_given_as_the_picker_takes_it(self):
-        asked = []
-        command = ": frame-loop-read --split <<'EOF'\n" + json.dumps(SPLIT) + "\nEOF"
-        with mock.patch.object(
-            splitcheck, "read", lambda split: asked.append(split) or "frame-loop · split of frame 0 · read"
-        ):
-            out = hook._read_on_demand(command)
-            bad = hook._read_on_demand(": frame-loop-read --split <<'EOF'\nnot json\nEOF")
-        self.assertEqual(asked, [SPLIT])
-        self.assertIn("split of frame 0", json.dumps(out, ensure_ascii=False))
-        self.assertIn("not read: usage", json.dumps(bad, ensure_ascii=False))
+    def test_a_split_is_read_from_a_file_and_kept_for_the_pickers_pages(self):
+        """The split first reached the check inside a shell command, and Claude Code asked the
+        author to approve that command when its JSON held quotes. It is read from a file."""
+        import tempfile
 
-    def test_claude_is_told_to_read_a_split_before_the_picker(self):
-        self.assertIn(": frame-loop-read --split", hook.SPLIT_TOLD)
+        import state
+
+        record = {"parent": "frame 0", "requirements": {"A1": "covered"}, "lines": {"x": "needed"}, "at": 1.0}
+        with tempfile.TemporaryDirectory() as work, mock.patch.object(state, "work", lambda: Path(work)):
+            given = Path(work) / "split.json"
+            given.write_text(json.dumps(SPLIT), encoding="utf-8")
+            asked = []
+            with mock.patch.object(
+                splitcheck,
+                "check",
+                lambda split: asked.append(split) or ("frame-loop · split of frame 0 · read", record),
+            ):
+                out = hook._read_on_demand(f": frame-loop-read --split {given}")
+            self.assertEqual(asked, [SPLIT])
+            self.assertIn("split of frame 0", json.dumps(out, ensure_ascii=False))
+            self.assertEqual(json.loads((Path(work) / "split-read.json").read_text(encoding="utf-8")), record)
+            with mock.patch.object(
+                splitcheck, "check", lambda split: ("frame-loop · split · not read: no reader", None)
+            ):
+                hook._read_on_demand(f": frame-loop-read --split {given}")
+            self.assertFalse((Path(work) / "split-read.json").exists())  # no other split's reading is shown
+            for bad in (": frame-loop-read --split", f": frame-loop-read --split {work}/none.json"):
+                self.assertIn("not read: usage", json.dumps(hook._read_on_demand(bad), ensure_ascii=False))
+
+    def test_claude_is_told_to_have_a_split_read_before_the_picker(self):
+        self.assertIn(": frame-loop-read --split <that file>", hook.SPLIT_TOLD)
         self.assertLess(
             hook.SPLIT_TOLD.index("frame-loop-read --split"), hook.SPLIT_TOLD.index("A split goes to the author whole")
         )
+
+    def test_claude_is_told_a_parts_file_holds_no_grant_of_its_own(self):
+        """Seen in a live session: each part's file carried a grant the picker had not shown,
+        so it was not what was approved, and the author was asked about every file again."""
+        self.assertIn("no `grant`, `obligations` or `semantic`", hook.SPLIT_TOLD)
+
+    def test_a_requirement_owned_by_its_steps_is_no_fault(self):
+        """Seen live: the docs say a requirement is owned by its steps, Claude wrote that word,
+        the node check knew only "leaves", and every such part's file was put to the author
+        again as raw JSON after they had approved it in the picker."""
+        import tree
+
+        def owner_faults(owner):
+            node = {
+                "id": "n",
+                "parent": "root",
+                "scope": ["a.py"],
+                "asks": [{"id": "C1", "quotes": "A1", "owner": owner, "text": "x"}],
+            }
+            return [
+                f
+                for f in tree.node_faults(node, {"id": "root", "asks": [{"id": "A1", "text": "y"}]}, {})
+                if "owner" in f
+            ]
+
+        self.assertEqual(owner_faults("steps"), [])
+        self.assertEqual(owner_faults("leaves"), [])
+        self.assertEqual(owner_faults("children"), [])
+        self.assertEqual(len(owner_faults("both")), 1)
 
 
 if __name__ == "__main__":

@@ -141,33 +141,34 @@ def told(parent: str, found: list[dict[str, Any]], unsplit: list[str]) -> str:
         out.append(f"frame-loop · split of {parent} · no part narrows: " + "; ".join(f"“{_short(t)}”" for t in unsplit))
     if any(one["said"] != COVERED for one in found):
         out.append(
-            "A split that is not settled is not a mismatch. Before the picker: say under each line how it "
-            "narrows the requirement, not only which words, add what is missing, and read the split again; "
-            "what stays open, tell the author in plain words."
+            "A split that is not settled is not a mismatch, and the picker shows the author which requirement "
+            "it is. Tell them in plain words what stays open; if they ask for a change, say under each line "
+            "how it narrows the requirement, not only which words."
         )
     return "\n".join(out)
 
 
-def read(split: dict[str, Any]) -> str:
-    """Read a proposed split against its parent and say what was found."""
+def check(split: dict[str, Any]) -> tuple[str, dict[str, Any] | None]:
+    """Read a proposed split against its parent: what was found in plain words, and the same
+    for the picker's pages, or None when nothing was read."""
     started = time.time()
     try:
         parent, asks = parent_asks(split.get("parent"))
         by = lines_of(split)
     except SplitError as error:
-        return f"frame-loop · split · not read: {error}"
+        return f"frame-loop · split · not read: {error}", None
     known = {a["id"]: a for a in asks}
     strangers = [q for q in by if q not in known]
     if strangers:
-        return f"frame-loop · split · not read: {', '.join(strangers)} is not a requirement of {parent}"
+        return f"frame-loop · split · not read: {', '.join(strangers)} is not a requirement of {parent}", None
     text = json.dumps(split, ensure_ascii=False)
     secret = next((name for name, pattern in SECRETS if pattern.search(text)), None)
     if secret:
-        return f"frame-loop · split · not read: it looks like it holds a secret ({secret})"
+        return f"frame-loop · split · not read: it looks like it holds a secret ({secret})", None
     tier, note = tier_for("")
     run = _reader()
     if tier is None or run is None:
-        return f"frame-loop · split · not read: {note or 'no reader configured'}"
+        return f"frame-loop · split · not read: {note or 'no reader configured'}", None
     state.LIVE["what"] = "checking the split"
     planned = [(known[q], by[q], frame_for(parent, known[q], by[q], tier)) for q in by]
     from concurrent.futures import ThreadPoolExecutor
@@ -189,4 +190,15 @@ def read(split: dict[str, Any]) -> str:
             "seconds": round(time.time() - started, 1),
         }
     )
-    return told(parent, found, unsplit)
+    record = {
+        "parent": split.get("parent") or FRAME_0,
+        "requirements": {one["id"]: one["said"] for one in found},
+        "lines": {x["text"]: x["role"] for one in found for x in one["lines"] if x["role"]},
+        "at": started,
+    }
+    return told(parent, found, unsplit), record
+
+
+def read(split: dict[str, Any]) -> str:
+    """The reading's words alone."""
+    return check(split)[0]

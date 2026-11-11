@@ -24,7 +24,9 @@ from typing import Any
 
 import frames
 
-OWNERS = ("leaves", "children")
+# A requirement is filled by its node's own steps ("leaves", or "steps", as the docs say it) or by
+# its children's requirements.
+OWNERS = ("leaves", "steps", "children")
 
 
 def load(folder: str | None, frame0: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -130,7 +132,7 @@ def node_faults(node: dict[str, Any], parent: dict[str, Any], nodes: dict[str, d
         if ask.get("quotes") not in parent_asks:
             faults.append(f"{ask.get('id')} quotes {ask.get('quotes')}, not an ask of {parent.get('id', 'its parent')}")
         if ask.get("owner") not in OWNERS:
-            faults.append(f"{ask.get('id')}: its owner is its leaves or its children, never both")
+            faults.append(f"{ask.get('id')}: its `owner` is `steps` (its own work) or `children`, never both")
     texts = [a.get("text") for a in node.get("asks") or []]
     if len(set(texts)) != len(texts):
         faults.append("two asks share their words: asks are disjoint")
@@ -265,7 +267,7 @@ def climb(nodes: dict[str, dict[str, Any]], completed: set[tuple[str, str]]) -> 
             return (
                 "children" if any(a.get("quotes") == ask["id"] for c in children[nid] for a in c["asks"]) else "leaves"
             )
-        return ask.get("owner", "leaves")
+        return "children" if ask.get("owner") == "children" else "leaves"
 
     # The nodes from the root down by a stack, not recursion, so a tree of any depth climbs;
     # then read bottom up, each child before its parent. A node is taken once.

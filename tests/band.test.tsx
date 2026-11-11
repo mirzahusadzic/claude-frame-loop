@@ -652,6 +652,52 @@ test('each page\'s header is read from the tree: path, requirement split, princi
   expect(review).toContain('  · A request that is not limited is answered as today  (frame 0)')
 })
 
+test('the split\'s reading shows on its pages: which lines are needed, which overlap, and what did not settle', async ($, on) => {
+  const sent = await picking($, on)
+  Object.assign(sent.files, TREE_FILES, {
+    '/project/.frame-loop/work/split-read.json': JSON.stringify({
+      parent: 'frame 0',
+      requirements: { A1: 'covered' },
+      lines: { 'Requests are counted per client.': 'overlaps', 'The count resets each minute.': 'needed' },
+    }),
+  })
+  await $.tool.call(SPLIT as any)
+  const ui = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+  const shown = await texts(ui)
+  expect(shown).toContain('      the other lines already cover this one')
+  expect(shown).toContain('      needed: without it the requirement is not met')
+  await ui.press({ key: 'go-review' })
+  await ui.unmount()
+  expect(await texts(await $.ui.mount({ ...PICKER, surface: 'terminal' }))).toContain(
+    'Read before you: the parts make what they split true.',
+  )
+})
+
+test('a split that did not settle, or was read for another frame, says so or says nothing', async ($, on) => {
+  const sent = await picking($, on)
+  const read = (parent: string, said: string) =>
+    JSON.stringify({ parent, requirements: { A1: said }, lines: { 'Requests are counted per client.': 'needed' } })
+  const pages = async () => {
+    await $.tool.call(SPLIT as any)
+    const first = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+    const page = await texts(first)
+    await first.press({ key: 'go-review' })
+    await first.unmount()
+    const last = await $.ui.mount({ ...PICKER, surface: 'terminal' })
+    const review = await texts(last)
+    await last.unmount()
+    return { page, review }
+  }
+  Object.assign(sent.files, TREE_FILES, { '/project/.frame-loop/work/split-read.json': read('frame 0', 'not settled') })
+  expect((await pages()).review).toContain(
+    'Read before you: not settled whether the parts make "Each client is limited per minute" true.',
+  )
+  sent.files['/project/.frame-loop/work/split-read.json'] = read('counting', 'covered') // another split's reading
+  const other = await pages()
+  expect(other.page.join('\n')).not.toContain('needed: without it')
+  expect(other.review).toContain('Not read before you: this split was not read against what it splits.')
+})
+
 test('a split below frame 0 shows the path through the parts and the principles each adds', async ($, on) => {
   const sent = await picking($, on)
   Object.assign(sent.files, TREE_FILES)

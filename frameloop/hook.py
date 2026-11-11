@@ -201,25 +201,18 @@ def _read_on_demand(command: str) -> dict[str, Any]:
 
     first, _, rest = command.strip().partition("\n")
     words = shlex.split(first)
-    if "--split" in words:  # a split, as the picker takes it, read as words before the author sees it
-        import splitcheck
-
-        found = HEREDOC.search(first)
-        body: list[str] = []
-        for line in rest.split("\n") if found else []:
-            if (line.lstrip("\t") if found.group(1) else line) == found.group(3):
-                break
-            body.append(line)
+    if "--split" in words:  # a split in a file, as the picker takes it: no command carries its JSON
+        at = words.index("--split") + 1
         try:
-            split = json.loads("\n".join(body))
-        except ValueError:
+            split = json.loads(Path(words[at]).expanduser().read_text(encoding="utf-8")[:400000])
+        except (IndexError, OSError, ValueError):
             split = None
         if not isinstance(split, dict):
             return _reading_said(
-                "frame-loop · split · not read: usage: : frame-loop-read --split <<'EOF' "
-                '{"parent": ..., "parts": [...]} EOF, the split as the picker takes it'
+                "frame-loop · split · not read: usage: : frame-loop-read --split <file>, the file holding "
+                "the split as JSON, with the `parent` and `parts` the approve tool takes"
             )
-        return _reading_said(splitcheck.read(split))
+        return _reading_said(_split_read(split))
     if "--complete" in words:
         frame0 = load_frame0()
         # What the turn declared holds here too: a stricter reader, a harder reading.
@@ -676,6 +669,24 @@ def _writes_what_was_approved(path: str, tool: str | None, tool_input: dict[str,
     return framezero.text_in_approved_words(text, framezero.FRAME_0)
 
 
+def _split_read(split: dict[str, Any]) -> str:
+    """A split read as words against the frame it splits, before it goes to the picker. What
+    was found is kept for the picker's pages and said here. A split that was not read leaves
+    no reading of another split behind."""
+    import splitcheck
+
+    said, record = splitcheck.check(split)
+    kept = state.work() / "split-read.json"
+    try:
+        if record is None:
+            kept.unlink(missing_ok=True)
+        else:
+            kept.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    return said
+
+
 def _node_file(path: str) -> str | None:
     """The node a path is the file of: a JSON file directly in the tree folder, named by it."""
     named = Path(path)
@@ -883,12 +894,13 @@ def _loop_files_changed(event: dict[str, Any]) -> list[str]:
 
 # How a split reaches the author: whole, in one picker, before anything of it exists.
 SPLIT_TOLD = (
-    "Before a split goes to the author, read it: `: frame-loop-read --split <<'EOF'` then the same "
-    "`parent` and `parts` you will give the approve tool, as JSON, then `EOF`. It says, a requirement "
-    "at a time, whether its parts make it true, which lines are needed and which could go. Each "
-    "item's `detail` says how the line narrows the requirement, not only which words. Revise and "
-    "read again, twice at most; what stays open, tell the author in plain words when the picker "
-    "opens. "
+    "Before a split goes to the author, have it read: write it to a file in your scratchpad as "
+    "JSON, with the same `parent` and `parts` you will give the approve tool, and run "
+    "`: frame-loop-read --split <that file>`. It reads the split as words against the frame it "
+    "splits: whether each requirement's parts make it true, which lines are needed and which the "
+    "others already cover. The picker shows the author the same on its pages, or that the split "
+    "was not read. Each item's `detail` says how the line narrows the requirement, not only which "
+    "words. "
     "A split goes to the author whole: one call of the approve tool with `parts`, every part of "
     "the split at once, each with its file's `id`, its `name` in plain words, its `scope` (the "
     "paths it may change) and its `items`, "
@@ -897,7 +909,9 @@ SPLIT_TOLD = (
     "per part and one approval for them all. End your turn when it opens: write no part's file "
     "and begin no code for the split until the answer arrives, then write each part's file with "
     "the Write tool, holding the lines approved for it, what each narrows, its name, its parent "
-    "and its scope as the picker showed them: such a file needs no other approval."
+    "and its scope as the picker showed them: such a file needs no other approval. Give a part's "
+    "file no `grant`, `obligations` or `semantic` of its own: the picker showed none, so a file "
+    "holding one goes to the author again."
 )
 
 

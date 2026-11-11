@@ -191,7 +191,35 @@ const readHeader = async ($: any, parent: string | undefined): Promise<Header> =
   } catch {
     // no rules index: no guide's rules to count
   }
+  try {
+    // What the hooks read of this split on its way here (splitcheck.py), kept beside their work.
+    const work = (await set($.env.get('FRAME_LOOP_WORK'))) || `${home}/work`
+    const read = await json(`${work}/split-read.json`)
+    if (read?.parent === (parent ?? 'frame 0') && read.requirements && read.lines)
+      header.check = { requirements: read.requirements, lines: read.lines }
+  } catch {
+    // the split was not read: its pages say nothing of a reading
+  }
   return header
+}
+
+// What the split's reading found of one line, in the author's words, or nothing.
+const ROLE: Record<string, string> = {
+  needed: 'needed: without it the requirement is not met',
+  overlaps: 'the other lines already cover this one',
+}
+// What it found of each requirement split, a line each: only what the author should look at.
+const readingOf = (header: Header | undefined): string[] => {
+  const found = header?.check?.requirements
+  if (!found) return ['Not read before you: this split was not read against what it splits.']
+  const open = Object.entries(found).filter(([, said]) => said !== 'covered')
+  if (open.length === 0) return ['Read before you: the parts make what they split true.']
+  return open.map(([id, said]) => {
+    const text = header?.requirements[id]?.text ?? 'a requirement'
+    return said === 'not covered'
+      ? `Read before you: the parts do not make "${text}" true. Something is missing.`
+      : `Read before you: not settled whether the parts make "${text}" true.`
+  })
 }
 
 // The requirements a part's lines narrow, in the frame's words, or what is wrong with them.
@@ -643,6 +671,13 @@ export const register: Register = on => {
                 </Button>
               ))}
             </Box>
+            {readingOf(header).length > 0 ? (
+              <Box flexDirection="column" marginTop={1}>
+                {readingOf(header).map(line => (
+                  <Text>{line}</Text>
+                ))}
+              </Box>
+            ) : null}
             {holds}
             {leftOutLines}
             {buttons(
@@ -674,6 +709,9 @@ export const register: Register = on => {
                 {`[${item.isChecked ? 'x' : ' '}] ${item.text}`}
               </Button>
               {item.detail ? <Text color="inactive">{`      ${item.detail}`}</Text> : null}
+              {ROLE[header?.check?.lines[item.text] ?? ''] ? (
+                <Text color="inactive">{`      ${ROLE[header?.check?.lines[item.text] ?? '']}`}</Text>
+              ) : null}
             </Box>
           ))}
           {holds}
