@@ -190,7 +190,9 @@ def node_text_in_approved_words(text: str, node: str) -> bool:
     try:
         held = json.loads(text)
         asks = held.get("asks") or []
-        items = [_words(x["text"]) for part in ("asks", "principles", "triggers") for x in held.get(part) or []]
+        # A split's lines are requirements: one written as a rule of the part is not what was
+        # approved, though its words are (pass 10, F4). A split approves no rules for a part.
+        items = [_words(x["text"]) for x in asks]
         quotes = {_words(a["text"]): a.get("quotes") for a in asks}
     except (ValueError, KeyError, TypeError, AttributeError):
         return False
@@ -203,6 +205,7 @@ def node_text_in_approved_words(text: str, node: str) -> bool:
         and isinstance(held.get("scope"), list)
         and sorted(held["scope"]) == sorted(found.get("scope") or [])
         and not (held.get("obligations") or held.get("semantic") or held.get("grant"))
+        and not (held.get("principles") or held.get("triggers"))
         and len(items) == len(set(items))
         and set(items) == words
         and all(narrows.get(t) == q for t, q in quotes.items())
@@ -476,6 +479,10 @@ def node_file_faults(path: str, tool: str, tool_input: dict[str, Any], frame0: d
         node = json.loads(text)
     except ValueError:
         return ["it is not JSON"]
+    # "frame 0", however the file words it, is the root here as in the tree and the approval
+    # check: read raw, an approved part was asked about again (pass 10, F6).
+    if isinstance(node, dict) and "parent" in node:
+        node = {**node, "parent": tree.parent_of(node)}
     nodes = {**_tree_nodes(load_frame0_root()), node.get("id", Path(path).stem): node}
     parent = nodes.get(node.get("parent"))
     if parent is None:
