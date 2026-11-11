@@ -32,10 +32,27 @@ A part is read when its work is finished, without Claude asking: when the work m
 
 ---
 
+### Counted by its tests
+
+Reading a finished change against a requirement is the expensive reading, and on a large change it often cannot settle: the reader sees a summary, and a summary of a large change says less than the requirement asks. With `FRAME_LOOP_READ=signal`, work inside an approved part is held another way: the split was read before any code, the part's files are held by code, its rules by the rules question, and its requirements by its tests.
+
+| A part's requirement is | When |
+| --- | --- |
+| counted, "✓ by its tests (not read: no signal)" | its change stays inside the part's files, a test changed with it, a step claims it, and the rules question on the change passed |
+| read against its change, as before | something marks it: a change outside the part's files, no test changed with it, no step claims it, a deleted file, a dependency manifest, the loop's own settings, or a rules question that did not pass |
+
+The line says it was not read, and the signal that makes a requirement be read is logged. Size alone is never a signal. The default is `always`, which reads every finished part; the setting is in [Setup](setup.md).
+
+> [!IMPORTANT]
+> "By its tests" means a test file changed with the work, not that the loop ran the test and saw it fail before and pass after. That check is on the [Roadmap](roadmap.md).
+
+---
+
 ### Evidence
 
 | Pilot | Result |
 | --- | --- |
 | recoil 1, two nodes on a scratch project | both completions carried and firm after one run, 45 reader calls; the climb completed the node, then frame 0; a step outside the node read as a reframing |
+| a split of two parts with one contract, on a signal, in a live session | the split read as covered before the picker; both parts counted by their tests after the rules question; frame 0's first requirement done from its parts and its second read and done: "frame 0 complete", 106 reader calls |
 
 The fixed rules are in `frameloop/tree.py`; the walk's contract is pinned in `tests/testcontract.py`.

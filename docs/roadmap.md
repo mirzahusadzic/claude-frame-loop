@@ -6,12 +6,13 @@ What frame-loop does not do yet, and what it might do later. Nothing here is pro
 
 ### Designed, not built
 
-These have a design and no implementation. The first three are the designed rows of the Premise table in [Crossings](crossings.md); the last two are design notes not yet in the docs.
+These have a design and no implementation. Some are the designed rows of the Premise table in [Crossings](crossings.md); the rest are design notes not yet in the docs.
 
 | Item | What it adds |
 | --- | --- |
 | commands and spend in the grant | a node's grant limits the commands it may run and what it may spend, not only its paths |
-| the crossing's own reading | the promise read over all its siblings, with each one removed in turn |
+| where a split's reading failed | a split that does not settle says which requirement, not where: each clause of the parent read on its own, so the doubt lands on a clause |
+| a part's tests run by the loop | on a signal, a part counts by its tests when a test file changed with it; the loop would run that test before and after the change and count only a test that failed first |
 | marking a reading wrong | a reading the user marks wrong stops its node until the user has looked |
 | refusal as a typed outcome | a refusal names its ground (a rule, a prior or a policy) and its owner, and rises to the user, so quietly smaller or different work cannot pass as compliance |
 | openings in frame 0 | an opening is a question frame 0 holds open beside its requirements; work on one returns a draft, an option or a question, never code tested against a guess |

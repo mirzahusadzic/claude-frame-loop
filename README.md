@@ -25,6 +25,7 @@ A semantic workflow linter for Claude Code: your confirmed requirements and rule
 - **Free checks:** every turn; files, size, your confirmed rules; no model.
 - **Reader:** on a signal, on a plan, or when Claude asks, under Gadfly's trials; a fit without your requirement is rejected.
 - **A summary goes out:** Haiku, on your login, summarizes the change, told never to quote it; the reader (another model, Muse Spark) gets the summary and file names, with frame 0 and the rules; secrets are refused. It may still carry private text. [Privacy](docs/privacy.md).
+- **Large work, split:** a requirement too coarse to check is split into parts; the split is read as words before any code, and you approve it whole in one picker, with its contracts.
 - **Authority:** pushes, releases, publishing, deletes, the loop's own files: recorded, and Claude is told; a delete, or a change to frame 0, the rules, the tree or the switch, also reaches you as a ▲; in enforce mode, they wait for your OK.
 - **Live:** a band above the prompt: what is happening now, the time left, the tokens spent.
 

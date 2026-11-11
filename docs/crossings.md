@@ -1,6 +1,6 @@
 # Crossings
 
-Advanced: not needed for a first check. What you see: for large work, Claude proposes splitting a requirement into smaller ones, each saved as a node file once you confirm, and a change outside a node's paths is reported as not authorized.
+Advanced: not needed for a first check. What you see: for large work, Claude proposes splitting a requirement into parts. The split is read first, as words against what it splits, and then reaches you whole in one picker; each part is saved as a node file once you approve, and a change outside a part's paths is reported as not authorized.
 
 Large work runs as a tree of frames: frame 0 at the root, nodes below it at any depth. A crossing is you and Claude agreeing how one part of the work splits, at the level it is discussed at (its grain), into sibling nodes; a node narrows its parent and never widens it. How completed work climbs the tree is in [Recoil](recoil.md).
 
@@ -32,6 +32,28 @@ A split reaches you whole, in one picker: a page for each part, then a review pa
 The header of every page is written by frame-loop from the tree, never by Claude: the path from frame 0 down to the requirement being split, that requirement in its words (marked when they are not the ones you approved), which page of how many this is, and, under "Holds for every part", the principles each part inherits with the level each comes from, and a count of the guide's rules. Claude writes only the lines you approve, each with what it narrows, and each part's files it may change, shown under its name. Once you approve, Claude writes each part's file, and a file that holds exactly what you approved for that part is written with no second question and no ▲; one that holds anything else comes to you. The arrows in the header, or the row of part names below the lines, move between pages; the focus starts on a page's first line, never on the approve button. The review lists each part with its number of lines and whether you have seen it; a part not seen yet does not block the approval.
 
 A split can also fix contracts between its parts: one statement that two or more parts must each keep, such as "a client over its limit is never counted twice" for counting and the 429 response. A contract shows on the page of every part it binds, in the same words, under "Contracts with other parts", naming the parts that share it; unchecking it on one page takes it out on every page, and the review lists each contract with its parts. The same one approval fixes the contracts with the parts. When the split is read before the picker, each contract is read once against the lines of the parts it binds, and each of those pages says whether their lines keep it, do not keep it, or did not settle; a reading that failed is never shown as kept.
+
+---
+
+### The split's reading
+
+Before the picker opens, the split is read as words against the frame it splits: no code exists yet, so this is the one place where a wrong turn costs a sentence to fix. Claude writes the split to a file and runs `: frame-loop-read --split <file>`; what the reading finds is drawn on the picker and said to Claude.
+
+| On the picker | Means |
+| --- | --- |
+| Read before you: the parts make what they split true | every requirement being split is met if all its lines are |
+| Read before you: not settled whether the parts make "..." true | the reader could not tell; it is no mismatch, and the split is yours to judge |
+| Read before you: the parts do not make "..." true. Something is missing | the lines leave a gap in that requirement |
+| needed: without it the requirement is not met | under a line: taking it out breaks the answer |
+| the other lines already cover this one | under a line: the split holds without it |
+| says which words it narrows, not how | under a line: its detail only quotes its parent, so the link between them stands nowhere |
+| Read before you: a part may break your rule "..." | that part's lines, read against the rules that hold for its files |
+| Not read before you | no reading was made of exactly this split: it was skipped, refused, or the split was changed afterwards |
+
+Each part's page also lists the guide's rules whose scope its files touch and what a change there will owe. Each contract is read against the lines of the parts it binds. A reading that fails or is refused is never shown as a pass, and a reading made for other lines, files or contracts is never shown at all.
+
+> [!NOTE]
+> A split's lines are words nobody has approved yet, and they are sent as written. A reader that trains on its inputs gets them only from a project GitHub confirms public; elsewhere the split is not read, and the picker says so.
 
 ---
 
@@ -75,5 +97,6 @@ A crossing holds its premise as the load-bearing method declares it: what each s
 | node files, their checks, engagement, scope enforcement | built |
 | completion per requirement and the climb | built; see Recoil |
 | commands and spend in the grant | designed |
-| the crossing's own reading: the promise over all siblings, each removed in turn | designed |
+| the split's reading: each requirement against the lines that narrow it, each line removed in turn, each part against its rules, each contract against its parts | built; see The split's reading |
+| where a split's reading failed, clause by clause | designed |
 | marking a reading wrong, which stops a node until the user has looked | designed |

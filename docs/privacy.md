@@ -30,6 +30,7 @@ Every reading also carries frame 0's requirements and the rules, in their own wo
 | plan, on leaving plan mode | the plan's text | the file names, if any, and the plan's label |
 | proposal, before any code | its text | its label |
 | completion | each step's free label and the claimed steps' diffs, cut at 4,000 characters each | each step's label, from its whole diff |
+| a split, before its picker | its lines, what each narrows, its contracts, the requirement being split and the rules for each part's files, as written; to a reader that trains, only from a project confirmed public | the same: a split is words, not a change, and has no label |
 
 ---
 

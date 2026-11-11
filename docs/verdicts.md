@@ -32,6 +32,7 @@ A read that fits, finds nothing to read or does not settle shows nothing once it
 | ▲ needs you: frame 0's words aren't the ones you approved: Claude can open the picker | the frame holds something you did not approve, or lacks something you did, so nothing was read | ask Claude to open it |
 | ▲ needs you: 2 of 3 claimed requirements read as done · 4 not read | completion found a requirement the work claimed firmly not done, or was refused one, and counts what it did not read, each named under details; what did not settle goes to Claude first; for the whole frame, "2 of 3 requirements" | finish them |
 | ▲ needs you: Claude didn't say which of your requirements this work serves | completion: the work claims none, and the reader's two answers did not agree on one | ask Claude which |
+| ▲ split: a part may break your rule "a rule" | the split's reading, before its picker: that part's lines against the rules for its files | change the part's lines, or the rule |
 | ■ not read: a reason | refused before sending, such as a secret | see [Privacy](privacy.md); never counted as a fit |
 
 ---
