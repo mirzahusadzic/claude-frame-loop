@@ -184,6 +184,20 @@ def _rules_notes(frame0: dict[str, Any]) -> list[str]:
 
 
 HEREDOC = re.compile(r"<<(-?)\s*(\\|['\"]?)(\w+)['\"]?")
+SPLIT_PATH = re.compile(r"""(?:^|\s)--split\s+(?:"([^"]+)"|'([^']+)'|([^\s"']\S*))""")
+
+
+def _split_file(first: str, words: list[str]) -> Path | None:
+    """The file `--split` names: the word as a shell reads it, or, where that names no file,
+    the path as it is written. A shell's reading eats the backslashes of a Windows path
+    (`C:\\Users\\…`), which Claude Code's hooks under Git Bash may be given."""
+    at = words.index("--split") + 1
+    written = SPLIT_PATH.search(first)
+    for given in (words[at] if at < len(words) else "", "".join(written.groups(default="")) if written else ""):
+        path = Path(given).expanduser()
+        if given and path.is_file():
+            return path
+    return None
 
 
 def _reading_said(text: str) -> dict[str, Any]:
@@ -202,10 +216,10 @@ def _read_on_demand(command: str) -> dict[str, Any]:
     first, _, rest = command.strip().partition("\n")
     words = shlex.split(first)
     if "--split" in words:  # a split in a file, as the picker takes it: no command carries its JSON
-        at = words.index("--split") + 1
+        path = _split_file(first, words)
         try:
-            split = json.loads(Path(words[at]).expanduser().read_text(encoding="utf-8")[:400000])
-        except (IndexError, OSError, ValueError):
+            split = json.loads(path.read_text(encoding="utf-8")[:400000]) if path else None
+        except (OSError, ValueError):
             split = None
         if not isinstance(split, dict):
             return _reading_said(

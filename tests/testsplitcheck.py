@@ -369,8 +369,76 @@ class SplitCheckTests(unittest.TestCase):
             ):
                 hook._read_on_demand(f": frame-loop-read --split {given}")
             self.assertFalse((Path(work) / "split-read.json").exists())  # no other split's reading is shown
-            for bad in (": frame-loop-read --split", f": frame-loop-read --split {work}/none.json"):
+            broken = Path(work) / "broken.json"
+            broken.write_text('{"parts": [', encoding="utf-8")  # a file that is there and holds no JSON
+            for bad in (
+                ": frame-loop-read --split",
+                f": frame-loop-read --split {work}/none.json",
+                f": frame-loop-read --split {broken}",
+            ):
                 self.assertIn("not read: usage", json.dumps(hook._read_on_demand(bad), ensure_ascii=False))
+
+    def test_a_split_file_is_found_as_its_path_is_written(self):
+        """Windows CI: the marker's words were split as a POSIX shell splits them, which ate the
+        backslashes of `C:\\Users\\…`, so the file was not found and the split not read. A path
+        with backslashes, or with a space inside quotes, is taken as written; a space escaped
+        by a backslash still reads as a shell reads it, where a backslash is no separator."""
+        import tempfile
+
+        import state
+
+        record = {"parent": "frame 0", "requirements": {"A1": "covered"}, "at": 1.0}
+        with tempfile.TemporaryDirectory() as work, mock.patch.object(state, "work", lambda: Path(work)):
+            if os.sep == "\\":  # a backslash is a separator here, a character of the name elsewhere
+                (Path(work) / "sub").mkdir()
+                slashed = Path(work) / "sub" / "split.json"
+            else:
+                slashed = Path(work) / "sub\\split.json"
+            (Path(work) / "with space").mkdir()
+            spaced = Path(work) / "with space" / "split.json"
+            for given in (slashed, spaced):
+                given.write_text(json.dumps(SPLIT), encoding="utf-8")
+            self.assertIn("\\", str(slashed))
+            commands = [
+                f": frame-loop-read --split {slashed}",
+                f': frame-loop-read --split "{slashed}"',
+                f": frame-loop-read --split '{spaced}'",
+                f': frame-loop-read --split "{spaced}"',
+            ]
+            if os.sep == "/":  # elsewhere a backslash before a space would end a folder's name
+                commands.append(": frame-loop-read --split " + str(spaced).replace(" ", "\\ "))
+            for command in commands:
+                with self.subTest(command):
+                    asked = []
+                    with mock.patch.object(
+                        splitcheck,
+                        "check",
+                        lambda split, asked=asked: (
+                            asked.append(split) or ("frame-loop · split of frame 0 · read", record)
+                        ),
+                    ):
+                        out = json.dumps(hook._read_on_demand(command), ensure_ascii=False)
+                    self.assertEqual(asked, [SPLIT])
+                    self.assertNotIn("not read: usage", out)
+            unquoted = json.dumps(hook._read_on_demand(f": frame-loop-read --split {spaced}"), ensure_ascii=False)
+            self.assertIn("not read: usage", unquoted)  # unquoted, a space ends the path, as in a shell
+
+    def test_a_reading_that_cannot_be_kept_is_still_said(self):
+        """A work folder that cannot be written would crash the marker's hook, and the reading
+        Claude asked for would be lost."""
+        import tempfile
+
+        import state
+
+        with tempfile.TemporaryDirectory() as work, mock.patch.object(state, "work", lambda: Path(work)):
+            blocked = Path(work) / "split-read.json"
+            blocked.mkdir()  # neither written over nor removed
+            for record in ({"parent": "frame 0", "at": 1.0}, None):
+                with mock.patch.object(
+                    splitcheck, "check", lambda split, r=record: ("frame-loop · split of frame 0 · read", r)
+                ):
+                    self.assertEqual(hook._split_read(SPLIT), "frame-loop · split of frame 0 · read")
+            self.assertTrue(blocked.is_dir())
 
     def test_claude_is_told_to_have_a_split_read_before_the_picker(self):
         self.assertIn(": frame-loop-read --split <that file>", hook.SPLIT_TOLD)
