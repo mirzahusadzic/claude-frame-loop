@@ -161,6 +161,23 @@ class LiveFileTests(unittest.TestCase):
         self.assertTrue(self.path.is_dir())
         self.assertFalse(live._LIVE_LOCK.locked())
 
+    def test_a_part_line_that_cannot_be_replaced_leaves_no_temporary_file_and_fails_no_hook(self):
+        """A failed write of where the work is would crash the marker that engages a part, or
+        leave a stray temporary file beside the band's files at every move."""
+        target = self.tmp / "live-test.part.json"
+        target.mkdir()
+        live._part_line({"part": None, "finished": None})
+        self.assertEqual(sorted(p.name for p in self.tmp.glob("*.tmp")), [])
+        self.assertTrue(target.is_dir())
+
+    def test_a_temporary_file_that_cannot_be_removed_fails_no_hook_either(self):
+        self.path.mkdir()
+        (self.tmp / "live-test.part.json").mkdir()
+        with mock.patch.object(Path, "unlink", side_effect=OSError("held by another process")):
+            live._live(state="reading")
+            live._part_line({"part": None, "finished": None})
+        self.assertFalse(live._LIVE_LOCK.locked())
+
     def test_an_interrupted_read_is_closed_and_a_finished_one_left(self):
         """A read the user stopped would show as still checking in the band."""
         self.path.write_text(json.dumps({"state": "reading", "pid": None}), encoding="utf-8")

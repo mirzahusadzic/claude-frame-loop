@@ -118,7 +118,7 @@ def torn(frame, only=()):
 
 
 class SplitCheckTests(unittest.TestCase):
-    def read(self, reader, split=SPLIT, rules=keeps):
+    def read(self, reader, split=SPLIT, rules=keeps, held=FRAME):
         seen = []
         self.rule_frames = []
 
@@ -131,7 +131,7 @@ class SplitCheckTests(unittest.TestCase):
 
         with (
             mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
-            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: held),
             mock.patch.object(splitcheck, "tier_for", lambda text: ("contributor", "")),
             mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
             mock.patch.object(splitcheck, "_reader", lambda: run),
@@ -548,6 +548,223 @@ class SplitCheckTests(unittest.TestCase):
         moved = json.loads(json.dumps(SPLIT))
         moved["parts"][0]["scope"] = ["other.py"]
         self.assertNotEqual(splitcheck.shape_of(moved), record["of"])
+
+    def test_a_requirement_the_parts_do_not_make_true_says_something_is_missing(self):
+        def refuting(frame, only=()):
+            return {"exit": 0, "firm": True, "category": "carried", "findings": [{"levels": {"baseline": "no"}}]}
+
+        said, _ = self.read(refuting)
+        self.assertIn(
+            f"“{PARENT[0]['text']}”: its parts do not make it true: something is missing",
+            said,
+        )
+        self.assertNotIn("its parts make it true", said)
+        self.assertIn("is not a mismatch", said)
+
+    def test_a_split_that_says_how_and_narrows_every_requirement_has_nothing_left_to_name(self):
+        """A line on thin details or on requirements no part narrows, said of a split that has
+        neither, would send Claude to revise a split that needs nothing."""
+        whole = {
+            "parts": [
+                {
+                    "id": "counting",
+                    "name": "Counting",
+                    "scope": ["app.py"],
+                    "items": [
+                        {
+                            "text": "Requests are counted per client.",
+                            "detail": "one count a client, reset each minute",
+                            "quotes": "A1",
+                        },
+                        {
+                            "text": "Over the count, a request gets HTTP 429.",
+                            "detail": "the refusal a client over its count receives",
+                            "quotes": "A2",
+                        },
+                    ],
+                }
+            ]
+        }
+        said, seen = self.read(covered, whole)
+        self.assertEqual(len(seen), 2)  # one reading a requirement
+        self.assertNotIn("no part narrows", said)
+        self.assertNotIn("not how", said)
+
+    def test_a_split_with_no_line_is_not_read(self):
+        said, seen = self.read(covered, {"parts": [{"id": "x", "name": "X", "scope": ["a"], "items": []}]})
+        self.assertEqual((seen, self.rule_frames), ([], []))
+        self.assertIn("not read: the split holds no line", said)
+
+    def test_a_part_whose_files_no_rule_holds_is_asked_nothing_about_rules(self):
+        """A rules question with no rule in it costs calls and can only pass: a part no rule
+        holds is read for its requirement alone, and nothing is said of rules it may break."""
+        bare = {**FRAME, "principles": [], "triggers": [], "semantic": [], "obligations": []}
+        said, seen = self.read(covered, held=bare)
+        self.assertEqual(self.rule_frames, [])
+        self.assertEqual(len(seen), 1)
+        self.assertNotIn("rule", said)
+
+    def test_a_split_that_holds_a_secret_is_sent_to_no_reader(self):
+        leaky = json.loads(json.dumps(SPLIT))
+        leaky["parts"][0]["items"][0]["detail"] = "keyed by AKIAABCDEFGHIJKLMNOP"
+        said, seen = self.read(covered, leaky)
+        self.assertEqual((seen, self.rule_frames), ([], []))
+        self.assertIn("not read: it looks like it holds a secret (an AWS key)", said)
+
+    def test_a_split_with_no_reader_allowed_is_not_read_and_leaves_no_reading(self):
+        """A failed reading is never a pass: with no reader, or a tier refused, nothing is
+        kept for the picker's pages, and the line says why."""
+        calls = []
+        for tier, reader, why in (
+            ("private", None, "no reader configured"),
+            (None, lambda frame, only=(): calls.append(frame), "unknown reader tier 'x'"),
+        ):
+            with (
+                self.subTest(why),
+                mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+                mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+                mock.patch.object(
+                    splitcheck, "tier_for", lambda text, t=tier: (t, "" if t else "unknown reader tier 'x'")
+                ),
+                mock.patch.object(splitcheck, "not_public", lambda cwd: None),  # as a public project: no machine state
+                mock.patch.object(splitcheck, "_reader", lambda r=reader: r),
+                mock.patch.object(splitcheck, "_log", lambda row: None),
+            ):
+                said, record = splitcheck.check(SPLIT)
+                self.assertIsNone(record)
+                self.assertIn(f"frame-loop · split · not read: {why}", said)
+        self.assertEqual(calls, [])
+
+    def test_a_splits_reading_counts_its_calls_from_its_own_start(self):
+        """A split of five requirements and four parts, read under a count already running,
+        hit the reader's cap and settled nothing."""
+        import types
+
+        module = types.ModuleType("split_reader_double")
+        events = []
+        module.new_reading = lambda: events.append("new count")
+
+        def run(frame, only=()):
+            events.append(frame["name"])
+            return keeps(frame) if frame["name"].startswith("violation-") else covered(frame)
+
+        run.__module__ = module.__name__
+        with (
+            mock.patch.dict(sys.modules, {module.__name__: module}),
+            mock.patch.object(splitcheck, "parent_asks", lambda parent: ("frame 0", PARENT)),
+            mock.patch.object(splitcheck, "parent_frame", lambda parent: FRAME),
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("private", "")),
+            mock.patch.object(splitcheck, "_reader", lambda: run),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+        ):
+            splitcheck.check(SPLIT)
+        self.assertEqual(events[0], "new count")
+        self.assertEqual(events.count("new count"), 1)
+        self.assertGreater(len(events), 1)
+
+    def test_a_contract_that_is_no_statement_is_no_part_of_what_was_read_as_in_the_picker(self):
+        """The picker shows a reading only on the split it was of, rebuilt by the band as this
+        builds it; the band skips a contract that is no object, so this must too, or the two
+        would disagree on the same split."""
+        self.assertEqual(splitcheck.shape_of({**SPLIT, "contracts": ["loose words", None]}), splitcheck.shape_of(SPLIT))
+
+    def tree_project(self):
+        """Frame 0 and a part "counting" under it, on disk, as the tree reads them."""
+        import tempfile
+
+        import state
+
+        held = tempfile.TemporaryDirectory(prefix="frame-loop-subsplit-")
+        self.addCleanup(held.cleanup)
+        home = Path(held.name)
+        (home / "tree").mkdir()
+        frame0 = {"id": "frame-0", "asks": PARENT, "principles": FRAME["principles"], "triggers": []}
+        (home / "frame0.json").write_text(json.dumps(frame0), encoding="utf-8")
+        counted = "Requests are counted per client."
+        part = {
+            "id": "counting",
+            "name": "Counting",
+            "parent": "frame 0",
+            "scope": ["app.py"],
+            "asks": [
+                {
+                    "id": "C1",
+                    "text": counted,
+                    "quotes": "A1",
+                    "owner": "children",
+                    "inversion": {counted: "Requests are not counted per client."},
+                }
+            ],
+            "principles": [{"id": "P2", "text": "Counts live in memory only."}],
+        }
+        (home / "tree" / "counting.json").write_text(json.dumps(part), encoding="utf-8")
+        patched = mock.patch.dict(
+            os.environ,
+            {
+                "FRAME_LOOP_FRAME0": str(home / "frame0.json"),
+                "FRAME_LOOP_TREE": str(home / "tree"),
+                "FRAME_LOOP_RULES": str(home / "no-rules.json"),
+            },
+        )
+        patched.start()
+        self.addCleanup(patched.stop)
+        saved = state.NODE
+        state.NODE = None
+        self.addCleanup(setattr, state, "NODE", saved)
+
+    def test_a_split_of_a_part_is_read_against_that_parts_requirements_and_every_rule_above_it(self):
+        """A split of a part read against frame 0's requirements, or without the rules above the
+        part, would pass lines that narrow nothing the part was approved for, or break a rule
+        the part keeps."""
+        self.tree_project()
+        sub = {
+            "parent": "counting",
+            "parts": [
+                {
+                    "id": "keys",
+                    "name": "Keys",
+                    "scope": ["app.py"],
+                    "items": [
+                        {
+                            "text": "A client is known by the key it sends.",
+                            "detail": "which client a request is counted for",
+                            "quotes": "C1",
+                        }
+                    ],
+                }
+            ],
+        }
+        seen, ruled = [], []
+
+        def run(frame, only=()):
+            (ruled if frame["name"].startswith("violation-") else seen).append(frame)
+            return keeps(frame) if frame["name"].startswith("violation-") else covered(frame)
+
+        with (
+            mock.patch.object(splitcheck, "tier_for", lambda text: ("private", "")),
+            mock.patch.object(splitcheck, "_reader", lambda: run),
+            mock.patch.object(splitcheck, "_log", lambda row: None),
+        ):
+            said, record = splitcheck.check(sub)
+            self.assertEqual(len(seen), 1)
+            self.assertEqual(
+                seen[0]["inputs"], [{"id": "ask", "text": "The requirement: Requests are counted per client."}]
+            )
+            self.assertIn("split of Counting · “Requests are counted per client.”: its parts make it true", said)
+            rules = json.dumps(ruled, ensure_ascii=False)
+            self.assertIn("A request under the limit is answered as today.", rules)  # frame 0's, above the part
+            self.assertIn("Counts live in memory only.", rules)  # the part's own
+            self.assertEqual(record["parent"], "counting")
+            seen.clear()
+            for parent, why in (
+                ("billing", "no part named billing is in the tree"),
+                ("frame0", "C1 is not a requirement of frame 0"),
+            ):
+                said, record = splitcheck.check({**sub, "parent": parent})
+                self.assertIsNone(record)
+                self.assertIn(f"not read: {why}", said)
+            self.assertEqual(seen, [])
+        self.assertEqual(splitcheck.parent_frame("frame 0")["id"], "frame-0")
 
     def record(self):
         with (

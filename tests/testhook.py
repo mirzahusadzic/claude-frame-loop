@@ -3948,6 +3948,27 @@ class TreeHookTests(CoreTests):
         self.assertIn("its rules ✗", told)
         self.assertFalse([r for r in self.events("filled") if r.get("routed") == "its tests, no signal"])
 
+    def test_on_a_signal_only_requirements_the_same_steps_claim_share_one_rules_question(self):
+        """Asked again for each requirement the same change serves, the rules question would cost
+        its calls once a requirement, and the author would hear the same rule as often."""
+        self._quiet()
+        os.environ["FRAME_LOOP_READER"] = "testhook:completing_but_breaking"
+        seen = loaded_seen()
+        self.start()
+        self.marker(": frame-loop-node greeter")
+        (REPO / "hello.py").write_text(f"print('settings {uid(self)}')\n", encoding="utf-8")
+        (REPO / "tests").mkdir(exist_ok=True)
+        made = REPO / "tests" / f"test_settings_{uid_number(self)}.py"
+        made.write_text("def test_settings():\n    assert True\n", encoding="utf-8")
+        self.addCleanup(lambda: made.exists() and made.unlink())
+        self.marker(": frame-loop-declare --serves N1,N2")
+        told = self.marker(": frame-loop-node")["hookSpecificOutput"]["additionalContext"]
+        ruled = [f["name"] for f in seen if f["name"].startswith("violation-")]
+        self.end()
+        self.assertEqual(len(ruled), 1, ruled)
+        self.assertEqual(told.count("its rules ✗"), 1, told)
+        self.assertNotIn("by its tests", told)
+
     def test_on_a_signal_only_a_test_counts_for_the_requirement_its_step_claims_alone(self):
         """Pass 10, F3: with `--complete --all`, a requirement no step claimed took every step
         as its own, and one requirement's test passed them all."""

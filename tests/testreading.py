@@ -120,6 +120,24 @@ class ReadStepTests(Isolated):
         self.assertEqual({f["battery"]["reasoning"] for f in loaded.SEEN}, {"low"})
         self.assertFalse(hasattr(loaded, "on_progress"))
 
+    def test_a_reader_that_reports_tokens_is_counted_by_the_band_only_with_a_live_view(self):
+        """The band shows the tokens a reading spent; with no live view a count would be written
+        nowhere, and a counter left from an earlier reading would write into a stale one."""
+        import types
+        from unittest import mock
+
+        module = types.ModuleType("token_reader_double")
+        module.on_tokens = "left from an earlier reading"
+        module.run = lambda frame, only=(): testhook.passing(frame, only)
+        module.run.__module__ = module.__name__
+        with mock.patch.dict(sys.modules, {module.__name__: module}):
+            os.environ["FRAME_LOOP_READER"] = f"{module.__name__}:run"
+            reading.read_step(FRAME0, self.step(), ["A1"], "private")
+            self.assertIsNone(module.on_tokens)
+            os.environ["FRAME_LOOP_LIVE"] = str(WORK / f"reading-live-{uid(self)}")
+            reading.read_step(FRAME0, self.step(), ["A1"], "private")
+            self.assertIs(module.on_tokens, reading._on_tokens)
+
     def test_a_split_on_the_rules_is_not_lost_beside_an_unsettled_fit(self):
         """Only the first reason went on, so Claude never heard the rules question split."""
         os.environ["FRAME_LOOP_READER"] = "testreading:both_split"
@@ -160,6 +178,11 @@ def together(frame, only=()):
 
 def cut_short(frame, only=()):
     return {"error": {"message": "the reader gave no answer within 300 s, so it was stopped"}}
+
+
+def spent_out(frame, only=()):
+    """As the reader gives a reading stopped at its cap after forty calls."""
+    return {"exit": 3, "stopped": "spent", "made": 40}
 
 
 def firm_but_doubted(frame, only=()):
@@ -400,6 +423,16 @@ class CompletionTests(Isolated):
         text = self.complete()
         self.assertIn("not read (the reader gave no answer within 300 s", text)
         self.assertNotIn("None", text)
+
+    def test_a_reading_stopped_at_its_cap_still_counts_what_it_spent(self):
+        """A reading that did not finish is no verdict, but its calls were made: left out of the
+        count, the band and the record would show a costly stop as free."""
+        os.environ["FRAME_LOOP_READER"] = "testreading:spent_out"
+        self.claim("S1", ["A1"])
+        text = self.complete()
+        self.assertIn("A1 not read (spent)", text)
+        rows = [json.loads(x) for x in self.log.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual([r for r in rows if r.get("event") == "completion"][-1]["usage"]["calls"], 40)
 
     def complete(self):
         out = hook.answer(
@@ -859,3 +892,100 @@ class DiffFailureTests(Isolated):
             str(self.repo), missing, self.after, json.loads(Path(FIXTURE).read_text(encoding="utf-8")), ["A1"]
         )
         self.assertIn("the change's diff could not be read", step["signals"])
+
+
+class SignalTests(Isolated):
+    """FRAME_LOOP_READ=signal: work inside an approved part is read against its requirement only
+    when a fact the code finds marks it; otherwise its rules question alone is asked."""
+
+    DIFF = "diff --git a/app.py b/app.py\n+x = 1\n"
+
+    def setUp(self):
+        super().setUp()
+        os.environ.update(FRAME_LOOP_READ="signal", FRAME_LOOP_READER="testreading:plain")
+        state.NODE = "greeter"
+
+    def names(self):
+        return [f["name"].split("-")[0] for f in SEEN]
+
+    def read(self, frame0, paths, fit_read=None):
+        result, _, _ = reading._read(
+            frame0,
+            self.DIFF,
+            ["A1"],
+            "the turn's change",
+            "turn-1",
+            said="",
+            facts={"paths": paths},
+            fit_read=fit_read,
+        )
+        return result
+
+    def test_a_change_in_its_parts_files_is_put_to_the_rules_question_alone(self):
+        """A finished change read against its requirement rarely settled and took most of the
+        reader's cost: inside its part's files, only whether it breaks a rule is asked."""
+        result = self.read({**FRAME0, "scope": ["app.py"]}, ["app.py"])
+        self.assertEqual(self.names(), ["violation"])
+        self.assertEqual((result["decision"], result["fit"]), (gate.PASS, reading.IN_PART_SAID))
+        SEEN.clear()
+        result = self.read({**FRAME0, "scope": ["app.py"]}, ["other.py"])  # outside them, the fit is asked
+        self.assertIn("which", self.names())
+        self.assertNotEqual(result.get("fit"), reading.IN_PART_SAID)
+
+    def test_with_no_rule_to_break_nothing_is_asked_and_only_a_change_found_done_passes(self):
+        bare = {**FRAME0, "scope": ["app.py"], "principles": [], "triggers": []}
+        result = self.read(bare, ["app.py"])
+        self.assertEqual(SEEN, [])
+        self.assertEqual((result["decision"], result["fit"]), (gate.PASS, reading.IN_PART_SAID))
+        doubted = self.read(bare, ["app.py"], fit_read="doubted")
+        self.assertEqual(doubted["decision"], gate.UNSETTLED)  # what the end-of-work check doubted is no pass
+        done = self.read(bare, ["app.py"], fit_read="done")
+        self.assertEqual((done["decision"], done["fit"]), (gate.PASS, reading.FIT_READ))
+        self.assertEqual(SEEN, [])
+
+    def test_a_part_whose_frame_holds_no_rule_holds_its_rules_with_no_call(self):
+        claimed = [{"id": "S1", "diff": self.DIFF, "paths": ["app.py"]}]
+        held = reading._rules_hold({"asks": FRAME0["asks"], "scope": ["app.py"]}, claimed, "", "A1")
+        self.assertEqual(held, (True, "", {}))
+        self.assertEqual(SEEN, [])
+
+    def test_without_a_tree_every_path_changed_is_the_parts_to_answer_for(self):
+        """No sibling's files can excuse a path when there is no tree: one outside the part's
+        files marks it for a reading."""
+        step = [{"paths": ["other.py", "tests/test_app.py"], "diff": "+x\n"}]
+        signals = reading.read_signals(step, {"scope": ["app.py", "tests/*"]}, "", None)
+        self.assertEqual(signals, ["a change outside its part's files"])
+
+    def test_a_rules_question_on_the_parts_work_that_did_not_pass_marks_it_for_a_reading(self):
+        """A part whose turn rose on its rules would be counted by its tests, as if nothing had."""
+        step = [{"paths": ["app.py", "tests/test_app.py"], "diff": "+x\n"}]
+        frame = {"scope": ["app.py", "tests/*"]}
+        rows = [
+            {"session": self.session, "node": "greeter", "event": "turn", "decision": gate.PASS},
+            {"session": self.session, "node": "other", "event": "turn", "decision": gate.RISE},
+            {"session": "elsewhere", "node": "greeter", "event": "turn", "decision": gate.RISE},
+        ]
+        self.log.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+        self.assertEqual(reading.read_signals(step, frame, "", None), [])
+        with self.log.open("a", encoding="utf-8") as out:
+            out.write(json.dumps({**rows[0], "decision": gate.RISE}) + "\n")
+        self.assertEqual(reading.read_signals(step, frame, "", None), ["a rules question on its work did not pass"])
+
+    def test_without_a_tree_no_line_of_where_the_work_is_is_written(self):
+        folder = WORK / f"reading-live-{uid(self)}"
+        os.environ["FRAME_LOOP_LIVE"] = str(folder)
+        reading.show_part("greeter")
+        self.assertFalse((folder / f"{self.session}.part.json").exists())
+
+    def test_a_part_gone_from_the_tree_owns_none_of_its_frames_requirements(self):
+        """A part engaged and then removed would count its frame's requirements as its parts',
+        and none would be read."""
+        from unittest import mock
+
+        os.environ["FRAME_LOOP_TREE"] = str(WORK / f"reading-tree-{uid(self)}")
+        nodes = {"root": {**FRAME0, "id": "root"}, "child": {"id": "child", "parent": "root", "asks": []}}
+        with mock.patch.object(reading, "_tree_nodes", lambda root: nodes):
+            self.assertEqual(reading._owned_by_parts({"asks": [{"id": "N1", "text": "x"}]}), set())
+            state.NODE = "root"
+            nodes["child"]["asks"] = [{"id": "C1", "quotes": "A1"}]
+            self.assertEqual(reading._owned_by_parts(FRAME0), {"A1"})
