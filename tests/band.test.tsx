@@ -222,6 +222,22 @@ for (const [why, projectDir, where] of [['no project folder is named', undefined
   })
 }
 
+// Off and on-and-idle show the same empty band: the label beside the session's modes is the
+// one standing sign that nothing is being checked, so it stays for as long as the switch is off.
+for (const [isOff, said] of [[true, 'modes: plan, frame-loop off'], [false, 'modes: plan']] as const) {
+  test(`the switch: ${isOff ? 'off is said beside' : 'on adds nothing to'} the session's modes`, async ($, on) => {
+    const store = seed(on, null)
+    store.off = { value: isOff, version: 1 }
+    on('ui.render', ($: any, e: any) => {
+      const { Text } = $.ui.resolve(e)
+      return <Text>{`modes: ${e.props.modes.join(', ')}`}</Text>
+    })
+    const ui = await $.ui.mount({ plugin: 'frame-loop', component: 'SessionMode', props: { modes: ['plan'] }, surface: 'terminal' })
+    expect((await ui.find({ type: 'Text' }))?.text).toBe(said)
+    await ui.unmount()
+  })
+}
+
 // Seen: a reload left the band with only the current folder, and `/frame-loop on` said "on"
 // for a switch the hooks never read. What the hooks say for this session decides.
 test('the switch: /frame-loop writes where the hooks say they read it', async ($, on) => {
