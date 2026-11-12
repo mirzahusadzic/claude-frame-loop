@@ -146,23 +146,6 @@ def haiku(text: str) -> dict[str, Any]:
     return made
 
 
-def copied(label: str, text: str) -> list[str]:
-    """The label's runs of WIDTH or more characters that the change holds, each the
-    longest run, so the writer can be told what it repeated."""
-    flat_label, flat_text = " ".join(label.split()), " ".join(text.split())
-    runs, i = [], 0
-    while i <= len(flat_label) - WIDTH:
-        if flat_label[i : i + WIDTH] in flat_text:
-            end = i + WIDTH
-            while end < len(flat_label) and flat_label[i : end + 1] in flat_text:
-                end += 1
-            runs.append(flat_label[i:end].strip())
-            i = end
-        else:
-            i += 1
-    return runs
-
-
 def quotes(label: str, text: str) -> bool:
     """Whether the label copies the change: any WIDTH characters in a row, spaces collapsed."""
     flat_label, flat_text = " ".join(label.split()), " ".join(text.split())
