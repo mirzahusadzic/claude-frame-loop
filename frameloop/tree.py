@@ -99,15 +99,6 @@ def _ancestors(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[d
     return found
 
 
-def _circle(nid: str, nodes: dict[str, dict[str, Any]]) -> bool:
-    chain = _ancestors(nodes[nid], nodes)
-    return (
-        nid != "root"
-        and (not chain or chain[-1].get("id") != "root")
-        and (chain[-1] if chain else nodes[nid]).get("parent") in nodes
-    )
-
-
 def scope_of(node: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[str]:
     """A node's scope, or its nearest parent's when it names none: never every path by
     omission."""
@@ -151,7 +142,11 @@ def node_faults(node: dict[str, Any], parent: dict[str, Any], nodes: dict[str, d
     texts = [a.get("text") for a in node.get("asks") or []]
     if len(set(texts)) != len(texts):
         faults.append("two asks share their words: asks are disjoint")
-    faults += [f for f in frames.frame0_faults({"asks": node.get("asks") or []}) if "inversion" in f or "no asks" in f]
+    asks = node.get("asks") or []
+    worded = [a for a in asks if isinstance(a.get("text"), str)]
+    faults += [f"{a.get('id')}: it has no `text`, the words it requires" for a in asks if a not in worded]
+    if worded or not asks:  # an ask with no words has no inversion to check
+        faults += [f for f in frames.frame0_faults({"asks": worded}) if "inversion" in f or "no asks" in f]
     if not node.get("scope"):
         faults.append("it names no scope: a node lists the paths it may change")
     if node.get("circle") or node.get("id") in {a.get("id") for a in _ancestors(parent, nodes)} | {parent.get("id")}:

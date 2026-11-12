@@ -466,6 +466,7 @@ class SplitWriteTests(Approved):
             ("a principle no picker showed", {**PART, "principles": [{"id": "P7", "text": "No new store."}]}),
             ("other words", {**PART, "asks": [{**PART["asks"][0], "text": "Requests are tallied."}]}),
             ("a grant", {**PART, "grant": {"commands": ["make"]}}),
+            ("a line with no words", {**PART, "asks": [{k: v for k, v in PART["asks"][0].items() if k != "text"}]}),
         ):
             with self.subTest(why):
                 self.split()
@@ -499,6 +500,7 @@ class SplitWriteTests(Approved):
             ("a contract with no record of any", None, self.BOUND),
             ("contracts that are no list", self.BOUND, {"text": self.SHARED}),
             ("a contract with no parts", self.BOUND, [{"text": self.SHARED}]),
+            ("a contract with no words", self.BOUND, [{"text": " ", "with": ["the-429"]}]),
         ):
             with self.subTest(why):
                 (self.home / "approved.json").unlink(missing_ok=True)
@@ -528,6 +530,25 @@ class SplitWriteTests(Approved):
     def test_a_part_under_another_name_is_not_excused_by_its_neighbours_answer(self):
         self.split()
         self.assertEqual(self.act(self.node(name="headers")), ("changed the tree", True))
+
+    def test_a_part_approved_in_the_split_and_then_removed_comes_to_the_author(self):
+        """The approval is of a part's file as it stands: a part removed is the tree changed,
+        and only the author may change it."""
+        self.split()
+        path = self.node()
+        self.assertEqual(self.act(path), ("changed the tree", False))
+        at = path.stat().st_mtime
+        path.unlink()
+        said = lines.act_words({"event": "config", "path": str(path), "at": at, "after": True})
+        self.assertEqual(said[:2], ("removed the tree", True))
+
+    def test_a_file_in_the_tree_folder_that_is_no_parts_json_still_asks(self):
+        """Only a part's own file, JSON directly in the tree folder, is excused by its split."""
+        self.split()
+        path = self.home / "tree" / "counting.md"
+        path.parent.mkdir()
+        said = self.pre(path, PART, "enforce")
+        self.assertEqual(said["hookSpecificOutput"]["permissionDecision"], "ask")
 
     def test_a_file_in_a_folder_below_the_tree_is_no_part(self):
         self.split()

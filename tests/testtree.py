@@ -153,6 +153,14 @@ class NodeFaultTests(unittest.TestCase):
         self.assertTrue(any("owner" in f for f in faults), faults)
         self.assertTrue(any("inversion" in f for f in faults), faults)
 
+    def test_an_ask_with_no_words_is_named_and_never_crashes_the_check(self):
+        """A part's file with a line that had no `text` crashed the hook that checks the write,
+        and the author read a KeyError instead of what was wrong."""
+        wordless = {k: v for k, v in node()["asks"][0].items() if k != "text"}
+        faults = tree.node_faults(node(asks=[wordless]), FRAME0, {"root": FRAME0})
+        self.assertIn("N1: it has no `text`, the words it requires", faults)
+        self.assertFalse(any("no asks" in f for f in faults), faults)  # it has one, with no words
+
 
 class FrameTests(unittest.TestCase):
     def test_a_node_reads_as_frame_0_with_its_asks_and_every_rule_above_it(self):
@@ -161,6 +169,16 @@ class FrameTests(unittest.TestCase):
         self.assertEqual([p["id"] for p in frame["principles"]], ["P1", "P2"])
         self.assertEqual([t["id"] for t in frame["triggers"]], ["T1"])
         self.assertEqual(frame["node"], "greeter")
+
+    def test_a_contract_takes_no_id_a_rule_above_holds_and_one_with_no_words_is_no_rule(self):
+        """A contract under a rule's id would be read, and named to the author, as that rule;
+        one with no words would put an empty rule to the rules question."""
+        above = {**FRAME0, "principles": [*FRAME0["principles"], {"id": "contract-1", "text": "Logs stay local."}]}
+        contracts = [{"text": " ", "with": ["readme"]}, {"text": SHARED, "with": ["readme"]}]
+        principles = tree.frame0_for(node(contracts=contracts), above)["principles"]
+        held = [p for p in principles if p.get("contract")]
+        self.assertEqual([(p["id"], p["text"], p["with"]) for p in held], [("contract-2", SHARED, ["readme"])])
+        self.assertIn({"id": "contract-1", "text": "Logs stay local."}, principles)
 
 
 SHARED = "A greeting never prints a name the user did not give."
@@ -321,6 +339,17 @@ class LoadTests(unittest.TestCase):
         self.assertEqual(tree.frame0_for(nodes["greeter"], FRAME0, nodes)["node"], "greeter")
         self.assertEqual(tree.node_frame(nodes["greeter"], {})["name"], "node-greeter")
         self.assertTrue(tree.climb(nodes, {("greeter", "N1")})["greeter"]["complete"])
+
+    def test_a_node_file_with_no_parent_is_under_no_frame(self):
+        """Read as frame 0's part, a file that names no parent would own frame 0's requirement
+        and fill it with its own steps."""
+        folder = Path(tempfile.mkdtemp())
+        raw = {k: v for k, v in node().items() if k != "parent"}
+        (folder / "greeter.json").write_text(json.dumps(raw), encoding="utf-8")
+        nodes = tree.load(str(folder), FRAME0)
+        self.assertNotIn("parent", nodes["greeter"])
+        self.assertFalse(tree.owned_by_parts("root", FRAME0["asks"][0], nodes))
+        self.assertFalse(tree.climb(nodes, {("greeter", "N1")})["root"]["filled"]["A1"])
 
 
 class MoreNodeFaultTests(unittest.TestCase):
