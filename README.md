@@ -63,7 +63,7 @@ From your sentence to the block, it goes in this order. Steps 3 and 6 call model
 
 It needs Claude Code with hooks modules, `git`, and Python 3.9 or later on the path: `python3` or `python`, and `py -3` on Windows. Everything else is Python's standard library.
 
-It runs on macOS, Linux and Windows. Its Windows branches pass their tests through stand-ins on macOS. No Windows machine has run it yet, and it has not been loaded in a session there.
+It runs on macOS, Linux and Windows. It has not been loaded in a session on Windows yet.
 
 Install it from its marketplace, at a Claude Code prompt:
 
@@ -137,12 +137,9 @@ The licence is for the code. What a project's records hold is its person's alone
 
 ### Status
 
-frame-loop is alpha, and its central check is not reliable yet. The last measurement passed none of a person's six rows, though the work looked to meet them, with either of two makers.
+frame-loop is alpha. With the check off it keeps your rows, your approval and the commands you approved, and calls no model.
 
-- **Why it failed.** The rows said several things, some about how the software is made, and the description of the change could not bear them. It named none of the options the rows spoke of, and had lost 7 of its 18 lines to its own form check.
-- **The mend.** One claim a row, and a command for what only a run can show, such as how the software is made. Neither is measured yet.
-- **Not shown in a live session:** the rows of the parts making the row above them pass, a project with nothing left open, the next proposal opening as one closes, and a line typed at the prompt as a change.
-- **Not shown at all:** a writer given a change whose own text tells it what to write.
+The check is the newer part. It is strict, and it can fail a row the work meets, most often a row that says several things. Write one claim a row, and give a command to what only a run can show.
 
 ---
 

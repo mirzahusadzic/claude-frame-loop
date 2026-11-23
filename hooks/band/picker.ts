@@ -6,7 +6,7 @@
 // answers until /frame-loop. A change closes it only while the session answers: after its turn the picker is open
 // again, on the new proposal or on the same one. Effects are data the shell carries out: check a proposal, run the
 // writer, read a waiting proposal back, submit the approval's sentence, bring the pane's ring to the cursor or its
-// open line, or tell the session one proposal took another's place. Enter on a row, or on his sentence, opens one
+// open line, or tell the session one proposal took another's place. Enter on a row, or on their sentence, opens one
 // line under it with the keyboard in it.
 import type { Examined, Open, Picker, Proposal } from '../../types'
 import { approveArgs } from './frameloop'
@@ -23,13 +23,13 @@ export type Event =
   | { type: 'go'; stop: string } // the cursor to a stop a page away, the ring with it
   | { type: 'focus'; stop: string } // the ring is on a stop of its own
   | { type: 'yes' } // y: the row under the cursor answered yes
-  | { type: 'press'; stop?: string } // enter on a row or his sentence: its line opens with the keyboard in it
+  | { type: 'press'; stop?: string } // enter on a row or their sentence: its line opens with the keyboard in it
   | { type: 'back' } // esc in the line, or the ring moved off it: back to the stop, nothing sent
-  | { type: 'typed'; text: string } // his words in the line as he types them, as the host tells each change
-  | { type: 'submit'; text: string } // enter in the line: empty confirms or closes; words are his change
-  | { type: 'changed'; text: string } // a line he sent at the host's prompt while the picker was open: his change
-  | { type: 'reopen' } // the session's turn after his change ended with no new proposal, or his line never entered
-  | { type: 'withdrawn' } // the session withdrew it, at his word
+  | { type: 'typed'; text: string } // their words in the line as they type them, as the host tells each change
+  | { type: 'submit'; text: string } // enter in the line: empty confirms or closes; words are their change
+  | { type: 'changed'; text: string } // a line they sent at the host's prompt while the picker was open: their change
+  | { type: 'reopen' } // the session's turn after their change ended with no new proposal, or their line never entered
+  | { type: 'withdrawn' } // the session withdrew it, at their word
   | { type: 'turned' } // a main turn ended
   | { type: 'details' }
   | { type: 'help' }
@@ -53,7 +53,7 @@ export type Effect =
   | { kind: 'replaced'; id: string; by: string }
 
 export const EMPTY: Picker = { open: null, waiting: [], told: [], ever: false, closing: '' }
-// The key of the line under the stop he chose.
+// The key of the line under the stop they chose.
 export { INPUT }
 
 type Step = { state: Picker; effects: Effect[] }
@@ -96,8 +96,8 @@ export const step = (s: Picker, e: Event): Step => {
   if (e.type === 'proposed') {
     if (o?.id === e.id || (o && s.waiting.some(w => w.id === e.id))) return same_
     if (o && !o.writing && (o.changed || same(o.proposal, e.proposal))) {
-      // a re-proposal for the same place and kind, or the session's answer to his change, takes the open one's place,
-      // which is dropped unwritten; a row whose words and question stand unchanged keeps his yes
+      // a re-proposal for the same place and kind, or the session's answer to their change, takes the open one's place,
+      // which is dropped unwritten; a row whose words and question stand unchanged keeps their yes
       const next = opened({ ...e, said: e.said || o.said }, keptOf(o))
       const ring: Effect[] = next.checking ? [] : [{ kind: 'focus' }]
       return { state: { ...s, open: next, ever: true, closing: '' }, effects: [{ kind: 'replaced', id: o.id, by: e.id }, ...checkIf(next), ...ring] }
@@ -155,8 +155,9 @@ export const step = (s: Picker, e: Event): Step => {
     case 'aside':
       return set({ aside: true, changing: '', typed: '' })
     case 'closed': // esc backs out one thing: the line, the details, the key list, then the pane itself
-      if (o.help) return set({ help: false }, [{ kind: 'focus' }])
-      if (o.details) return set({ details: '' }, [{ kind: 'focus' }])
+      // esc is the host's close, and it takes the keys with it: the pane the band keeps open takes them back
+      if (o.help) return set({ help: false }, [{ kind: 'regain' }])
+      if (o.details) return set({ details: '' }, [{ kind: 'regain' }])
       return o.changing ? set(shut(o), [{ kind: 'regain' }]) : o.aside || o.changed ? same_ : set({ aside: true })
     case 'resume':
       return set({ aside: false }, [{ kind: 'focus' }])
@@ -172,14 +173,14 @@ export const step = (s: Picker, e: Event): Step => {
         if (row?.status === 'Review') return step(s, { type: 'yes' })
         return set(shut(o), [{ kind: 'focus' }])
       }
-    case 'changed': // his change, to the row he chose or to the whole: closed while the session answers it
+    case 'changed': // their change, to the row they chose or to the whole: closed while the session answers it
       return o.aside || o.writing ? same_ : set({ changed: e.text, changing: '', typed: '', help: false })
     case 'reopen':
       return o.changed ? set({ changed: '' }) : same_
     case 'withdrawn':
       return o.changed ? after(s, [], true) : same_
   }
-  if (o.writing || o.checking || o.changed) return same_ // nothing changes under the writer, the check, or his change
+  if (o.writing || o.checking || o.changed) return same_ // nothing changes under the writer, the check, or their change
   const stops = stopsOf(o)
   const rows = rowsOf(o)
   const row = rows.find(r => r.id === o.cursor)
@@ -202,14 +203,14 @@ export const step = (s: Picker, e: Event): Step => {
       const next = rowsOf(answered).find(r => r.status === 'Review' && later.includes(r.id))
       return set({ answered: answered.answered, changing: '', typed: '', cursor: next?.id ?? 'ok', details: '' }, ring)
     }
-    case 'press': { // on a row or his sentence: its line opens under it, with the keyboard in it
+    case 'press': { // on a row or their sentence: its line opens under it, with the keyboard in it
       const at = e.stop && stops.includes(e.stop) ? e.stop : o.cursor
       if (at === 'ok') return isOffered(o) ? step(s, { type: 'approve' }) : same_
       if (at === 'retry') return step(s, { type: 'retry' })
       if (at !== 'said' && !rows.some(r => r.id === at)) return same_
       return set({ cursor: at, changing: at, typed: '', help: false }, [{ kind: 'focus', key: INPUT }])
     }
-    case 'details': // a row's details, or his sentence whole
+    case 'details': // a row's details, or their sentence whole
       return row || o.cursor === 'said' ? set({ details: o.details === o.cursor ? '' : o.cursor }, ring) : same_
     case 'help':
       return set({ help: !o.help }, ring)
@@ -236,8 +237,8 @@ export const held = (s: Picker): string[] => [...(s.open ? [s.open.id] : []), ..
 // what a message of the person's that answers it means. Nothing where this session's picker never held a proposal.
 export const pickerTold = (s: Picker): string[] =>
   s.ever ? [...s.told, `${LABELS.pickerNow} ${pickerLine(s)}.`, ...(held(s).length ? [LABELS.unapprovedTold] : [])] : []
-// What the session is told beside his change: to the row he chose in the pane or to the whole proposal, and what to do
-// with it. A line he sends at the host's prompt is a change to the whole, `whole`.
+// What the session is told beside their change: to the row they chose in the pane or to the whole proposal, and what to do
+// with it. A line they send at the host's prompt is a change to the whole, `whole`.
 export const changeTold = (o: Open, whole = false): string[] => {
   const row = whole ? undefined : rowsOf(o).find(r => r.id === o.changing)
   return [row ? `${LABELS.changeRow} ${o.id}: “${row.text}”.` : `${LABELS.changeWhole} ${o.id}.`, LABELS.changeTold]

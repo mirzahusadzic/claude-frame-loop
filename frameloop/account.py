@@ -9,9 +9,9 @@ or what is absent, that tells housekeeping, or that tells a detail of a thing an
 account is asked once more with each fault named, and a line still at fault in the second answer is dropped. Never
 more than one further call. The checks are patterns, so they catch the plain forms of each, not every wording.
 A word the person wrote in a requirement at the place, an option, a command or a file name among them, is never a
-quote: it is what he asked to observe. The check learns those words; the writer never does.
+quote: it is what they asked to observe. The check learns those words; the writer never does.
 
-The writer is one call of a small model through the person's own `claude -p`, as the old tree's writer.py made it:
+The writer is one call of a small model through the person's own `claude -p`:
 no tools, no MCP, no slash commands, no session kept, one turn. Its session loads nothing of the person's own: safe
 mode turns off their plugins, hooks, MCP servers and CLAUDE.md, no settings file is read, and every hook is turned
 off by the settings it is given; their login is kept. So a private change passes through none of their plugins.

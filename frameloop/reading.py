@@ -20,7 +20,7 @@ branch with the claim's kept steps where the maker would be (kept.py), and its r
 The claim reversed is the one kept with the claim's step at the examination, read against its own step; a claim with
 no reversal kept is read without that trial, and is then no more than a doubt.
 
-The call to Gadfly is the old tree's (reader.py): a version floor, a bound in time, and one more try after a pause
+The call to Gadfly has a version floor, a bound in time, and one more try after a pause
 where the router refused every call for now. Nothing reaches Gadfly before screen.py has read every string of the
 frame, and Gadfly withholds the same patterns itself.
 

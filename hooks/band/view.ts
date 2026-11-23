@@ -166,17 +166,17 @@ export const carried = (o: Open): string[] =>
   rowsOf({ ...o, answered: [] }).filter(r => r.status === 'Review' && !r.noStep && o.kept.includes(answerKey(r))).map(r => r.id)
 
 // The host's wrapper of a pasted text, as it puts a paste into the prompt it hands on: tags of the host's, no words
-// of his. A line that holds nothing but such tags is the wrapper's alone.
+// of theirs. A line that holds nothing but such tags is the wrapper's alone.
 const PASTE = /<\/?pasted_content(?:\s[^>]*)?>/g
 const PASTE_ONLY = /^\s*(?:<\/?pasted_content(?:\s[^>]*)?>\s*)+$/
-// His prompt as he typed it, line by line: the host's paste tags taken out, and every line that holds nothing but
+// Their prompt as they typed it, line by line: the host's paste tags taken out, and every line that holds nothing but
 // space; every word of the rest kept, each line made safe to draw.
 export const saidLines = (x: string): string[] =>
   x.split(/\r\n|[\n\r\u0085\u2028\u2029]/).filter(l => !PASTE_ONLY.test(l)).map(l => l.replace(PASTE, '')).filter(l => l.trim() !== '').map(shown)
 
-// The key of the line enter opens under the stop he chose.
+// The key of the line enter opens under the stop they chose.
 export const INPUT = 'input'
-// The stops the cursor moves between, in order: his sentence, each row with its notes as one, then OK; or, where the
+// The stops the cursor moves between, in order: their sentence, each row with its notes as one, then OK; or, where the
 // check failed as a whole, Check again alone. None while the check runs.
 export const stopsOf = (o: Open): string[] => {
   if (o.checking) return []
@@ -199,7 +199,7 @@ export const firstCursor = (o: Open): string => {
 export const MAX_WIDTH = 110
 const counted = (k: number, [one, many]: readonly [string, string]) => `${k} ${k === 1 ? one : many}`
 // A text in lines of at most `w` cells, and `later` cells after the first, broken at a space where one is, else where
-// the line ends; nothing else of it changes, so his own words stay as typed.
+// the line ends; nothing else of it changes, so their own words stay as typed.
 const wrap = (x: string, w: number, later = w): string[] => {
   let width = Math.max(1, w)
   const out: string[] = []
@@ -213,7 +213,7 @@ const wrap = (x: string, w: number, later = w): string[] => {
   return [...out, rest]
 }
 
-// Where the cursor rests among the rows, as "row 5 of 12"; nothing while it is on his sentence or on OK.
+// Where the cursor rests among the rows, as "row 5 of 12"; nothing while it is on their sentence or on OK.
 const whereOf = (o: Open): string => {
   const rows = rowsOf(o)
   const at = rows.findIndex(r => r.id === o.cursor)
@@ -237,7 +237,7 @@ const headOf = (o: Open, running: string): Seg[] => {
 }
 
 // The keys that apply at the cursor now, as the pane holding the keyboard takes them. `paged` where the list is taller
-// than the pane, `cut` where his sentence shows only its first line.
+// than the pane, `cut` where their sentence shows only its first line.
 const keysAt = (o: Open, paged: boolean, cut: boolean): Key[] => {
   const close: Key[] = [{ key: LABELS.keys.esc, means: LABELS.keys.close }]
   const page: Key[] = paged ? [{ key: LABELS.keys.page, means: LABELS.keys.pageMeans }] : []
@@ -259,13 +259,13 @@ const keysAt = (o: Open, paged: boolean, cut: boolean): Key[] => {
   return [...yes, ...build, change, ...details, ...tail]
 }
 const MOVES = new Set<string>([LABELS.keys.tab, LABELS.keys.page, LABELS.keys.help, LABELS.keys.esc])
-// The last line, in every state: while the check runs, to wait; with his change's line open, what enter and esc do
+// The last line, in every state: while the check runs, to wait; with their change's line open, what enter and esc do
 // there; with the keyboard, the keys that apply now; without it, what a line typed in the host's prompt is and how to
 // give the pane the keys, with the keys they will be. `drafted` where the host's prompt holds text.
 export type Foot = { lead: string; keys: Key[] }
 const footOf = (o: Open, drafted: boolean, focused: boolean, paged: boolean, cut: boolean): Foot => {
   if (o.checking) return { lead: LABELS.pleaseWait, keys: [] }
-  if (o.changing) { // in the line every letter is his words; empty enter still confirms or closes
+  if (o.changing) { // in the line every letter is their words; empty enter still confirms or closes
     const means = o.typed.trim() ? LABELS.keys.send : LABELS.keys.confirm
     return { lead: '', keys: [{ key: LABELS.keys.enter, means }, { key: LABELS.keys.esc, means: LABELS.keys.back }] }
   }
@@ -287,7 +287,7 @@ const headingOf = (p: Proposal): string => {
   if (!k) return LABELS.build
   return `${LABELS.buildIn} ${LABELS.numbers[k] ?? String(k)} ${k === 1 ? LABELS.parts[0] : LABELS.parts[1]}`
 }
-// His sentence in one line: its first line, cut to `room` where it does not fit, then how many lines more.
+// Their sentence in one line: its first line, cut to `room` where it does not fit, then how many lines more.
 const oneLine = (all: string[], room: number): string => {
   const more = all.length - 1
   const tail = more ? `${LABELS.cutLead}${more} ${more === 1 ? LABELS.lines[0] : LABELS.lines[1]}` : ''
@@ -298,7 +298,7 @@ const oneLine = (all: string[], room: number): string => {
 }
 
 // A line of the screen: its pieces, the stop it belongs to, and whether it is the cursor's block. An `input` line is
-// where the line he types his change in is drawn, under the stop he chose.
+// where the line they type their change in is drawn, under the stop they chose.
 export type ScreenLine = { kind: LineKind; segs: Seg[]; stop?: string; lit?: true }
 // `head` the lines the header takes, which the window always keeps; `foot` and `help` the last line; `stops` the
 // stops in order, each drawn as one element of the host's; `cursor` the stop under the cursor, whose lines the window
@@ -324,7 +324,7 @@ export const screen = (o: Open, width: number, project: string, running = '', al
   const lit = (stop: string) => !o.checking && o.cursor === stop
   const gutter = (stop: string): Seg[] => (lit(stop) ? [{ text: LABELS.cursor, tone: 'accent', cursor: true }, { text: ' ' }] : [{ text: '  ' }])
   const on = (stop: string) => (o.checking ? {} : lit(stop) ? { stop, lit: true as const } : { stop })
-  // the line right under the stop he chose: dim while empty; his words wrap inside the table, never cut, under where
+  // the line right under the stop they chose: dim while empty; their words wrap inside the table, never cut, under where
   // they begin
   const input = (stop: string, cell: (segs: Seg[]) => Seg[] = segs => [{ text: ' ' }, ...segs], room = w - 2) => {
     if (o.changing !== stop) return
@@ -334,7 +334,7 @@ export const screen = (o: Open, width: number, project: string, running = '', al
       lines.push({ kind: 'input', ...on(stop), segs: cell([{ text: '    ' }, { text: piece, ...(empty ? { tone: 'dim' as const } : {}) }]) })
     }
   }
-  // his sentence: its first line, cut to the width, and how many more; whole under d, or while he types his change
+  // their sentence: its first line, cut to the width, and how many more; whole under d, or while they type their change
   const all = saidLines(o.said)
   const room = w - LABELS.youSaid.length - 3
   const whole = o.details === 'said' || o.changing === 'said'
@@ -443,7 +443,7 @@ export const paneScreen = (o: Open, width: number, rows: number, project: string
 }
 
 // What the pane draws of a screen taller than its body: the header always, then as many lines of the rest as fit,
-// the window moved from `top` only as far as keeps the cursor's block (its row, its question, its details and his
+// the window moved from `top` only as far as keeps the cursor's block (its row, its question, its details and their
 // change's line) wholly in view, or its top where it is taller than the window; then, in place of the blank line, what
 // is out of view above and below, counted; then the last line. Gives the lines and the window's top.
 export const fit = (sc: Screen, rows: number, top: number): { lines: ScreenLine[]; top: number } => {

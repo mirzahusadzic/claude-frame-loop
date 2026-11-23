@@ -463,7 +463,7 @@ class FormTests(unittest.TestCase):
 
 class OwnWordsTests(unittest.TestCase):
     """A person's own words are never a fault: an option, a command, a word or a file name that stands in the
-    requirements he approved at the place is what he asked to observe. The check learns those words; the writer
+    requirements they approved at the place is what they asked to observe. The check learns those words; the writer
     never sees them, or the check would read its echo of the requirement."""
 
     DIFF = (

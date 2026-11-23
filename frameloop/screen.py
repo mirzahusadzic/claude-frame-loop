@@ -1,9 +1,8 @@
 """What is sent: a secret is cut from a change before anything leaves this machine, and where one is left, nothing
 is sent at all.
 
-Lifted from the old tree at 36cdba3: the patterns of signals.SECRET_PATTERNS and the cutting of privacy's
-_without_secrets. A change is cut by its stretches (a hunk with the lines around it), so a key and the secret written
-beside it go together; anything else that holds one is refused whole. The kind each pattern finds is said in words.py.
+A change is cut by its stretches (a hunk with the lines around it), so a key and the secret written beside it go
+together; anything else that holds one is refused whole. The kind each pattern finds is said in words.py.
 """
 
 from __future__ import annotations
@@ -26,7 +25,7 @@ PATTERNS = (
     ("stripe-key", r"\b[rs]k_(?:live|test)_[0-9A-Za-z]{24,}"),
     ("web-token", r"\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}"),
     # A name ending in a key in any case, given a long value with a digit in it; never a word that merely ends in key
-    # (monkey), nor a value that is itself a name built of words. The old tree's reasoning and counts stand beside it.
+    # (monkey), nor a value that is itself a name built of words.
     (
         "assigned-key",
         r"(?<![A-Za-z0-9])(?:(?:[A-Za-z0-9]+_)*(?:KEY|[Kk]ey)|[A-Za-z][A-Za-z0-9]*?(?:Key|KEY))[\"']?\s*[:=]\s*[\"']?"

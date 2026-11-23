@@ -31,7 +31,7 @@ const UNHELD_MS = 1500
 const picker = atom({ plugin: 'frame-loop', key: 'picker' } as const, EMPTY, { shape: 'picker-5' })
 const live = atom({ plugin: 'frame-loop', key: 'live' } as const, '')
 const asked = atom({ plugin: 'frame-loop', key: 'asked' } as const, '')
-// Whether the host's prompt holds text, as his edits leave it: the picker's last line says what enter there sends.
+// Whether the host's prompt holds text, as their edits leave it: the picker's last line says what enter there sends.
 const drafted = atom({ plugin: 'frame-loop', key: 'drafted' } as const, false)
 // Where the host seated the picker's pane: the band says what opens it where it waits undrawn or without the keys.
 const seat = atom({ plugin: 'frame-loop', key: 'seat' } as const, { id: '', seat: '' } as Seat, { shape: 'seat-1' })
@@ -263,7 +263,7 @@ const seated = async ($: $, id: string, now: Seat['seat']) => {
   const had = await read($, seat)
   if (had.id !== id || had.seat !== now) await update($, seat, () => ({ id, seat: now }))
 }
-// The pane follows the picker: open on the proposal it holds, unless closed by esc or while the session answers his
+// The pane follows the picker: open on the proposal it holds, unless closed by esc or while the session answers their
 // change, and closed where none is open; and, from the band's clock, `grow`, opened again where its content wants more
 // rows than it asked for, never from inside a move of the host's that the open would wait on.
 const paneNow = async ($: $, grow = false) => {
@@ -286,8 +286,8 @@ const regain = async ($: $) => {
   const o = (await read($, picker)).open
   if (o && !o.aside && !o.changed) await paneOpen($, o)
 }
-// His change, as he typed it in the line under a row or under his sentence: the picker closes while the session
-// answers, and the session is told it as his change with the picker as it stands. Enter on nothing, or spaces alone,
+// Their change, as they typed it in the line under a row or under their sentence: the picker closes while the session
+// answers, and the session is told it as their change with the picker as it stands. Enter on nothing, or spaces alone,
 // confirms a row under review or closes the line, and sends nothing. A line that never entered, as one another hook
 // dropped, opens the picker again at once.
 const sendChange = async ($: $, typed: string) => {
@@ -369,7 +369,7 @@ const seatNow = async ($: $) => {
   await seated($, o.id, !p.isPlaced ? 'undrawn' : heldOnce || !waited ? 'shown' : 'unheld')
 }
 
-// Whether the host's prompt holds text, kept as his edits and the host's own changes leave it.
+// Whether the host's prompt holds text, kept as their edits and the host's own changes leave it.
 const typing = async ($: $, text: string) => {
   if ((text.trim() !== '') !== (await read($, drafted))) await update($, drafted, () => text.trim() !== '')
 }
@@ -386,8 +386,8 @@ const pieces = ({ Text }: Els, line: ScreenLine, k: number, pad = 0) => {
   ))
 }
 
-// The line under the stop he pressed enter on: one Input, held by the keyboard as it opens, whose dim words say what
-// enter does; as many rows tall as his words take at the table's width, with the column rule beside each row there.
+// The line under the stop they pressed enter on: one Input, held by the keyboard as it opens, whose dim words say what
+// enter does; as many rows tall as their words take at the table's width, with the column rule beside each row there.
 const inputLine = (els: Els, o: Open, sc: Screen, rows: number, $: $) => {
   const { Box, Input, Text } = els
   const inTable = o.changing !== 'said'
@@ -452,7 +452,7 @@ export const register: Register = on => {
 
   // The pane's ring walks the list as the host moves it, each stop an element of the host's. A move onto the header is
   // the person's up, onto the last line their down, and the ring stays where it is while the cursor moves; the ring
-  // landing on a stop moves the cursor there, and off his change's line closes it, nothing sent.
+  // landing on a stop moves the cursor there, and off their change's line closes it, nothing sent.
   on('ui.focus', async ($, e, next) => {
     if (e.component !== 'Pane' || e.requestId !== PANE) return next(e)
     if (e.origin.kind === 'person') heldOnce = true // the person moves a ring only in a pane that holds the keys
@@ -518,7 +518,7 @@ export const register: Register = on => {
   }).catch(($, e, next) => next(e))
 
   // The session's withdrawal of the open proposal: only while a change of the person's to it stands unanswered, which
-  // only his own line sets, so the session cannot close a picker of its own accord.
+  // only their own line sets, so the session cannot close a picker of its own accord.
   on('tool.call', { tool: WITHDRAW }, async ($, e) => {
     const id = String((e as unknown as { id?: unknown }).id ?? '')
     const o = (await read($, picker)).open
@@ -560,8 +560,8 @@ export const register: Register = on => {
     return next(e)
   }).catch(($, e, next) => next(e))
 
-  // At each prompt, before its hook: a line the person sends while the picker is open is his change to the whole
-  // proposal, told so to the session beside his line, and the picker is closed while the session answers it; else his
+  // At each prompt, before its hook: a line the person sends while the picker is open is their change to the whole
+  // proposal, told so to the session beside their line, and the picker is closed while the session answers it; else their
   // own words kept word for word, for the picker's "You said". Then what the look finds, or what it found since, told
   // to the session once.
   on('prompt.submit', async ($, e, next) => {
@@ -587,12 +587,12 @@ export const register: Register = on => {
     if (told.length) await dispatch($, { type: 'told' })
     const context = [...change, ...(say ? [say] : []), ...told]
     const done = await next(context.length ? { ...e, context: [...(e.context ?? []), ...context] } : e)
-    if (change.length && 'drop' in done) await dispatch($, { type: 'reopen' }) // his line never entered: no answer comes
+    if (change.length && 'drop' in done) await dispatch($, { type: 'reopen' }) // their line never entered: no answer comes
     return done
   }).catch(($, e, next) => next(e))
 
-  // A main turn ended: the picker his change closed opens again, on the same proposal where the session made no new
-  // one, with his answers; and the line that told what he approved gives way to the band at rest.
+  // A main turn ended: the picker their change closed opens again, on the same proposal where the session made no new
+  // one, with their answers; and the line that told what they approved gives way to the band at rest.
   on('turn.complete', async ($, e, next) => {
     const done = await next(e)
     if (e.agentId === undefined) await dispatch($, { type: 'turned' })
@@ -614,9 +614,9 @@ export const register: Register = on => {
     return <Box />
   })
 
-  // The picker in its pane, one list the host's ring walks: the header, the path, his sentence in one line, the table
+  // The picker in its pane, one list the host's ring walks: the header, the path, their sentence in one line, the table
   // with every row and its one question, OK, a blank line and the keys line; each stop one element of the host's, the
-  // cursor's drawn first to take the ring; his change's one line under the stop he chose. Where the whole is taller
+  // cursor's drawn first to take the ring; their change's one line under the stop they chose. Where the whole is taller
   // than the pane's body, the header and the last line stay and the rest is windowed around the cursor, with what is
   // out of view counted. With the keyboard the last line's hotkeys are the host's Buttons; without it, what a line
   // typed at the prompt is and how to give the pane the keys.
@@ -641,7 +641,7 @@ export const register: Register = on => {
     const keys: string[] = []
     for (let k = 0; k < win.lines.length;) {
       const line = win.lines[k]!
-      if (line.kind === 'input') { // the one line under the stop, the Input wrapping with his words
+      if (line.kind === 'input') { // the one line under the stop, the Input wrapping with their words
         const block: ScreenLine[] = []
         while (k < win.lines.length && win.lines[k]!.kind === 'input') block.push(win.lines[k++]!)
         keys.push(INPUT)
@@ -717,8 +717,8 @@ export const register: Register = on => {
   })
 
   // The band above the prompt: only what bears value. For an open picker, nothing but an alert, and one line where its
-  // pane is not in front of him: closed by esc and how to reopen it, waiting undrawn or without the keyboard and what
-  // opens it, or closed while the session answers his change. With no picker open: what runs, while a run goes on;
+  // pane is not in front of them: closed by esc and how to reopen it, waiting undrawn or without the keyboard and what
+  // opens it, or closed while the session answers their change. With no picker open: what runs, while a run goes on;
   // else the line that tells what was approved, until the turn it starts ends; else what the band's look put back, or
   // an alert the hooks wrote; else the band at rest, one short line of the tree's tension, what needs the person's eye
   // and what the checks spent. The event's own sentence is never drawn. A line in the warning tone tells a failure or

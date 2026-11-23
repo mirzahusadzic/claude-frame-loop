@@ -1,4 +1,4 @@
-"""The pages a person reads, the repository guide and the records of real runs, held to their layout: the README's
+"""The pages a person reads and the repository guide, held to their layout: the README's
 order, each page's lead and rules, every local link, the limits on a paragraph and a bullet, and the facts a reader
 must not be told wrong."""
 
@@ -12,7 +12,6 @@ from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
-REAL = ROOT / "tests" / "real"  # a maintainer's plan for a real run, and the record of every one
 MADE = {"docs/told.md"}  # made by scripts/told.py, never by hand
 # Pages not yet brought to the layout: each left this set as it was rewritten, and it is to stay empty.
 PENDING: set = set()
@@ -39,7 +38,7 @@ def pages() -> list[Path]:
 
 def guides() -> list[Path]:
     """The pages for maintainers, held to the same limits as the pages for people."""
-    return [ROOT / "AGENTS.md", *sorted(REAL.glob("*.md"))]
+    return [ROOT / "AGENTS.md"]
 
 
 def held() -> list[Path]:
@@ -214,14 +213,9 @@ class PagesTests(unittest.TestCase):
             with self.subTest(page=relative(page)):
                 self.assertNotRegex(without_code(page.read_text("utf-8")), r"~/(?!\.frame\b)")
 
-    def test_the_records_of_real_runs_are_the_guides_and_not_the_readmes(self):
-        guide = links((ROOT / "AGENTS.md").read_text("utf-8"))
-        footer = links((ROOT / "README.md").read_text("utf-8").rstrip().split("\n\n")[-1])
-        for page in sorted(REAL.glob("*.md")):
-            with self.subTest(page=relative(page)):
-                self.assertIn(relative(page), guide)
-                self.assertNotIn(relative(page), footer)
-        self.assertEqual({path.name for path in REAL.glob("*.md")}, {"plan.md", "results.md"})
+    def test_no_record_of_a_run_is_kept_among_the_pages(self):
+        """What a run showed or left open goes into a release's notes, never into a page of the repository."""
+        self.assertFalse((ROOT / "tests" / "real").exists())
         self.assertFalse(list(DOCS.glob("real-run*.md")))
 
     def test_the_guide_splits_a_long_run_of_bullets_under_parts(self):

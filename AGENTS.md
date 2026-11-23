@@ -24,7 +24,6 @@ These hold for every change.
 | One rule for a reading | A kept row counts only where `reading.stands` holds it: its `runs` a run's own folder of the machine folder; `records` the digest of that folder whole, the frame with every record; the frame named for the row's claim, step, tree and sides, its last account at that tree; and, with the reading on, read again to its outcome from an answer to every trial that outcome needs. A which-step's row counts only where `reading.which_stands` holds it by the same evidence, its frame the one its account and claims make. Every reader of `readings.jsonl` goes through one or the other. |
 | Tests stay home | Tests use `tempfile.TemporaryDirectory` and a home pinned by `tests/pinned_home.py`. None touches the real `~/.frame`, nor the host's or the system's configuration folders, nor writes elsewhere in the home but this repository, the temporary folder and Python's bytecode cache. A link test skips where Windows denies the test account a link. The band's tests touch no file: the host's kit fakes every file, process and the store, and the plain tests read `tests/node/kept-split.json` alone. |
 | A test with every change | A change in behaviour comes with a test that fails on the old code and passes after. |
-| No remote | This repository has no remote and is never pushed. |
 | Commits | One concern a commit, said in plain words. No names of people or sessions, no dates, no clock times; a subject of at most 72 characters. |
 
 ---
@@ -207,7 +206,7 @@ What a frame file and a step hold, how the makers, accounts and tiers are kept a
 
 #### The machine folder
 
-The machine folder is `~/.frame/ground/claude/<name>-<hash16>/`, apart from the installed plugin's `~/.frame/claude`.
+The machine folder is `~/.frame/ground/claude/<name>-<hash16>/`, apart from `~/.frame/claude`, which the releases before 0.3 used and this one leaves alone.
 
 | File | Holds | Written by |
 | --- | --- | --- |
@@ -601,7 +600,7 @@ Each part names what a change there most often breaks, with the code that keeps 
 
 ### Docs
 
-The README is the short way in, and `docs/` holds the detail for people. A page tells the reader what a thing is, when to care, and what happens; code names, internal procedures and what a test guarantees stay in this file.
+The README is the short way in, and `docs/` holds the detail for people. A page tells the reader what a thing is, when to care, and what happens; code names, internal procedures and what a test guarantees stay in this file. What a run showed or left open goes into a release's notes, and no page holds it.
 
 | Page | Shape |
 | --- | --- |
@@ -614,8 +613,6 @@ The README is the short way in, and `docs/` holds the detail for people. A page 
 | `docs/privacy.md` | What leaves, what is cut, what is kept, and what the controls cannot promise |
 | `docs/settings.md` | The switch, and every environment name read |
 | `docs/files.md` | Every file the tool keeps: in the repository, in the machine folder, and with the host |
-| [`tests/real/plan.md`](tests/real/plan.md) | A maintainer's plan for a real run, with what only a real run can show |
-| [`tests/real/results.md`](tests/real/results.md) | The record of every real run, and what each left open |
 | `AGENTS.md` | Rules, commands, where the code is, and what is easy to get wrong |
 
 The layout rules, as `tests/test_pages.py` holds them on every page above but `docs/told.md`:
@@ -623,11 +620,11 @@ The layout rules, as `tests/test_pages.py` holds them on every page above but `d
 - **Limits.** A paragraph or a lead holds three sentences at most, a bullet two, and a sentence forty words. A code span and a «quoted sentence of the tool» count as one word.
 - **Plain words.** A sentence holds one thought, in short plain words, about 25 of them. No marketing words.
 - **Shape.** A page starts with `# Title` and a lead, and every `###` section stands under a `---` rule and opens with a lead, never a heading, table, list or code block. Parts are `####`.
-- **The README.** Its sections come in a fixed order, it holds no Mermaid chart, and its footer names exactly the pages of `docs/` and this file. The records under `tests/real/` are linked from here alone.
-- **Links.** Every relative link of a page, this file and the records leads to a file and a heading that exist.
+- **The README.** Its sections come in a fixed order, it holds no Mermaid chart, and its footer names exactly the pages of `docs/` and this file.
+- **Links.** Every relative link of a page and of this file leads to a file and a heading that exist.
 - **The loop chart** in `docs/check.md` keeps the house style: `layout: elk`, `look: neo`, the wrapping width and padding, `themeCSS`, a title and a detail in every node, a dashed optional path, translucent fills by role, and a caption.
 - **Who trains.** Privacy and settings name the two tiers and `FRAME_LOOP_TIER`, and no page names a second name that allows training.
-- **No one person.** No page, this file or the records tell a thing about one person. The person is "the person" or "they", never a pronoun of one sex.
+- **No one person.** No page, nor this file, tells a thing about one person. The person is "the person" or "they", never a pronoun of one sex.
 - **Long lists.** A run of more than ten bullets in this file is split under `####` parts.
 - **Home paths.** No page names a folder of the home but the tool's own `~/.frame/...`.
 

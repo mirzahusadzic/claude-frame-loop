@@ -22,11 +22,11 @@ export const LABELS = {
   sendsAll: 'enter sends it as your change to the whole proposal',
   // The last line while the check runs.
   pleaseWait: 'Please wait while frame-loop checks what you asked',
-  // The line enter opens under a row or his sentence, dim while empty.
+  // The line enter opens under a row or their sentence, dim while empty.
   inputHint: 'enter to confirm · or write your change here',
-  // His sentence, the mismatch that brought a proposal back, and the table's heading.
+  // Their sentence, the mismatch that brought a proposal back, and the table's heading.
   youSaid: 'You said: ',
-  // His sentence in one line: its first line, cut where it does not fit, and how many lines more.
+  // Their sentence in one line: its first line, cut where it does not fit, and how many lines more.
   cutLead: '… +',
   cut: '…',
   lines: ['line', 'lines'],
@@ -65,8 +65,8 @@ export const LABELS = {
   // A check that could not run, said in one plain line.
   checkFailedLead: 'The check could not run:',
   checkSilent: 'The check ended without a word.',
-  // A line the person sends at the host's prompt while the picker is open: his change, to the row he chose or to the
-  // whole proposal, as the session is told it beside his line, which reaches it as he typed it.
+  // A line the person sends at the host's prompt while the picker is open: their change, to the row they chose or to the
+  // whole proposal, as the session is told it beside their line, which reaches it as they typed it.
   changeRow: 'frame-loop: the person’s message is a change to this row of proposal',
   changeWhole: 'frame-loop: the person’s message is a change to the whole of proposal',
   changeTold:
@@ -117,7 +117,7 @@ export const LABELS = {
     'esc  close this list, or the picker for now, nothing approved; /frame-loop reopens the picker as you left it',
   ],
   // The picker closed by esc, waiting undrawn where the terminal is too narrow for a pane nobody asked for, or open
-  // without the keyboard; closed while the session answers his change; and the one line that tells what was approved.
+  // without the keyboard; closed while the session answers their change; and the one line that tells what was approved.
   waiting: 'a proposal waits',
   reopens: '/frame-loop reopens it',
   opens: '/frame-loop opens it',
@@ -194,7 +194,7 @@ export const LABELS = {
     'frame-loop could not hold the person’s ticks and switch on this machine to their word, so what another hand ' +
     'wrote there may count until the band looks again:',
   tool:
-    'Put a proposal to the person in frame-loop’s picker, for four uses: `frame`, his sentence as claims; ' +
+    'Put a proposal to the person in frame-loop’s picker, for four uses: `frame`, their sentence as claims; ' +
     '`split`, one crossing whole: items the claims above owned by "parts", each part under `split` as { place, ' +
     'items, holds } narrowing one above, holes naming each claim above by words with waiting parts, and contracts ' +
     'as { id, words, provides, depends, command }, command null if unchecked; `reframe`, new words with `old` and ' +
@@ -203,13 +203,13 @@ export const LABELS = {
     'could see for themselves is an item, seen in the work. What only a run can show is a hold, its command failing ' +
     'while it is not so: how the software is made, what it is built from, a number inside it, a published test ' +
     'vector. What neither can show here, such as another operating system, stays an item predicting "open", its ' +
-    '`ask` saying so. Fields, one each: `place` the folder, "" for root, never "."; `of` his sentence, in his ' +
+    '`ask` saying so. Fields, one each: `place` the folder, "" for root, never "."; `of` their sentence, in their ' +
     'words; `narrows` null at root, else the claim above as { place, words }; `owner` "work", or "parts" for a claim ' +
     'a split takes apart; `step` null, or { maker, lines } with maybe `reversal` as { words, lines }: the check makes ' +
     'the pair written; `predicts` what a reading of the finished work is expected to say, written before any ' +
     'reading: "fulfilled" where it carries the claim, "open" where it would not, never what stands today; `old` ' +
     'null, or the replaced words in a reframe; `ask`, optional, your own question to the person where the claim says ' +
-    'more, less or other than his words, one line, such as "You said numbered; I start at 1. OK?"; ask too where you ' +
+    'more, less or other than their words, one line, such as "You said numbered; I start at 1. OK?"; ask too where you ' +
     'picked one meaning of a word of theirs that could mean two things, such as "You said suit; I take it as cards. ' +
     'OK?". One sentence becomes one item and two holds. A frame at the root, in full: ' +
     '{"kind":"frame","place":"","title":"Notes","items":[{"words":"List prints the notes sorted by date.","of":' +
@@ -250,7 +250,7 @@ export const SCHEMA = {
         type: 'object',
         properties: {
           words: text,
-          of: { type: 'string', description: 'his sentence the claim comes from, in his words' },
+          of: { type: 'string', description: 'their sentence the claim comes from, in their words' },
           narrows: {
             type: ['object', 'null'],
             description: 'the claim above, quoted by its place and its words; null at the root',

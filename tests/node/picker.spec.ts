@@ -44,7 +44,7 @@ test('with the switch turned on, the same proposal shown again is checked before
   assert.deepEqual([again.state.open?.checking, again.state.open?.began, again.effects], [true, 200, [{ kind: 'examine', id: '4' }]])
 })
 
-test('the arrows move between his sentence, each row with its note, and OK; a path line or a note is never a stop', () => {
+test('the arrows move between their sentence, each row with its note, and OK; a path line or a note is never a stop', () => {
   const s = run([proposed(NOTES_SPLIT), checked(NOTES_SPLIT, NOTES_CHECKED)]).state
   assert.deepEqual(stopsOf(s.open!), ['said', 'c2', 'c3', 'c4', 'c5', 'k0', 'ok'])
   assert.equal(s.open?.cursor, 'c5')
@@ -132,7 +132,7 @@ test('every move of the cursor brings the pane’s ring with it; the ring landin
   assert.deepEqual([landed.state.open?.cursor, landed.effects], ['c2', []]) // the ring is already there
 })
 
-test('esc closes the picker for now, the proposal waiting with its answers; /frame-loop reopens it as he left it', () => {
+test('esc closes the picker for now, the proposal waiting with its answers; /frame-loop reopens it as they left it', () => {
   const answered = run([{ type: 'yes' }], ready).state
   const aside = run([{ type: 'aside' }], answered).state
   assert.deepEqual([aside.open?.aside, aside.open?.answered], [true, ['c1']])
@@ -141,14 +141,14 @@ test('esc closes the picker for now, the proposal waiting with its answers; /fra
   assert.deepEqual([back.state.open?.aside, back.state.open?.answered, back.state.open?.cursor, back.effects], [false, ['c1'], 'c2', [{ kind: 'focus' }]])
 })
 
-test('the person’s close: on the list the proposal waits; in his change’s line that line alone closes, the pane taken back', () => {
+test('the person’s close: on the list the proposal waits; in their change’s line that line alone closes, the pane taken back', () => {
   const closed = run([{ type: 'closed' }], ready)
   assert.deepEqual([closed.state.open?.aside, closed.effects], [true, []])
   assert.deepEqual(run([{ type: 'closed' }], closed.state).state, closed.state) // closed already: nothing more
   const typing = run([{ type: 'yes' }, { type: 'press' }], ready).state
   const back = run([{ type: 'closed' }], typing)
   assert.deepEqual([back.state.open?.aside, back.state.open?.changing, back.state.open?.answered, back.effects], [false, '', ['c1'], [{ kind: 'regain' }]])
-  const changed = run([{ type: 'changed', text: 'x' }], ready).state // the session answers his change: the pane was closed by the band
+  const changed = run([{ type: 'changed', text: 'x' }], ready).state // the session answers their change: the pane was closed by the band
   assert.deepEqual(run([{ type: 'closed' }], changed).state, changed)
 })
 
@@ -205,7 +205,7 @@ test('enter in the empty line answers a row under review yes, as y does, and clo
   assert.deepEqual([words?.changed, words?.changing, words?.typed], ['start at 0', '', ''])
 })
 
-test('d on his sentence shows it whole, and again hides it; on a row, its details', () => {
+test('d on their sentence shows it whole, and again hides it; on a row, its details', () => {
   const on = run([{ type: 'focus', stop: 'said' }, { type: 'details' }], ready).state
   assert.equal(on.open?.details, 'said')
   assert.equal(run([{ type: 'details' }], on).state.open?.details, '')
@@ -223,13 +223,13 @@ test('h and d each ask for the ring after the drawing they make; h or esc closes
   assert.deepEqual([hidden.state.open?.details, hidden.effects], ['', [{ kind: 'focus' }]])
   for (const done of [run([{ type: 'closed' }], help.state), run([{ type: 'closed' }], details.state)]) {
     assert.equal(done.state.open?.aside, false)
-    assert.deepEqual(done.effects, [{ kind: 'focus' }])
+    assert.deepEqual(done.effects, [{ kind: 'regain' }]) // the host's esc took the keys: the pane takes them back
   }
   assert.deepEqual([run([{ type: 'closed' }], help.state).state.open?.help, run([{ type: 'closed' }], details.state).state.open?.details],
     [false, ''])
 })
 
-test('his change closes the picker while the session answers; with no new proposal it opens again, his answers kept', () => {
+test('their change closes the picker while the session answers; with no new proposal it opens again, their answers kept', () => {
   const answered = run([{ type: 'yes' }, { type: 'press' }], ready).state // c2 chosen for change
   const changed = run([{ type: 'changed', text: 'one line, at most 80 characters' }], answered).state
   assert.deepEqual([changed.open?.changed, changed.open?.changing], ['one line, at most 80 characters', ''])
@@ -238,26 +238,26 @@ test('his change closes the picker while the session answers; with no new propos
   for (const e of [{ type: 'yes' }, { type: 'approve' }, { type: 'press' }] as Event[]) assert.equal(run([e], changed).state.open?.answered.length, 1)
   const turned = run([{ type: 'turned' }], changed).state
   assert.deepEqual([turned.open?.changed, turned.open?.answered, turned.open?.id], ['', ['c1'], '4'])
-  assert.equal(run([{ type: 'reopen' }], changed).state.open?.changed, '') // his line never entered: no answer comes
+  assert.equal(run([{ type: 'reopen' }], changed).state.open?.changed, '') // their line never entered: no answer comes
   assert.equal(run([{ type: 'changed', text: 'x' }], run([{ type: 'aside' }], ready).state).state.open?.changed, '') // closed by esc: no change
 })
 
-test('the session’s answer to his change takes the place of the one changed, whatever its place and kind', () => {
+test('the session’s answer to their change takes the place of the one changed, whatever its place and kind', () => {
   const changed = run([{ type: 'changed', text: 'split it in two' }], ready).state
   const again = run([proposed(SPLIT_FILE, null, 'off')], changed)
   assert.deepEqual([again.state.open?.id, again.state.waiting, again.effects], ['p2', [], [{ kind: 'replaced', id: '4', by: 'p2' }, { kind: 'focus' }]])
-  const unchanged = run([proposed(SPLIT_FILE, null, 'off')], ready) // with no change of his, it waits behind
+  const unchanged = run([proposed(SPLIT_FILE, null, 'off')], ready) // with no change of theirs, it waits behind
   assert.deepEqual([unchanged.state.open?.id, unchanged.state.waiting.map(w => w.id)], ['4', ['p2']])
 })
 
-test('the session withdraws the open proposal only while his change to it stands, and so it closes with nothing written', () => {
+test('the session withdraws the open proposal only while their change to it stands, and so it closes with nothing written', () => {
   assert.deepEqual(step(ready, { type: 'withdrawn' }), { state: ready, effects: [] })
   const waiting = run([proposed(SPLIT_FILE, null, 'off'), { type: 'changed', text: 'drop it' }], ready).state
   const gone = run([{ type: 'withdrawn' }], waiting)
   assert.deepEqual([gone.state.open, gone.state.told, gone.effects], [null, [closedTold('4')], [{ kind: 'load', id: 'p2' }]])
 })
 
-test('answers survive a new proposal: a row whose words and question stand unchanged keeps his yes', () => {
+test('answers survive a new proposal: a row whose words and question stand unchanged keeps their yes', () => {
   const answered = run([{ type: 'yes' }, { type: 'yes' }], ready).state // c1 and c2 answered
   const p = read(ASKED)
   const items = p.items.map((it, k) => (k === 2 ? { ...it, ask: 'You did not say one line; I would keep it to 80 characters. OK?' } : it))
@@ -270,13 +270,13 @@ test('answers survive a new proposal: a row whose words and question stand uncha
   assert.deepEqual(rowsOf(done.open!).map(r => r.status), ['Clear', 'Yes', 'Review', ''])
 })
 
-test('a main turn ended: the line that told what he approved gives way to the band at rest', () => {
+test('a main turn ended: the line that told what they approved gives way to the band at rest', () => {
   const s = { ...EMPTY, ever: true, closing: 'frame-loop · approved 4 rows in notes' }
   assert.equal(run([{ type: 'turned' }], s).state.closing, '')
   assert.equal(run([{ type: 'prompted' }], s).state.closing, '')
 })
 
-test('a second proposal waits, never takes the open one’s place, and opens when it closes, his sentence kept with it', () => {
+test('a second proposal waits, never takes the open one’s place, and opens when it closes, their sentence kept with it', () => {
   const waiting = run([proposed(SPLIT_FILE, null, 'off', 'split the api'), proposed(OPTIONS_FILE, null, 'off')], ready)
   assert.deepEqual([waiting.state.open?.id, waiting.state.waiting.map(w => w.id), waiting.effects], ['4', ['p2', 'p4'], []])
   const closed = run([{ type: 'changed', text: 'drop it' }, { type: 'withdrawn' }], waiting.state)

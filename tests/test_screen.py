@@ -1,6 +1,6 @@
 """What is sent: each kind of secret is found, what only looks like one is not, a stretch that holds one is cut whole
-and the rest of the change kept, and a change with one left is refused. The cases are the old tree's (36cdba3,
-tests/testprivacy.py); each key is built from pieces, so this file holds none whole."""
+and the rest of the change kept, and a change with one left is refused. Each key is built from pieces, so this
+file holds none whole."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 

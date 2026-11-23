@@ -281,7 +281,7 @@ test('the tool call keeps the proposal, opens the picker in its pane with the ke
   const { ui, lines } = await pane($)
   expect(lines[0]).toBe(`${HEAD} · ${LABELS.checked} · 2 rows · 1 ${LABELS.toReview} · row 2 of 2`)
   expect(lines[1]).toBe(' notes')
-  expect(lines[2]).toContain(`${LABELS.youSaid}a smal cli app`) // his own words, typos and all
+  expect(lines[2]).toContain(`${LABELS.youSaid}a smal cli app`) // their own words, typos and all
   expect(lines.join('\n')).toContain(`↳ ${QUESTION}`)
   const cursor = await ui.find({ key: 'c1' }) // the first row under review, an element of the host's, with its question
   expect(cursor?.props.autoFocus).toBe(true)
@@ -614,7 +614,7 @@ test('the band takes its word from the copies where its first witness kept their
   expect(stored.get(`word:${FOLDER}`)).toEqual({ 'approved.json': 'ticked-by-the-band', switch: 'on\n' })
 })
 
-test('while the check runs the pane shows the spinner header, the path and his sentence, and asks him to wait', async ($, on) => {
+test('while the check runs the pane shows the spinner header, the path and their sentence, and asks them to wait', async ($, on) => {
   const live = `${FOLDER}/live/s1.json`
   let done = false
   const { seen, clock } = await world($, on, { now: T0 * 1000, examine: async () => {
@@ -718,7 +718,7 @@ test('tab, shift+tab and the arrows walk the stops and never close the pane: twe
   const { seen, propose, ring, scroll } = await world($, on, { check: 'off' })
   await propose()
   const stops = ['c0', 'c1', 'ok']
-  const held = await pane($) // drawn while he moves
+  const held = await pane($) // drawn while they move
   const cursor = async () => linesOf(await held.ui.drawn())[0] ?? ''
   for (let k = 0; k < 20; k++) await ring('key-h') // past the last stop onto the last line: the cursor down, round again
   expect(stops[20 % stops.length]).toBe('ok')
@@ -771,14 +771,14 @@ test('the pane closed, as by esc: the proposal waits with its answers, the band 
   expect(aside.text).toBe(`${LABELS.name} · ${LABELS.waiting} · ${LABELS.reopens}`)
   expect(await aside.ui.find({ type: 'Button' }).catch(() => undefined)).toBeUndefined()
   expect((await $.command.run(typed(''))).text).toContain(`${LABELS.pickerHolds} p1`)
-  expect(seen.up).toBe(true) // opened again at his command
+  expect(seen.up).toBe(true) // opened again at their command
   expect(seen.opened.at(-1)).toMatchObject({ id: 'picker', focus: true, closeOnEscape: true })
-  expect((await look($)).lines[0]).toContain(LABELS.allAnswered) // his yes kept
+  expect((await look($)).lines[0]).toContain(LABELS.allAnswered) // their yes kept
   expect((await peek($)).text).toBe('')
   expect(verbs(seen)).not.toContain('approve')
 })
 
-test('enter on a row opens one line under it with the keyboard in it; enter with words sends his change to that row', async ($, on) => {
+test('enter on a row opens one line under it with the keyboard in it; enter with words sends their change to that row', async ($, on) => {
   const { seen, propose, clock } = await world($, on)
   await propose()
   const first = await pane($)
@@ -803,11 +803,11 @@ test('enter on a row opens one line under it with the keyboard in it; enter with
   expect(typing.lines[row + 2]).toBe(`     start the numbers at 0`.padEnd(70) + '│')
   expect((await typing.ui.find({ key: INPUT }))?.props).toMatchObject({ autoFocus: true, value: 'start the numbers at 0' })
   expect(typing.lines.at(-1)).toBe(` enter ${LABELS.keys.send} · esc ${LABELS.keys.back}`)
-  expect(await typing.ui.find({ key: 'key-y' })).toBeUndefined() // every key is his words while he types
-  expect(seen.submitted).toEqual([]) // nothing sent until he presses enter there
+  expect(await typing.ui.find({ key: 'key-y' })).toBeUndefined() // every key is their words while they type
+  expect(seen.submitted).toEqual([]) // nothing sent until they press enter there
   await typing.ui.input({ key: INPUT, text: 'start the numbers at 0' })
   await typing.ui.unmount()
-  expect(seen.submitted.at(-1)?.split('\n').slice(0, 3)).toEqual(['start the numbers at 0', // his line, as he typed it
+  expect(seen.submitted.at(-1)?.split('\n').slice(0, 3)).toEqual(['start the numbers at 0', // their line, as they typed it
     `${LABELS.changeRow} p1: “--list prints every note, numbered from 1”.`, LABELS.changeTold])
   expect(seen.closed).toBe(1) // closed while the session answers
   expect((await peek($)).text).toBe(`${LABELS.name} · ${LABELS.changeSent} · ${LABELS.opensAgain}`)
@@ -1001,7 +1001,7 @@ test('a plugin focus retry, or a focus with no element, leaves the line and its 
   await held.ui.unmount()
 })
 
-test('a line he types at the host’s prompt is a change to the whole proposal, even with a row’s line open', async ($, on) => {
+test('a line they type at the host’s prompt is a change to the whole proposal, even with a row’s line open', async ($, on) => {
   const { seen, propose, clock } = await world($, on)
   await propose()
   const first = await pane($)
@@ -1037,7 +1037,7 @@ test('a change that never entered, dropped by another hook, opens the picker aga
   expect((await look($)).lines[0]).toContain(LABELS.toReview)
 })
 
-test('the session withdraws a proposal only at his word: refused without a change of his, done after one', async ($, on) => {
+test('the session withdraws a proposal only at their word: refused without a change of theirs, done after one', async ($, on) => {
   const { seen, propose } = await world($, on)
   await propose()
   const refused = await $.tool.call({ tool: 'mcp__frame-loop__withdraw', id: 'p1' } as any)
@@ -1067,7 +1067,7 @@ test('without the keyboard the pane says what a line typed at the prompt sends, 
   expect(after.text).not.toContain(LABELS.sendsAll)
 })
 
-test('after the turn his approval started, the band at rest says how many passed of how many, not what was approved', async ($, on) => {
+test('after the turn their approval started, the band at rest says how many passed of how many, not what was approved', async ($, on) => {
   const live = `${FOLDER}/live/s1.json`
   const { seen, clock, propose } = await world($, on, { check: 'off' })
   await propose()
@@ -1098,7 +1098,7 @@ test('where the host leaves the pane undrawn, the band says a proposal waits and
 
 test('a pane drawn but never given the keyboard: the band says ctrl+x tab answers it, until the pane holds the keys', async ($, on) => {
   const { seen, propose, clock, ring } = await world($, on, { check: 'off' })
-  seen.holding = false // text in his prompt, say: the host opens the pane without the keyboard
+  seen.holding = false // text in their prompt, say: the host opens the pane without the keyboard
   await propose()
   await clock.advance(1000)
   expect((await peek($)).text).toBe('') // a moment for the host to give it
@@ -1126,17 +1126,17 @@ test('files changed while a proposal waits: the failure stands under the pane’
   expect((await peek($)).lines).toEqual([failed]) // and the band's alert
   await gone()
   expect((await peek($)).lines).toEqual([failed, `${LABELS.name} · ${LABELS.waiting} · ${LABELS.reopens}`])
-  await $.prompt.submit(said('drop it')) // closed by esc, his line is no change: the session withdraws nothing
+  await $.prompt.submit(said('drop it')) // closed by esc, their line is no change: the session withdraws nothing
   expect((await $.tool.call({ tool: 'mcp__frame-loop__withdraw', id: 'p1' } as any)).deny).toBeDefined()
   await $.command.run(typed(''))
-  await $.prompt.submit(said('drop it')) // his change, and the session withdraws it at his word
+  await $.prompt.submit(said('drop it')) // their change, and the session withdraws it at their word
   await $.tool.call({ tool: 'mcp__frame-loop__withdraw', id: 'p1' } as any)
   expect((await peek($)).text).not.toContain('failed')
   expect((await $.prompt.submit(said('ok'))).context).toEqual([`${LABELS.proposal} p1 ${LABELS.closedUnwritten}`, `${LABELS.pickerNow} ${LABELS.pickerEmpty}.`])
   expect(seen.lookArgs.at(-1)).toEqual(['--session', 's1', '--waiting', ''])
 })
 
-test('his sentence in one line, the host’s paste tags not his; d on it, or his change’s line under it, shows it whole', async ($, on) => {
+test('their sentence in one line, the host’s paste tags not theirs; d on it, or their change’s line under it, shows it whole', async ($, on) => {
   const { propose, ring } = await world($, on, { check: 'off' })
   await $.prompt.submit(said('\n<pasted_content id="7">\nwrite me a notes tool\n\nwith add and list\n</pasted_content id="7">\n'))
   await propose()
@@ -1157,7 +1157,7 @@ test('a second proposal waits behind the open one, says behind which, and is che
   const second = await propose({ ...FRAME, place: 'web', title: 'notes at web' })
   expect(second.result).toBe(`Stored as p2.\n${LABELS.waitsBehind} p1. ${LABELS.waits}\n${LABELS.asked}`)
   expect(verbs(seen).filter(v => v === 'examine')).toHaveLength(1)
-  await $.prompt.submit(said('drop the first')) // his change; the session withdraws it, and the next opens
+  await $.prompt.submit(said('drop the first')) // their change; the session withdraws it, and the next opens
   await $.tool.call({ tool: 'mcp__frame-loop__withdraw', id: 'p1' } as any)
   await clock.settle()
   expect(seen.ran.filter(a => a[1] === 'examine').map(a => a[2])).toEqual(['p1', 'p2'])

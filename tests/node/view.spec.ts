@@ -78,7 +78,7 @@ test('the holds a command checks stand under a heading of their own, a row each 
   assert.ok(split[head - 2]?.includes('→ limits') && split[head + 1]?.includes('The limits tests pass'), split.join('\n')) // under its part
 })
 
-test('the header says where the cursor rests among the rows, and nothing of it on his sentence or on OK', () => {
+test('the header says where the cursor rests among the rows, and nothing of it on their sentence or on OK', () => {
   const o = opened(NOTES_SPLIT, NOTES_CHECKED)
   assert.ok(drawn(o)[0]?.endsWith(` · ${LABELS.rows[0]} 4 ${LABELS.of} 5`))
   assert.ok(drawn(at(o, { type: 'move', by: 1 }))[0]?.endsWith(' · row 5 of 5'))
@@ -167,7 +167,7 @@ test('with the check on, a row the maker gave no step is Review with why, and ca
   assert.deepEqual(rowsOf(none).find(r => r.id === 'c0')?.notes, [LABELS.unchecked])
 })
 
-test('the header counts down as he answers, and the cursor goes to the next row under review, then to OK', () => {
+test('the header counts down as they answer, and the cursor goes to the next row under review, then to OK', () => {
   const asked = { ...NOTES_FRAME, items: NOTES_FRAME.items.map((it, k) => (k === 1 ? { ...it, ask: 'You said numbered; I start at 1. OK?' } : it)) }
   const o = opened(asked, FRAME_CHECKED)
   assert.equal(o.cursor, 'c1') // the first row under review
@@ -230,7 +230,7 @@ test('compact: one blank line in all, before the last line', () => {
   }
 })
 
-test('his sentence stands first, word for word, typos and all, in one line where it fits', () => {
+test('their sentence stands first, word for word, typos and all, in one line where it fits', () => {
   const typed = 'make teh list cmd print notes numberd'
   assert.equal(drawn(opened(NOTES_FRAME, FRAME_CHECKED, 'on', typed), 120)[2], `   ${LABELS.youSaid}${typed}`)
   assert.equal(drawn(opened(NOTES_FRAME, FRAME_CHECKED), 120)[2], `   ${LABELS.youSaid}${SAID}`)
@@ -350,7 +350,7 @@ test('the last line is always there: while the check runs, to wait; without the 
   const o = opened(NOTES_FRAME, FRAME_CHECKED)
   const without = drawn(o, 78, false)
   assert.equal(without[0], ` ${LABELS.name} · ${LABELS.pick} · ${LABELS.checked} · 4 rows · 1 ${LABELS.toReview} · row 3 of 4`)
-  assert.equal(without.at(-1), ` ${LABELS.hintAll} · ${LABELS.toAnswer} y yes, fine · enter confirm or change · d details`) // the keys he will have
+  assert.equal(without.at(-1), ` ${LABELS.hintAll} · ${LABELS.toAnswer} y yes, fine · enter confirm or change · d details`) // the keys they will have
   const given = drawn(o)
   assert.equal(given[0], without[0])
   assert.equal(given.at(-1), ` y yes, fine · enter confirm or change · d details · ${KEYS_TAIL}`)
@@ -358,11 +358,11 @@ test('the last line is always there: while the check runs, to wait; without the 
   for (const focused of [true, false]) {
     const lines = drawn(checking, 78, focused)
     assert.equal(lines[0], ` ${LABELS.name} · ${LABELS.pick} · ${LABELS.checking}`)
-    assert.deepEqual(lines.slice(1), [' notes', SAID_ONE, '', ` ${LABELS.pleaseWait}`]) // the path and his sentence, and no row yet
+    assert.deepEqual(lines.slice(1), [' notes', SAID_ONE, '', ` ${LABELS.pleaseWait}`]) // the path and their sentence, and no row yet
   }
   assert.equal(plain(screen(checking, 78, 'notes', '⠧ frame-loop · checking 2 of 3 · 4 s')).at(0), ' ⠧ frame-loop · checking 2 of 3 · 4 s')
   assert.equal(drawn(opened(NOTES_FRAME, FAILED), 78, false).at(-1), ` ${LABELS.hintAll} · ${LABELS.toAnswer} r retry`)
-  assert.ok(plain(screen(o, 78, 'notes', '', '', true)).at(-1)?.startsWith(` ${LABELS.sendsAll} · `)) // he typed in the prompt
+  assert.ok(plain(screen(o, 78, 'notes', '', '', true)).at(-1)?.startsWith(` ${LABELS.sendsAll} · `)) // they typed in the prompt
 })
 
 test('enter on a row opens one line under it and its question, dim while empty; its words wrap inside the table; esc goes back', () => {
@@ -394,7 +394,7 @@ test('enter on a row opens one line under it and its question, dim while empty; 
   assert.ok(wrapped.every(l => l.length === 71 && l.endsWith('│')), wrapped.join('\n')) // inside the table
   const said = at(o, { type: 'focus', stop: 'said' }, { type: 'press' })
   const whole = screen(said, 78, 'notes', '', '', false, true)
-  assert.deepEqual(whole.lines.slice(2, 5).map(l => l.kind), ['said', 'said', 'input']) // under his sentence, shown whole
+  assert.deepEqual(whole.lines.slice(2, 5).map(l => l.kind), ['said', 'said', 'input']) // under their sentence, shown whole
   assert.equal(plain(screen(at(said, { type: 'typed', text: 'give it a test' }), 78, 'notes', '', '', false, true)).at(-1), ` enter ${LABELS.keys.send} · esc ${LABELS.keys.back}`)
   for (const closed of [at(pressed, { type: 'back' }), at(typing, { type: 'back' }), at(pressed, { type: 'move', by: -1 }), at(typing, { type: 'move', by: 1 })]) {
     assert.equal(closed.changing, '')
@@ -420,18 +420,18 @@ test('the brief’s sketch: the roads, the row under review with its question, a
   assert.equal(drawn(typing).find(l => l.includes('give it a test of its own')), `     give it a test of its own`.padEnd(70) + '│')
 })
 
-// A prompt as the host hands it on: a paste expanded inside its own tags, around lines he wrote.
+// A prompt as the host hands it on: a paste expanded inside its own tags, around lines they wrote.
 const PASTED = '\n\n<pasted_content id="0176">\nwrite me a small cli tool for notes\n  jot add <text>  saves one note\n  jot list  prints them\n\n' +
   'keep it in one file, no packages\nand make teh list numbered\nsearch too maybe\nthat is all\n</pasted_content id="0176">\n'
 
-test('his sentence: the host’s paste tags taken out, his empty lines dropped, every other line drawn as a line', () => {
+test('their sentence: the host’s paste tags taken out, their empty lines dropped, every other line drawn as a line', () => {
   assert.deepEqual(saidLines(PASTED), ['write me a small cli tool for notes', '  jot add <text>  saves one note', '  jot list  prints them',
     'keep it in one file, no packages', 'and make teh list numbered', 'search too maybe', 'that is all'])
   assert.deepEqual(saidLines('fix this: <pasted_content id="1">x = 1</pasted_content id="1"> please'), ['fix this: x = 1 please'])
   assert.deepEqual(stopsOf(opened(NOTES_FRAME, FRAME_CHECKED, 'on', '\n<pasted_content id="2">\n</pasted_content id="2">\n')).slice(0, 1), ['c0'])
 })
 
-test('his sentence takes one line: his first line cut to the width, then how many more; d or his change shows it whole', () => {
+test('their sentence takes one line: their first line cut to the width, then how many more; d or their change shows it whole', () => {
   const o = opened(NOTES_FRAME, FRAME_CHECKED, 'on', PASTED)
   const one = drawn(o, 78)
   assert.equal(one.filter(l => l.includes(LABELS.youSaid) || l.startsWith(' '.repeat(13))).length, 1)

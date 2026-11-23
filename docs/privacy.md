@@ -72,5 +72,5 @@ The rows you approve lie in your repository; everything else the tool keeps lies
 The controls are checks, not proofs. These are their limits.
 
 - **The cut for secrets is a set of patterns.** A value in an unfamiliar shape can pass. Ordinary private material, as a name or a customer's data, is recognised by no pattern.
-- **The writer's session.** Claude Code's built-in plugins still load there, a telemetry plugin among them. No run has shown what they see of the change.
+- **The writer's session.** Claude Code's built-in plugins still load there, a telemetry plugin among them. The tool cannot say what they see of the change.
 - **Where requests go.** The tool names the models and the commands it starts. It cannot show where your `claude` command or your router sends them, which account they use, or how long a service keeps them.

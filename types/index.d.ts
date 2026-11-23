@@ -47,10 +47,10 @@ export type Examined = {
 // by its id, `ok`, or `retry`; `answered` the rows under review the person said yes to;
 // `kept` the rows a proposal this one took the place of had answered, each by its words and its question, kept where
 // they stand unchanged;
-// `changing` the stop the person pressed enter on, under which its one line is open in the pane; `typed` his words in
-// that line as he types them; `changed` the line he sent as his change, there or at the host's prompt, while the
+// `changing` the stop the person pressed enter on, under which its one line is open in the pane; `typed` their words in
+// that line as they type them; `changed` the line they sent as their change, there or at the host's prompt, while the
 // session answers it and the picker is
-// closed; `details` the row whose details are open, or `said` for his sentence whole; `help` the list of keys; `aside`
+// closed; `details` the row whose details are open, or `said` for their sentence whole; `help` the list of keys; `aside`
 // the picker closed by esc, the proposal waiting; `writing` and `failed` the writer's run and its refusal.
 export type Open = {
   id: string
