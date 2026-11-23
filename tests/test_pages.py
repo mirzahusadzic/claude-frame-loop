@@ -188,7 +188,7 @@ class PagesTests(unittest.TestCase):
         self.assertIn("-.->", chart)  # the optional path is dashed
         self.assertRegex(chart, r"classDef \w+ fill:#[0-9a-f]{8}")  # translucent fills by role
         caption = check.split("\n```", 2)[2].lstrip().splitlines()[0]
-        self.assertTrue(caption.startswith("*") and caption.endswith("*"))
+        self.assertRegex(caption, r'^<p align="center"><em>[^<]+</em></p>$')  # centred, as the README's figure is
 
     def test_the_pages_say_who_trains_and_what_a_person_must_set(self):
         privacy = (DOCS / "privacy.md").read_text("utf-8")

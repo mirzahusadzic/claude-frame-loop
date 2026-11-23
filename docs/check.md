@@ -79,7 +79,7 @@ flowchart TB
     class A,C,H tool
 ```
 
-*The loop: your sentence becomes rows you approve, the work is described and read against them, and each row comes back with its state.*
+<p align="center"><em>The loop: your sentence becomes rows you approve, the work is described and read against them, and each row comes back with its state.</em></p>
 
 The dashed loop is a change of yours: the session proposes again, and nothing is approved meanwhile. The account and the check run only with the check on, and your commands run either way.
 
