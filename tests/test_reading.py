@@ -12,6 +12,8 @@ import time
 import unittest
 from unittest import mock
 
+import launch
+import link
 from scene import STEP, TURNED, C, L, Scene, W, claim, frame, hole, pair, shop, split, under
 
 from frameloop import claims, hooks, machine, reading, recoil, watch, words, work
@@ -460,7 +462,13 @@ class ChainTests(unittest.TestCase):
 
         def git(*args, given=None):
             return subprocess.run(
-                ["git", *args], cwd=scene.project, input=given, capture_output=True, text=True, check=True
+                ["git", *args],
+                cwd=scene.project,
+                input=given,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                check=True,
             ).stdout.strip()
 
         blob = git("hash-object", "-w", "--stdin", given="def count_per_client(requests):\n    return totals\n")
@@ -547,15 +555,13 @@ class LinkTests(unittest.TestCase):
     read, and the writer writes nothing."""
 
     def test_no_write_follows_a_link_planted_in_the_machine_folder_and_the_line_says_why(self):
-        import os
-
         for folder in ("runs", "accounts"):
             with self.subTest(folder=folder):
                 scene = shop(Scene(self))
                 scene.fakes(claude={"result": SAID}, gadfly={"readers": {"reading-": "rests"}})
                 elsewhere = scene.outside / f"elsewhere-{folder}"
                 elsewhere.mkdir()
-                os.symlink(elsewhere, scene.where / folder)
+                link.make(self, scene.where / folder, elsewhere, directory=True)
                 lines = scene.turn(
                     lambda scene=scene: (
                         scene.write("limits/count.py", "changed\n"),
@@ -567,14 +573,12 @@ class LinkTests(unittest.TestCase):
                 self.assertNotEqual(scene.standing("limits", L).tension, "fulfilled")
 
     def test_the_writer_writes_no_frame_file_through_a_link_under_the_frame(self):
-        import os
-
         from scene import item, proposal
 
         scene = Scene(self)
         elsewhere = scene.outside / "elsewhere"
         elsewhere.mkdir()
-        os.symlink(elsewhere, scene.project / ".frame")
+        link.make(self, scene.project / ".frame", elsewhere, directory=True)
         said = scene.approving(scene.propose(proposal("frame", "", [item(C)]))["id"], "--ticked", "0")
         self.assertEqual((said[0], said[1]["written"], list(elsewhere.iterdir())), (1, [], []))  # refused, in JSON
 
@@ -602,10 +606,11 @@ class OnceTests(unittest.TestCase):
             event = {"hook_event_name": "Stop", "cwd": str(scene.project), "session_id": session}
             running.append(
                 subprocess.Popen(
-                    [str(ROOT / "hooks" / "run.sh")],
+                    launch.argv(ROOT / "hooks" / "run.sh"),
                     stdin=subprocess.PIPE,
                     stdout=subprocess.PIPE,
                     text=True,
+                    encoding="utf-8",
                     env=dict(os.environ),
                 )
             )

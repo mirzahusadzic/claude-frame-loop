@@ -6,9 +6,23 @@ import type { Event } from './picker'
 
 export type Ran = { exitCode: number; stdout: string; stderr: string }
 
+// A path the host can hand to either system: one separator, no doubled slash, and a Windows drive kept. A Unix name
+// may hold a backslash, so only a drive or UNC path is rewritten.
+const windowsPath = (path: string) => /^[A-Za-z]:[\\/]|^\\\\/.test(path)
+export const pathOf = (root: string, ...parts: string[]) => {
+  const windows = windowsPath(root)
+  const first = (windows ? root.replace(/\\/g, '/') : root).replace(/\/+$/, '')
+  const rest = parts.map(part => (windows ? part.replace(/\\/g, '/') : part).replace(/^\/+|\/+$/g, ''))
+  const found = [first, ...rest].filter(Boolean)
+  return found.length ? found.join('/') : '/'
+}
+// Windows has no shebang in a native spawn: the host's Git Bash runs the same launcher there.
+export const windowsNow = () => (globalThis as { process?: { platform?: string } }).process?.platform === 'win32'
+
 // Every verb through the plugin's one launcher for the person's own hand: Python isolated, the plugin's root put on
 // its path by hand, so a project's own frameloop/ or json.py never stands in for the writer.
-export const argvOf = (root: string, verb: string, args: readonly string[] = []) => [`${root}/hooks/hand.sh`, verb, ...args]
+export const argvOf = (root: string, verb: string, args: readonly string[] = [], windows = windowsNow()) =>
+  [...(windows ? ['bash'] : []), pathOf(root, 'hooks', 'hand.sh'), verb, ...args]
 
 // approve <id> --ticked 0,1,2: the proposal approved whole, every item; for options its one item with --pick <index>.
 export const approveArgs = (o: Open): string[] => {
@@ -52,7 +66,8 @@ export const failure = (ran: Ran) => {
 
 export const whereOf = (ran: Ran): string => {
   const f = parsed(ran)?.folder
-  return ran.exitCode === 0 && typeof f === 'string' && f.trim() && !/[\u0000-\u001f]/.test(f) ? f.replace(/\/+$/, '') : ''
+  if (ran.exitCode !== 0 || typeof f !== 'string' || !f.trim() || /[\u0000-\u001f]/.test(f)) return ''
+  return (windowsPath(f) ? f.replace(/\\/g, '/') : f).replace(/\/+$/, '')
 }
 
 // `several` where the faults are rows that look like several claims, which the same proposal sent again keeps.

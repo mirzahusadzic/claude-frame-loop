@@ -26,10 +26,23 @@ import time
 from pathlib import Path
 from typing import Optional
 
-from frameloop import claims, examine, hooks, machine, proposal, reading, watch, words, work
+from frameloop import claims, examine, hooks, host, machine, proposal, reading, watch, words, work
 
 
 def main(argv: list[str]) -> int:
+    host.utf8(sys.stdout)
+    try:
+        return _main(argv)
+    except Exception as error:
+        said = words.failed(type(error).__name__)
+        if argv[:1] == ["status"]:
+            print(said)
+        else:
+            _answer({"said": said}, 1)
+        return 1
+
+
+def _main(argv: list[str]) -> int:
     if argv[:1] == ["propose"] and (len(argv) == 2 or argv[2:] == ["--again"]):
         return propose(Path(argv[1]), again=len(argv) == 3)
     picked = _picked(argv[2:]) if len(argv) >= 2 and argv[0] == "approve" else None
@@ -51,7 +64,7 @@ def main(argv: list[str]) -> int:
         return line(argv[1])
     waits = _waits(argv[1:]) if argv[:1] == ["look"] else None
     if waits is not None:
-        return look(sys.stdin.read(), waits or None)
+        return look(sys.stdin.buffer.read().decode("utf-8", "replace"), waits or None)
     print(words.usage())
     return 2
 

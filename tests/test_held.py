@@ -44,10 +44,10 @@ class WhoseWordTests(unittest.TestCase):
                 shop(scene, holds=[held], on=False)
                 root = claims.load(scene.project).frames[""]
                 if case == "the contract's command":
-                    root["split"]["contracts"][0]["command"] = f"touch '{ran}'"
+                    root["split"]["contracts"][0]["command"] = f"touch '{ran.as_posix()}'"
                 else:
                     words_ = "Tests pass, all." if "words" in case else held["words"]
-                    root = {**root, "holds": [{"words": words_, "command": f"touch '{ran}'"}]}
+                    root = {**root, "holds": [{"words": words_, "command": f"touch '{ran.as_posix()}'"}]}
                 scene.frame(root)
                 scene.turn(lambda scene=scene: scene.write("auth/client.py", "changed\n"))
                 self.assertFalse(ran.exists())
@@ -92,6 +92,7 @@ class WorkTests(unittest.TestCase):
 
 
 class DeviceTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "Windows has no /dev/zero, and its test account may not make the link")
     def test_a_frame_file_that_is_a_link_to_a_device_is_never_opened_by_any_hook(self):
         scene = Scene(self)
         scene.write("README.md")

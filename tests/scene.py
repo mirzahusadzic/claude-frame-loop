@@ -238,7 +238,9 @@ class Scene:
         return machine.folder(self.project)
 
     def git(self, *args, cwd=None) -> str:
-        done = subprocess.run(["git", *args], cwd=cwd or self.project, check=True, capture_output=True, text=True)
+        done = subprocess.run(
+            ["git", *args], cwd=cwd or self.project, check=True, capture_output=True, text=True, encoding="utf-8"
+        )
         return done.stdout
 
     def write(self, path, text="made up\n") -> None:
@@ -274,7 +276,13 @@ class Scene:
         """git, as the tool runs it on its own snapshots, whose objects lie in the machine folder's store."""
         more = work.store(self.project, self.where)
         done = subprocess.run(
-            ["git", *args], cwd=self.project, check=True, capture_output=True, text=True, env={**os.environ, **more}
+            ["git", *args],
+            cwd=self.project,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            env={**os.environ, **more},
         )
         return done.stdout
 
@@ -389,6 +397,7 @@ class Scene:
             cwd=cwd or self.project,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env=env,
             input=given,
         )

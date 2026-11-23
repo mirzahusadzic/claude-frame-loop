@@ -39,7 +39,7 @@ Three more names are used as they stand, and set nothing of the tool's own:
 
 | Name | Used as |
 | --- | --- |
-| `PATH` | Which `python3` runs the hooks, the first of 3.9 or later, and where `git`, `claude` and `gadfly` are found |
+| `PATH` | Which Python 3.9 or later runs the hooks: `python3` or `python`, then `py -3` on Windows; and where `git`, `claude` and `gadfly` are found |
 | `CLAUDE_PLUGIN_ROOT` | The plugin's folder, as the host gives it to start the hooks; the Python side never reads it |
 | `CLAUDE_PLUGIN_DATA` | The host's data folder, where the draft of a session's last proposal is kept |
 
@@ -52,7 +52,7 @@ Two more names are the tool's own, and neither is a setting ([Repository guide](
 | `FRAME_LOOP_GROUND_IN_HOOK` | Set by the hooks' launcher for every hook and the commands it starts, so that approving and switching refuse there |
 | `FRAME_LOOP_GROUND_TESTS_HOME` | The test suite's own home, followed only to a folder the suite made and marked |
 
-`HOME` is never used to find the tool's records. Your own folder is taken from the system's record of your account, so a project cannot move the records by setting `HOME`.
+`HOME` is never used to find the tool's records. Your own folder is taken from the system's record of your account: the account database or, on Windows, the account profile.
 
 ---
 

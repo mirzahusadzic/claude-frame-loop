@@ -40,7 +40,8 @@ The rows you approve are written into your repository at your approval, one file
 The folder is `~/.frame/ground/claude/<name>-<hash>/`. The name is your repository's top folder's name in lower case, each run of other characters made a `-`, or `project` where nothing is left. The hash is the first 16 characters of the SHA-256 of that folder's full path.
 
 - **Your own folder.** `~` is your own folder as the system's record of your account gives it, never the `HOME` variable. So a project's settings cannot move the folder by setting `HOME`.
-- **No write through a link.** Every folder on the way is made by the tool as a real folder, and a link on the way refuses the write whole.
+- **Windows.** The account profile is read through Windows itself. New machine folders carry an ACL for that account alone, where macOS and Linux use their own folder mode.
+- **No write through a link.** Every folder on the way is made by the tool as a real folder, and a link, junction or Windows reparse point on the way refuses the write whole.
 - **A repository that holds it.** A repository that holds the machine folder itself, as one at your own folder would, is stood aside from. Your approvals there could arrive by a pull.
 - **Another version.** `~/.frame/claude` is apart from it, and this version neither reads nor writes there.
 
@@ -96,8 +97,8 @@ What the line above the prompt is drawn from, and the files the tool keeps for i
 | --- | --- | --- |
 | `live/<session id>.json` | The line above the prompt: what runs, what needs your eye, an alert, and what the checks spent | The hooks |
 | `log.jsonl` | Each prompt and each turn's end, with what was told; past 4 MiB, cut to its last 1 MiB of rows | The hooks |
-| `watch.json` | The tool's record of the files it decides by, so that a change by another hand is told | The hooks |
-| `watch.lock`, `reading.lock` | The locks that keep two hooks from writing at once | The hooks |
+| `watch.json` | The tool's record of the files it decides by, so that a change by another hand is told; on Windows a plain file is also digested by its bytes | The hooks |
+| `watch.lock`, `reading.lock` | The system file locks that keep two hooks from writing at once: `flock` on macOS and Linux, a byte lock on Windows | The hooks |
 | `writer/`, `withhold.json` | The folder the writer runs in, where every hook stands aside; and the secret patterns handed to Gadfly | The check |
 
 ---

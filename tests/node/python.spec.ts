@@ -2,18 +2,22 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { argvOf, digestsOf, examinedOf, examineFailure, failure, fieldsText, proposalOf, proposedOf, sameDigests, shownOf, switchedOf, whereOf, writtenOf } from '../../hooks/band/frameloop'
+import { argvOf, digestsOf, examinedOf, examineFailure, failure, fieldsText, pathOf, proposalOf, proposedOf, sameDigests, shownOf, switchedOf, whereOf, writtenOf } from '../../hooks/band/frameloop'
 import { LABELS } from '../../hooks/band/labels'
 
 const ran = (stdout: unknown, exitCode = 0, stderr = '') => ({ exitCode, stdout: typeof stdout === 'string' ? stdout : JSON.stringify(stdout), stderr })
 
 test('each verb runs through the plugin’s own launcher, never a python3 of the project’s path', () => {
-  assert.deepEqual(argvOf('/the/plugin', 'switch', ['off']), ['/the/plugin/hooks/hand.sh', 'switch', 'off'])
-  assert.deepEqual(argvOf('/the/plugin', 'where'), ['/the/plugin/hooks/hand.sh', 'where'])
+  assert.deepEqual(argvOf('/the/plugin', 'switch', ['off'], false), ['/the/plugin/hooks/hand.sh', 'switch', 'off'])
+  assert.deepEqual(argvOf('/the/plugin', 'where', [], false), ['/the/plugin/hooks/hand.sh', 'where'])
+  assert.deepEqual(argvOf('C:\\Program Files\\frame-loop\\', 'where', [], true), ['bash', 'C:/Program Files/frame-loop/hooks/hand.sh', 'where'])
+  assert.equal(pathOf('C:\\plug\\', 'live', 'a.json'), 'C:/plug/live/a.json')
+  assert.equal(pathOf('', 'drafts', 'a.json'), 'drafts/a.json')
 })
 
 test('where names the folder, or nothing, and why in the sentence it refused with', () => {
   assert.equal(whereOf(ran({ folder: '/m/.frame/claude/app-0123456789abcdef/' })), '/m/.frame/claude/app-0123456789abcdef')
+  assert.equal(whereOf(ran({ folder: 'C:\\m\\.frame\\claude\\app-0123456789abcdef\\' })), 'C:/m/.frame/claude/app-0123456789abcdef')
   assert.equal(whereOf(ran({ folder: '/m' }, 1)), '')
   assert.equal(whereOf(ran({ folder: '/m\n/x' })), '')
   assert.equal(whereOf(ran('not json')), '')

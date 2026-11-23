@@ -13,6 +13,12 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from frameloop import host  # noqa: E402  (after the source root is on the path)
 
 # The keywords that say nothing of the value, and those this checker reads.
 NOTES = {"$schema", "$id", "$defs", "title", "description", "default", "examples", "$comment"}
@@ -176,4 +182,5 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
+    host.utf8(sys.stdout)
     sys.exit(main(sys.argv[1:]))

@@ -7,6 +7,7 @@ import json
 import unittest
 from unittest import mock
 
+import link
 from scene import FILES, PARTS, STEP, A, C, D, L, Scene, W, claim, contract, frame, hole, pair, shop, split, under
 
 from frameloop import claims, hooks, machine, recoil, words
@@ -92,7 +93,7 @@ class ReadingTests(unittest.TestCase):
 
         def linked(scene):
             scene.write("real/count.py")
-            (scene.project / "counter").symlink_to("real")
+            link.make(self, scene.project / "counter", "real", directory=True)
 
         def submodule(scene):
             lib = scene.outside / "lib"
@@ -119,7 +120,7 @@ class ReadingTests(unittest.TestCase):
                 "count.py",
                 ["count.py"],
                 None,
-                lambda s: (s.project / "count.py").chmod(0o755),
+                lambda s: ((s.project / "count.py").chmod(0o755), s.git("update-index", "--chmod=+x", "count.py")),
                 True,
             ),
             "a submodule, moved on": ("vendor", ["README.md"], submodule, bumped, True),

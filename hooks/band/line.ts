@@ -121,8 +121,15 @@ export const commandText = (l: Line, seconds: number) =>
     ...(l.now ? [nowText(l.now, seconds)] : []),
   ].join('\n')
 
-// A session id names a file only when it is a plain id.
-export const isPlain = (id: string) => /^[A-Za-z0-9_-]{1,128}$/.test(id)
+const WINDOWS_NAMES = new Set([
+  'con', 'prn', 'aux', 'nul', 'clock$',
+  ...Array.from({ length: 9 }, (_, n) => `com${n + 1}`),
+  ...Array.from({ length: 9 }, (_, n) => `lpt${n + 1}`),
+])
+// A session id names a file only when it is a plain id, and on Windows no reserved name or other case collides.
+export const isPlain = (id: string, windows = false) =>
+  /^[A-Za-z0-9_-]{1,128}$/.test(id) &&
+  (!windows || (id === id.toLowerCase() && !WINDOWS_NAMES.has(id)))
 
 export type Command = { kind: 'show' } | { kind: 'switch'; to: 'on' | 'off' } | { kind: 'say'; text: string }
 export const commandOf = (args: string, isPerson: boolean): Command => {

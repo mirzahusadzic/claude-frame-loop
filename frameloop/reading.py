@@ -43,7 +43,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from frameloop import account, approval, claims, machine, recoil, screen, watch, words, work
+from frameloop import account, approval, claims, host, machine, recoil, screen, watch, words, work
 from frameloop import now as running  # `now` is a snapshot's tree id here
 
 ROOT = Path(__file__).resolve().parent.parent  # Gadfly's working folder, so that it imports frameloop.kept from here
@@ -1193,7 +1193,11 @@ def _under(folder: Path, depth: int) -> list:
     record, and raises."""
     found = []
     for entry in sorted(os.scandir(folder), key=lambda each: each.name):
-        if entry.is_symlink() or not (entry.is_file(follow_symlinks=False) or entry.is_dir(follow_symlinks=False)):
+        if (
+            entry.is_symlink()
+            or host.is_link(Path(entry.path))
+            or not (entry.is_file(follow_symlinks=False) or entry.is_dir(follow_symlinks=False))
+        ):
             raise claims.NotPlain("link")
         if entry.is_dir(follow_symlinks=False):
             if depth <= 0:
@@ -1310,10 +1314,10 @@ def _inside(where: Path, runs: str) -> Optional[Path]:
     path = where
     for step in steps:
         path = path / step
-        if path.is_symlink():
+        if host.is_link(path):
             return None
     try:
-        inside = where.resolve() in path.resolve().parents
+        inside = host.under(path.resolve(), where.resolve()) and not host.same(path.resolve(), where.resolve())
     except OSError:
         return None
     return path if inside and path.is_dir() else None

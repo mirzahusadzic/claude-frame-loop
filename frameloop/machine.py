@@ -10,19 +10,17 @@ every call, so a change made during one is told, whoever made it. No write goes 
 
 from __future__ import annotations
 
-import fcntl
 import hashlib
 import json
 import os
-import pwd
 import re
-import stat
+import threading
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator, Optional
 
-from frameloop import approval, claims
+from frameloop import approval, claims, host
 
 TESTS = Path(__file__).resolve().parent.parent / "tests"
 PIN = "FRAME_LOOP_GROUND_TESTS_HOME"
@@ -46,6 +44,16 @@ LOCK_SECONDS = 2  # what a hook waits for the watch's lock, well inside the shor
 # run.sh sets this in each hook's environment, so its children have it too. It is no setting: only the person's
 # own hand reads it, to refuse to write ticks or the switch from inside a hook.
 IN_HOOK = "FRAME_LOOP_GROUND_IN_HOOK"
+WINDOWS_NAMES = {
+    "con",
+    "prn",
+    "aux",
+    "nul",
+    "clock$",
+    *(f"com{n}" for n in range(1, 10)),
+    *(f"lpt{n}" for n in range(1, 10)),
+}
+_RESTRICTED: set[str] = set()  # machine folders this process has already kept to the Windows account
 
 
 def home() -> Path:
@@ -56,27 +64,28 @@ def home() -> Path:
     pinned = os.environ.get(PIN)
     if pinned and _made_by_the_suite(Path(pinned)):
         return Path(pinned)
-    return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    return host.home()
 
 
 def _made_by_the_suite(pinned: Path) -> bool:
-    if not pinned.is_absolute() or pinned.resolve() != pinned or not pinned.name.startswith("home-"):
+    if not pinned.is_absolute() or not host.same(pinned.resolve(), pinned) or not pinned.name.startswith("home-"):
         return False
     mark = pinned / SUITE_MARK
-    return TESTS / ".work" in pinned.parents and pinned.is_dir() and mark.is_file() and not mark.is_symlink()
+    return host.under(pinned, TESTS / ".work") and pinned.is_dir() and mark.is_file() and not host.is_link(mark)
 
 
 def folder(project: Path) -> Path:
     """The project's folder on this machine: its folder's name cut to [a-z0-9-], and a digest of its path."""
     name = re.sub(r"[^a-z0-9-]+", "-", project.name.lower()).strip("-") or "project"
-    digest = hashlib.sha256(str(project.resolve()).encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(host.path_key(project.resolve()).encode("utf-8")).hexdigest()[:16]
     return home().joinpath(*MACHINE, f"{name}-{digest}")
 
 
 def held_by(project: Path) -> bool:
     """Whether the project holds its own machine folder, as a repository at the home does: the person's ticks
     there could then arrive by a pull, so no such project is taken."""
-    return project.resolve() in folder(project).resolve().parents
+    held = project.resolve()
+    return any(host.same(held, above) for above in folder(project).resolve().parents)
 
 
 def inside(cwd: str) -> bool:
@@ -85,7 +94,7 @@ def inside(cwd: str) -> bool:
         here, machines = Path(cwd).resolve(), home().joinpath(*MACHINE).resolve()
     except (OSError, ValueError):
         return False
-    return here == machines or machines in here.parents
+    return host.under(here, machines)
 
 
 def keep_json(path: Path, data) -> None:
@@ -408,7 +417,8 @@ def _elsewhere(now) -> bool:
     if not isinstance(now.get("until"), (int, float)) or now["until"] < time.time():
         return False
     try:
-        os.kill(now["pid"], 0)  # signal 0 is sent to nothing: it asks only whether the process is there
+        if not host.alive(now["pid"]):
+            return False
     except OSError:  # gone, or another account's, which no hook of this session is
         return False
     return True
@@ -437,8 +447,8 @@ def note_session(session: str, project: Path) -> None:
 
 
 def _session_file(session: str) -> Path:
-    plain = re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session)
-    return home().joinpath(*MACHINE, SESSIONS, f"{session if plain else claims.digest('session', session)[:32]}.json")
+    plain = plain_name(session)
+    return home().joinpath(*MACHINE, SESSIONS, f"{plain or claims.digest('session', session)[:32]}.json")
 
 
 def live(where: Path, session: str) -> dict:
@@ -452,8 +462,18 @@ def live(where: Path, session: str) -> dict:
 def _live(where: Path, session: str) -> Path:
     """The live file of a session, by its id where that is a plain name, else by a digest of it: no id can lead
     the file out of the folder."""
-    plain = re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session)
-    return where / LIVE / f"{session if plain else claims.digest('session', session)[:32]}.json"
+    plain = plain_name(session)
+    return where / LIVE / f"{plain or claims.digest('session', session)[:32]}.json"
+
+
+def plain_name(session: str) -> Optional[str]:
+    """A session id that names a file as written, and on Windows one that no reserved device or other case collides
+    with."""
+    if re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session) is None:
+        return None
+    if host.WINDOWS and (session != session.lower() or session.casefold() in WINDOWS_NAMES):
+        return None
+    return session
 
 
 def watched(name: str) -> bool:
@@ -470,14 +490,10 @@ def _hashes(where: Path, project: Path) -> dict[str, str]:
 
 
 def _digest(path: Path) -> Optional[str]:
-    """A file's state as the watch keeps it, from its own entry and never its contents, so no file is opened: a
-    link, a pipe or a device is looked at as itself, and a large record costs no more than a small one. Any write,
-    and any change of its times, moves the change time, which no hand can set back."""
-    try:
-        held = os.lstat(path)
-    except OSError:
-        return None
-    return f"{held.st_mode:o}:{held.st_ino}:{held.st_size}:{held.st_mtime_ns}:{held.st_ctime_ns}"
+    """A file's state as the watch keeps it: its own entry, and on Windows the bytes of a plain file, since Windows may
+    keep a creation time where macOS and Linux keep a change time no hand can set back. A link, a pipe or a device is
+    looked at as itself."""
+    return host.state(path)
 
 
 class Locked(Exception):
@@ -497,14 +513,14 @@ def _locked(where: Path) -> Iterator[None]:
     is waited for LOCK_SECONDS at most, and a lock file that is a link or a pipe is never waited on."""
     try:
         folders(where)
-        handle = os.open(where / LOCK, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        handle = host.open_lock(where / LOCK)
     except OSError as error:
         raise Locked() from error
     try:
         until = time.monotonic() + LOCK_SECONDS
         while True:
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                host.lock(handle)
                 break
             except BlockingIOError:
                 if time.monotonic() > until:
@@ -516,7 +532,10 @@ def _locked(where: Path) -> Iterator[None]:
         finally:
             _HELD[0] -= 1
     finally:
-        os.close(handle)
+        try:
+            host.unlock(handle)
+        finally:
+            os.close(handle)
 
 
 class Linked(OSError):
@@ -528,17 +547,37 @@ def folders(path: Path, top: Optional[Path] = None) -> Path:
     that is none of a link's: one that is a link, or no folder, raises Linked, so no write follows a link planted in
     the machine folder or the frame's. Gives the path."""
     top = top if top is not None else home()
+    owner = home()
     at = top
     for part in path.relative_to(top).parts:
         at = at / part
         try:
             held = os.lstat(at)
         except FileNotFoundError:
-            os.mkdir(at, 0o700 if home() in at.parents else 0o777)
+            private = host.under(at, owner)
+            os.mkdir(at, 0o700 if private else 0o777)
+            _restrict(at, private, owner)
             continue
-        if not stat.S_ISDIR(held.st_mode):
+        if host.kind(held) != "folder":
             raise Linked(str(at))
+        _restrict(at, host.under(at, owner), owner)
     return path
+
+
+def _restrict(path: Path, private: bool, owner: Path) -> None:
+    """A Windows machine folder, made this account's alone once in this process; the shared names above it are left."""
+    if not private or not host.WINDOWS:
+        return
+    try:
+        parts = path.relative_to(owner).parts
+    except ValueError:
+        return
+    if len(parts) <= len(MACHINE):
+        return
+    key = host.path_key(path)
+    if key not in _RESTRICTED:
+        host.restrict(path)
+        _RESTRICTED.add(key)
 
 
 READING_LOCK = "reading.lock"  # held while a turn's end makes accounts and readings, so two never make one twice
@@ -551,13 +590,13 @@ def waited(where: Path, name: str, until: float, waiting=None) -> Iterator[None]
     Locked where it cannot be had by then."""
     folders(where)
     try:
-        handle = os.open(where / name, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        handle = host.open_lock(where / name)
     except OSError as error:
         raise Locked() from error
     try:
         while True:
             try:
-                fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                host.lock(handle)
                 break
             except BlockingIOError:
                 if time.monotonic() > until:
@@ -567,22 +606,24 @@ def waited(where: Path, name: str, until: float, waiting=None) -> Iterator[None]
                 time.sleep(0.1)
         yield
     finally:
-        os.close(handle)
+        try:
+            host.unlock(handle)
+        finally:
+            os.close(handle)
 
 
 def write_whole(path: Path, text: str, top: Optional[Path] = None) -> None:
     """Writes a file whole, so no reader meets half of it: written beside it under a name of its own, then moved;
     its folders made from `top` as `folders` makes them, the home where none is given."""
     folders(path.parent, top)
-    beside = path.with_name(f"{path.name}.{os.getpid()}.new")
-    beside.write_text(text, "utf-8")
-    os.replace(beside, path)
+    beside = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.new")
+    host.write_text(beside, text)
+    host.replace(beside, path)
 
 
 def _append(path: Path, row: dict) -> None:
     folders(path.parent)
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    host.append_text(path, json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
 def _rows(where: Path, name: str) -> list[dict]:

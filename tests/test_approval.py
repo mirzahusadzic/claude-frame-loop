@@ -6,6 +6,7 @@ import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 import json
 import unittest
 
+import link
 from scene import PARTS, A, C, L, Scene, W, claim, contract, frame, shop, under
 
 from frameloop import claims, hooks, machine, words
@@ -48,8 +49,13 @@ class ApprovalTests(unittest.TestCase):
     def test_a_hold_or_a_contract_check_not_ticked_is_never_run(self):
         scene = Scene(self)
         ran = scene.outside / "ran"
-        holds = [{"words": "The tests pass.", "command": f"touch '{ran}'"}]
-        shop(scene, holds=holds, contracts=[contract("auth", ["limits"], command=f"touch '{ran}'")], approve=False)
+        holds = [{"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}]
+        shop(
+            scene,
+            holds=holds,
+            contracts=[contract("auth", ["limits"], command=f"touch '{ran.as_posix()}'")],
+            approve=False,
+        )
         tree = claims.load(scene.project)
         for place in PARTS:
             frame_ = tree.frames[place]
@@ -87,7 +93,7 @@ class ApprovalTests(unittest.TestCase):
         scene = Scene(self)
         ran = scene.outside / "ran"
         shop(scene)
-        came = {"words": "The tests pass.", "command": f"touch '{ran}'"}
+        came = {"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}
         pulled(scene, ".frame/limits/frame.json", lambda held: {**held, "holds": [came]})
         told = hooks.frame_told(scene.project).splitlines()
         self.assertIn(words.unlike_here(words.drift([("came", came["words"])])), told)
@@ -118,13 +124,13 @@ class ApprovalTests(unittest.TestCase):
             shipped.parent.mkdir(parents=True, exist_ok=True)
             shipped.write_bytes((scene.where / name).read_bytes())
             (scene.where / name).unlink()
-            (scene.where / name).symlink_to(shipped)
+            link.make(self, scene.where / name, shipped)
 
         def moved(scene):
             """The machine folder itself moved elsewhere, and a link left in its place."""
             elsewhere = scene.outside / "machine-elsewhere"
             scene.where.rename(elsewhere)
-            scene.where.symlink_to(elsewhere)
+            link.make(self, scene.where, elsewhere, directory=True)
 
         cases = {
             "the ticks a link": (lambda s: linked(s, machine.approval.FILE), [machine.approval.FILE], "project"),

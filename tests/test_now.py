@@ -13,6 +13,7 @@ import time
 import unittest
 from unittest import mock
 
+import hold_lock
 from scene import ROOT, C, D, L, Scene, shop, timeless
 from test_examine import proposed
 
@@ -200,22 +201,7 @@ class LeftBehindTests(unittest.TestCase):
             run.write(force=True)  # never waits on its own lock
             self.assertLess(time.monotonic() - started, 1)
         self.assertEqual((scene.where / machine.LIVE / f"{scene.session}.json").read_text("utf-8"), before)
-        other = subprocess.Popen(
-            [
-                sys.executable,
-                "-c",
-                "import fcntl, os, sys, time\n"
-                "h = os.open(sys.argv[1], os.O_WRONLY | os.O_CREAT, 0o600)\n"
-                "fcntl.flock(h, fcntl.LOCK_EX); print('held', flush=True); time.sleep(6)",
-                str(scene.where / machine.LOCK),
-            ],
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        self.addCleanup(other.stdout.close)
-        self.addCleanup(other.wait)
-        self.addCleanup(other.kill)
-        self.assertEqual(other.stdout.readline().strip(), "held")
+        hold_lock.holder(self, scene.where)
         self.assertFalse(machine.set_now(scene.where, scene.session, {"said": "made up"}))
         self.assertEqual((scene.where / machine.LIVE / f"{scene.session}.json").read_text("utf-8"), before)
 

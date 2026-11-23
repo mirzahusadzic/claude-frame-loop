@@ -72,10 +72,11 @@ const world = async ($: any, on: any, given: Given = {}) => {
   })
   on('process.hookEnv', () => ({ value: { CLAUDE_PLUGIN_DATA: DATA, CLAUDE_PROJECT_DIR: ROOT } }))
   on('process.run', async (_: unknown, e: { argv: readonly string[]; init?: { stdin?: string } }) => {
-    seen.ran.push([...e.argv])
+    const argv = e.argv[0] === 'bash' ? e.argv.slice(1) : e.argv // Git Bash is the Windows wrapper, not the verb
+    seen.ran.push([...argv])
     seen.inits.push(e.init)
-    seen.order.push(e.argv[1] ?? '')
-    const [, verb, ...args] = e.argv
+    seen.order.push(argv[1] ?? '')
+    const [, verb, ...args] = argv
     if (verb === 'where') return ok({ folder: FOLDER })
     if (verb === 'propose') {
       if (given.faults) return ok({ id: '', path: '', faults: given.faults, said: 'The proposal has faults.' }, 1)

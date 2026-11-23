@@ -43,7 +43,11 @@ def constants(tree):
 class WordsTests(unittest.TestCase):
     def test_docs_told_is_exactly_what_scripts_told_prints(self):
         printed = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "told.py")], capture_output=True, text=True, check=True
+            [sys.executable, str(ROOT / "scripts" / "told.py")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
         ).stdout
         self.assertEqual((ROOT / "docs" / "told.md").read_text("utf-8"), printed)
 

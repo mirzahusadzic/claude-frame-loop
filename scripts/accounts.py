@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from frameloop import account, machine, words, work  # noqa: E402  (after the source root is on the path)
+from frameloop import account, host, machine, words, work  # noqa: E402  (after the source root is on the path)
 
 
 def main(argv: list) -> int:
@@ -48,4 +48,5 @@ def main(argv: list) -> int:
 
 
 if __name__ == "__main__":
+    host.utf8(sys.stdout)
     sys.exit(main(sys.argv[1:]))

@@ -12,6 +12,7 @@ import time
 import unittest
 from unittest import mock
 
+import link
 from scene import OF, A, C, D, L, Scene, W, claim, frame, hole, pair, part, shop, split, under
 
 from frameloop import claims, examine, machine, reading, words
@@ -183,7 +184,7 @@ class OffTests(unittest.TestCase):
         )
         other = scene.outside / "elsewhere.json"
         other.write_text(path.read_text("utf-8").replace(f'"id": "{ident}"', '"id": "9"'), "utf-8")
-        (path.parent / "9.json").symlink_to(other)
+        link.make(self, path.parent / "9.json", other)
         self.assertEqual(examined(scene, "9", on=False), (None, words.examine_none("9")))
 
 

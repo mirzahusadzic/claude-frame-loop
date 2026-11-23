@@ -11,12 +11,11 @@ import hashlib
 import json
 import os
 import re
-import stat
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-from frameloop import words
+from frameloop import host, words
 
 FRAME = ".frame"
 FRAME_BYTES = 128 * 1024  # a frame file larger than this is left out unread
@@ -66,11 +65,11 @@ def plain_kind(top: Path, path: Path) -> Optional[str]:
     at = top
     for part in path.relative_to(top).parts[:-1]:
         at = at / part
-        if not stat.S_ISDIR(os.lstat(at).st_mode):
+        if host.kind(os.lstat(at)) != "folder":
             return "linked"
-    if not stat.S_ISDIR(os.lstat(top).st_mode):
+    if host.kind(os.lstat(top)) != "folder":
         return "linked"
-    return _kind(os.lstat(path).st_mode)
+    return host.kind(os.lstat(path))
 
 
 def plain_bytes(top: Path, path: Path, limit: int) -> bytes:
@@ -79,9 +78,12 @@ def plain_bytes(top: Path, path: Path, limit: int) -> bytes:
     kind = plain_kind(top, path)
     if kind is not None:
         raise NotPlain(kind)
-    handle = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     try:
-        kind = _kind(os.fstat(handle).st_mode)  # the path may have been swapped since it was looked at
+        handle = host.open_read(path)
+    except host.NotPlain as refused:
+        raise NotPlain(refused.kind) from None
+    try:
+        kind = host.kind(os.fstat(handle))  # the path may have been swapped since it was looked at
         if kind is not None:
             raise NotPlain(kind)
         chunks, size = [], 0
@@ -96,23 +98,6 @@ def plain_bytes(top: Path, path: Path, limit: int) -> bytes:
     if size > limit:
         raise TooLarge()
     return b"".join(chunks)
-
-
-def _kind(mode: int) -> Optional[str]:
-    """What a path that is no plain file is, by its mode; None for a plain file."""
-    if stat.S_ISREG(mode):
-        return None
-    return (
-        "link"
-        if stat.S_ISLNK(mode)
-        else "folder"
-        if stat.S_ISDIR(mode)
-        else "pipe"
-        if stat.S_ISFIFO(mode)
-        else "socket"
-        if stat.S_ISSOCK(mode)
-        else "device"
-    )
 
 
 class Twice(ValueError):
@@ -242,7 +227,7 @@ def frame_files(project: Path) -> list[Path]:
             elif depth < FRAME_DEPTH and entry.is_dir(follow_symlinks=False):
                 walk(entry.path, depth + 1)
 
-    if os.path.islink(top):
+    if host.is_link(top):
         return [top / "frame.json"]
     walk(str(top), 0)
     return sorted(found)

@@ -27,7 +27,9 @@ FALSE = "Each request is answered in French."
 
 def measure(scene, *argv):
     """The script as a maintainer runs it, from outside the project: its exit code and its lines."""
-    done = subprocess.run([sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, cwd=scene.outside)
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, encoding="utf-8", cwd=scene.outside
+    )
     return done.returncode, done.stdout.splitlines()
 
 

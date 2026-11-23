@@ -16,7 +16,11 @@ class SuiteTests(unittest.TestCase):
         for form in (["tests/test_words.py"], ["tests.test_words"]):
             with self.subTest(form=form):
                 done = subprocess.run(
-                    [sys.executable, "-m", "unittest", *form], cwd=ROOT, capture_output=True, text=True
+                    [sys.executable, "-m", "unittest", *form],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
                 )
                 self.assertEqual(done.returncode, 0, done.stderr[-400:])
                 self.assertIn("OK", done.stderr.splitlines()[-1])

@@ -15,15 +15,18 @@ and an examination's steps and marks are kept by that number. A crossing is tick
 
 from __future__ import annotations
 
+import contextlib
 import copy
 import hashlib
 import json
 import os
 import re
+import threading
+import time
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from frameloop import approval, claims, machine, words
+from frameloop import approval, claims, host, machine, words
 
 KINDS = ("frame", "split", "reframe", "options")
 KEYS = ("kind", "place", "title", "items", "holds", "split", "options", "reason")
@@ -104,12 +107,14 @@ def keep(where: Path, proposal: dict) -> tuple[str, Path]:
     number = max(taken, default=0) + 1
 
     def link(number: int) -> None:
-        beside = folder / f".{os.getpid()}.new"
-        beside.write_text(json.dumps({**proposal, "id": str(number)}, ensure_ascii=False, indent=1) + "\n", "utf-8")
+        # a name no other writer has, so one a dead process left is never taken for a proposal that took the id
+        beside = folder / f".{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.new"
+        host.write_text(beside, json.dumps({**proposal, "id": str(number)}, ensure_ascii=False, indent=1) + "\n")
         try:
-            os.link(beside, folder / f"{number}.json")  # fails where another propose took the id first
+            host.new_file(beside, folder / f"{number}.json")  # fails where another propose took the id first
         finally:
-            beside.unlink()
+            with contextlib.suppress(FileNotFoundError):  # on Windows the new file is this one, renamed
+                beside.unlink()
 
     while True:
         try:
@@ -131,7 +136,9 @@ def read(where: Path, ref: str) -> Optional[tuple[dict, bytes]]:
     """A kept proposal as find has it, with the bytes it was read from, whose digest the picker shows it by."""
     if not ref.isdigit():
         path = Path(ref).resolve()
-        if path.parent != (where / machine.PROPOSALS).resolve() or not re.fullmatch(r"\d+\.json", path.name):
+        if not host.same(path.parent, (where / machine.PROPOSALS).resolve()) or not re.fullmatch(
+            r"\d+\.json", path.name
+        ):
             return None
         ref = path.name[: -len(".json")]
     try:

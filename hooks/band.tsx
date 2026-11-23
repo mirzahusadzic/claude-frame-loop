@@ -1,7 +1,7 @@
 import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren } from 'claude-code'
 
-import { argvOf, digestsOf, examineFailure, failure, fieldsText, isWord, lineOfRan, NOTHING, proposedOf, restoredOf, sameDigests, shownNow, shownOf, switchedOf, whereOf, wordOf, writtenOf } from './band/frameloop'
+import { argvOf, digestsOf, examineFailure, failure, fieldsText, isWord, lineOfRan, NOTHING, pathOf, proposedOf, restoredOf, sameDigests, shownNow, shownOf, switchedOf, whereOf, windowsNow, wordOf, writtenOf } from './band/frameloop'
 import type { Ran, Word } from './band/frameloop'
 import { LABELS, SCHEMA } from './band/labels'
 import { commandOf, commandText, isEnded, isPlain, isQuiet, lineOf, nowText, restTail, STALE_SECONDS } from './band/line'
@@ -88,7 +88,7 @@ const where = async ($: $): Promise<string> => {
   asking ??= run($, 'where', [], 15000).then(async ran => {
     folder = whereOf(ran)
     whyNot = folder ? '' : failure(ran)
-    project = (await $.session.root()).replace(/\/+$/, '').split('/').pop() ?? ''
+    project = (await $.session.root()).replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? ''
     return folder
   })
   const found = await asking
@@ -328,7 +328,7 @@ let lastLive = ''
 const tick = async ($: $) => {
   if (!folder) return
   const id = await $.session.id()
-  const held = isPlain(id) ? await $.fs.read(`${folder}/live/${id}.json`).catch(() => '') : ''
+  const held = isPlain(id, windowsNow()) ? await $.fs.read(pathOf(folder, 'live', `${id}.json`)).catch(() => '') : ''
   if (held !== lastLive) {
     lastLive = held
     const drawn = held ? lineOfRan(await run($, 'line', [id], 15000)) : ''
@@ -347,8 +347,8 @@ const tick = async ($: $) => {
   await seatNow($)
   await paneNow($, true)
   if (!open || open.writing) return
-  const kept = await text($, `${folder}/proposals/${open.id}.json`)
-  if (kept === null || (await shownNow(kept, await text($, `${folder}/proposals/${open.id}.examined.json`))) === open.shown) return
+  const kept = await text($, pathOf(folder, 'proposals', `${open.id}.json`))
+  if (kept === null || (await shownNow(kept, await text($, pathOf(folder, 'proposals', `${open.id}.examined.json`)))) === open.shown) return
   const got = await show($, open.id)
   if (got && got.shown !== open.shown) await dispatch($, { type: 'reshown', id: open.id, ...got, at: await seconds($) })
 }
@@ -429,7 +429,7 @@ export const register: Register = on => {
     const given = e as unknown as Record<string, unknown>
     const fields = Object.fromEntries(FIELDS.filter(k => k in given).map(k => [k, given[k]]))
     const session = await $.session.id()
-    const draft = `${(await $.process.hookEnv()).CLAUDE_PLUGIN_DATA}/drafts/${isPlain(session) ? session : 'session'}.json`
+    const draft = pathOf((await $.process.hookEnv()).CLAUDE_PLUGIN_DATA ?? '', 'drafts', `${isPlain(session, windowsNow()) ? session : 'session'}.json`)
     await $.fs.write(draft, `${JSON.stringify(fields, null, 2)}\n`)
     const sent = fieldsText(fields)
     const again = several.session === session && several.text === sent
@@ -437,7 +437,7 @@ export const register: Register = on => {
     several = got.kind === 'faults' && got.several ? { session, text: sent } : { session: '', text: '' }
     if (got.kind !== 'stored') return { deny: got.kind === 'faults' ? got.text : `${LABELS.cannotRun} ${got.text}` }
     const shownNowIs = await show($, got.id)
-    if (!shownNowIs) return { deny: `${LABELS.cannotRun} ${folder}/proposals/${got.id}.json` }
+    if (!shownNowIs) return { deny: `${LABELS.cannotRun} ${pathOf(folder, 'proposals', `${got.id}.json`)}` }
     const notes = await dispatch($, { type: 'proposed', id: got.id, ...shownNowIs, said: await read($, asked), at: await seconds($) }, true)
     const now = await read($, picker)
     const told = (text: string) => ({ result: [got.said, ...notes, text, LABELS.asked].filter(Boolean).join('\n') })

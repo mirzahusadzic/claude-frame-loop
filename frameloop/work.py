@@ -10,14 +10,13 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
 import threading
 import time
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from frameloop import claims, machine, now
+from frameloop import claims, host, machine, now
 
 LINK = "120000"  # the mode git gives a symbolic link
 OBJECTS = "objects"  # the store of the tool's snapshots, in the machine folder
@@ -47,15 +46,19 @@ def run(command: str, cwd: Path, seconds: float) -> Ran:
     """Runs a command of what holds in a process group of its own, its output read and dropped as it comes, so none
     of it is held. It ends when the command does: what it started in a session of its own may still hold the output,
     and is then said to linger, never waited for. One still running at its time is stopped with its group."""
+    ready = host.shell(command)
+    if ready is None:
+        return Ran(None, False, False)
+    line, through_shell = ready
     try:
         child = subprocess.Popen(
-            command,
+            line,
             cwd=cwd,
-            shell=True,
-            start_new_session=True,
+            shell=through_shell,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
+            **host.group(),
         )
     except OSError:
         return Ran(None, False, False)
@@ -68,6 +71,8 @@ def run(command: str, cwd: Path, seconds: float) -> Ran:
         child.wait()
         code = None
     drain.join(LINGER_SECONDS)
+    if not drain.is_alive():
+        child.stdout.close()
     return Ran(code, True, drain.is_alive())
 
 
@@ -80,8 +85,11 @@ def _drop(output) -> None:
 
 def _stop(group: int) -> None:
     """Stops a process group; one already gone, or one this account may not signal, is a result and no error."""
+    if host.WINDOWS:
+        host.stop(group)
+        return
     with contextlib.suppress(OSError):
-        os.killpg(group, signal.SIGKILL)
+        host.stop(group)
 
 
 def _spawn(
@@ -90,14 +98,15 @@ def _spawn(
     """Runs git in a process group of its own and keeps its output. One still running at its time is stopped with
     all it started, and has no exit code; git that cannot be started at all raises GitMissing."""
     try:
+        command = host.program(command)
         child = subprocess.Popen(
             command,
             cwd=cwd,
             env=env,
-            start_new_session=True,
             stdin=subprocess.DEVNULL if given is None else subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
+            **host.group(),
         )
     except OSError as error:
         raise GitMissing() from error
@@ -139,7 +148,7 @@ def store(project: Path, where: Path) -> dict:
 @functools.lru_cache(maxsize=8)
 def _objects(project: Path) -> Path:
     """The project's own object folder, asked of git once a process."""
-    theirs = Path(_must(git(project, "rev-parse", "--git-path", "objects")).rstrip("\n"))
+    theirs = Path(_must(git(project, "rev-parse", "--git-path", "objects")).rstrip("\r\n"))
     return theirs if theirs.is_absolute() else project / theirs
 
 
@@ -148,7 +157,7 @@ def root(cwd: str) -> Optional[Path]:
     if not cwd or not Path(cwd).is_dir():
         return None
     top = git(cwd, "rev-parse", "--show-toplevel")
-    return Path(top.rstrip("\n")).resolve() if top else None
+    return Path(top.rstrip("\r\n")).resolve() if top else None
 
 
 def snapshot(project: Path, scratch: Path) -> str:
@@ -156,7 +165,7 @@ def snapshot(project: Path, scratch: Path) -> str:
     the claims, never the work. It goes through an index of the tool's own, made in the machine folder from a copy
     of the person's, and writes its objects to the tool's own store, so their index, their files and their .git are
     never touched."""
-    real = Path(_must(git(project, "rev-parse", "--git-path", "index")).rstrip("\n"))
+    real = Path(_must(git(project, "rev-parse", "--git-path", "index")).rstrip("\r\n"))
     real = real if real.is_absolute() else project / real
     machine.folders(scratch)
     objects = store(project, scratch)
@@ -242,7 +251,7 @@ def _hidden(project: Path, indexed: dict) -> tuple[list[str], list[str]]:
     )
     fields = (said or "").split("\0")
     tracked = set(_must(git(project, "ls-files", "-z", more=indexed)).split("\0"))
-    exclude = Path(_must(git(project, "rev-parse", "--git-path", "info/exclude")).rstrip("\n"))
+    exclude = Path(_must(git(project, "rev-parse", "--git-path", "info/exclude")).rstrip("\r\n"))
     exclude = (exclude if exclude.is_absolute() else project / exclude).resolve()
     found, nested = [], []
     for source, _, _, name in zip(fields[0::4], fields[1::4], fields[2::4], fields[3::4]):

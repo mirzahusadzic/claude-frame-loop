@@ -10,19 +10,19 @@ These hold for every change.
 
 | Rule | Detail |
 | --- | --- |
-| Standard library | Python 3.9 or later, nothing installed; the band is TypeScript the host loads, with no package. POSIX only: the home comes from `pwd`, the watch's lock from `fcntl`. `kept.py` alone imports Gadfly's `midwife`, as Gadfly's own Python loads it. |
+| Standard library | Python 3.9 or later, nothing installed; the band is TypeScript the host loads, with no package. macOS and Linux keep their POSIX forms; Windows uses its account profile, byte locks, reparse-point-safe handles, ACLs and system tools. `host.py` alone branches on the system, and `kept.py` alone imports Gadfly's `midwife`, as Gadfly's own Python loads it. |
 | House rules | Ruff 0.17.4 reads the Python as 3.9, with lines at 120 and `E`, `W`, `F`, `I` and `B` selected (`ruff.toml`). `.coveragerc` sets a floor of 100% branch coverage of `frameloop/`, the hooks' own processes included. |
 | No settings | Nothing is read from the environment but three names. `machine.PIN` is followed only to a home the suite made: a folder `home-*` in `tests/.work`, reached through no link, holding the suite's mark. `machine.IN_HOOK`, which `hooks/run.sh` sets, makes the person's own hand refuse. `reading.tier` alone reads `FRAME_LOOP_TIER`, under the two tiers below. |
 | One module of words | Every sentence the session or the person meets is made in `frameloop/words.py`; the band's fixed words are in `hooks/band/labels.ts`. `docs/told.md` is made from both by `scripts/told.py`. |
 | Plain words | What the person reads follows the rules under What the person reads below; code, frame files, state names and these pages keep their own words. |
 | Nothing by colour alone | Not everyone tells colours apart: every state is told by its words and glyphs, and a colour or a band only repeats them. A test strips every tone from the picker in each state and reads it. |
-| A hook never breaks the session | A hook catches every error and says `words.failed`. With no Python 3.9, `hooks/run.sh` stands aside in silence. |
+| A hook never breaks the session | A hook catches every error and says `words.failed`. With no Python 3.9, `hooks/run.sh` stands aside in silence after trying `python3`, `python`, and `py -3` on Windows. |
 | The person's own hand | `proposal.tick`, `machine.approve` and `machine.set_switch` are for the band, through `hooks/hand.sh`. No hook calls them; the command line refuses them inside a hook and while a call is out, and each write is recorded in the watch. The band keeps the person's word in the host's store, and its look puts back any copy that says other. |
-| Deletes | The tool deletes only files it named itself in the machine folder: its snapshot index with git's lock beside it, and the copy `propose` makes before it links a proposal in. Trimming the log writes it again whole. The band deletes nothing. Nothing recursive, in code or in tests. |
-| No write through a link | Every folder the tool writes in is made by `machine.folders`, from the home for the machine's files and from the project for frame files. A folder on the way that is a link, or no folder, raises `machine.Linked`, and nothing is written through it. A reading so refused says why; the writer refuses whole, checking every folder before it writes a file. |
-| No model in a test | `tests/bin` holds a `claude` and a `gadfly` that call nothing. `tests/pinned_home.py` puts them first on PATH and stops any other child of those names. |
+| Deletes | The tool deletes only files it named itself in the machine folder: its snapshot index with git's lock beside it, and the copy `propose` makes before it keeps a proposal at its new name. Trimming the log writes it again whole. The band deletes nothing. Nothing recursive, in code or in tests. |
+| No write through a link | Every folder the tool writes in is made by `machine.folders`, from the home for the machine's files and from the project for frame files. A folder on the way that is a link, junction, Windows reparse point, or no folder, raises `machine.Linked`, and nothing is written through it. A reading so refused says why; the writer refuses whole, checking every folder before it writes a file. |
+| No model in a test | `tests/bin` holds a `claude` and a `gadfly` that call nothing, with `.cmd` and `.ps1` forms for Windows. `tests/pinned_home.py` puts them first on PATH and stops any other child of those names. |
 | One rule for a reading | A kept row counts only where `reading.stands` holds it: its `runs` a run's own folder of the machine folder; `records` the digest of that folder whole, the frame with every record; the frame named for the row's claim, step, tree and sides, its last account at that tree; and, with the reading on, read again to its outcome from an answer to every trial that outcome needs. A which-step's row counts only where `reading.which_stands` holds it by the same evidence, its frame the one its account and claims make. Every reader of `readings.jsonl` goes through one or the other. |
-| Tests stay home | Tests use `tempfile.TemporaryDirectory` and a home pinned by `tests/pinned_home.py`. None touches the real `~/.frame`, nor the host's or the system's configuration folders, nor writes elsewhere in the home but this repository, the temporary folder and Python's bytecode cache. The band's tests touch no file: the host's kit fakes every file, process and the store, and the plain tests read `tests/node/kept-split.json` alone. |
+| Tests stay home | Tests use `tempfile.TemporaryDirectory` and a home pinned by `tests/pinned_home.py`. None touches the real `~/.frame`, nor the host's or the system's configuration folders, nor writes elsewhere in the home but this repository, the temporary folder and Python's bytecode cache. A link test skips where Windows denies the test account a link. The band's tests touch no file: the host's kit fakes every file, process and the store, and the plain tests read `tests/node/kept-split.json` alone. |
 | A test with every change | A change in behaviour comes with a test that fails on the old code and passes after. |
 | No remote | This repository has no remote and is never pushed. |
 | Commits | One concern a commit, said in plain words. No names of people or sessions, no dates, no clock times; a subject of at most 72 characters. |
@@ -82,6 +82,8 @@ Not yet under them: "You said" folded to one line, whole under `d`; `words.few`,
 
 Each runs from the top of the repository.
 
+On Windows, Git Bash runs the two `.sh` launchers, which find `python3`, `python` or `py -3`. The `python3` commands below may be run as `py -3` or `python` there.
+
 ```sh
 python3 tests/run.py
 python3 tests/run.py reverse
@@ -115,7 +117,7 @@ hooks/hand.sh status
 | `uvx ruff@0.17.4 check .` | Checks every Python file under the rules in `ruff.toml`. |
 | `uvx ruff@0.17.4 format --check .` | Holds every Python file to Ruff's formatter without changing it. |
 | `sh scripts/coverage.sh` | Branch coverage of `frameloop/` under the whole suite, held to `fail_under = 100` in `.coveragerc`. It installs coverage in a venv of its own under `tests/.work/`, and needs `uv`. |
-| `hooks/hand.sh` | `propose`, `show`, `examine`, `approve`, `switch`, `look`, `line`, `status` and `where` of `python3 -m frameloop`, as the band's contract below says. Run it from the project: it puts this folder on Python's path itself. |
+| `hooks/hand.sh` | `propose`, `show`, `examine`, `approve`, `switch`, `look`, `line`, `status` and `where` of the `frameloop` command line, as the band's contract below says. Run it from the project: it puts this folder on Python's path itself. |
 
 ---
 
@@ -126,6 +128,7 @@ The Python side is in `frameloop/`, one job a module; the band is in `hooks/band
 | Module | Job |
 | --- | --- |
 | `words.py` | Every sentence, as a template; `TOLD` sets them out in order. |
+| `host.py` | The few system forms: the account home, a no-follow read, a lock, a process's life and tree, a command's shell, a whole replacement, and a Windows account ACL. |
 | `claims.py` | Loads and checks frame files, read as bounded plain files; digests what can be ticked; sets out the tree by place. |
 | `proposal.py` | Checks and keeps proposals, a crossing whole among them, finds one for the writer and the examination alike, and writes the frame files and ticks for what the person picked. |
 | `approval.py` | Reads what the person ticked, and each place's set as they ticked it; never writes it. |
@@ -158,9 +161,10 @@ The Python side is in `frameloop/`, one job a module; the band is in `hooks/band
 | `hooks/hooks.json` | Sends every event, `SessionEnd` among them, to `hooks/run.sh`, and names the band's module. |
 | `hooks/run.sh` | Starts `frameloop.hooks.main` isolated, with the hook's mark set. |
 | `hooks/hand.sh` | Starts `frameloop.__main__` the same way for the band, without the hook's mark. |
+| `tests/bin/*.cmd`, `tests/bin/*.ps1` | The Windows path to the same stand-ins, through PowerShell so their arguments stay data. |
 | `scripts/told.py` | Prints the page of every sentence. |
 | `scripts/coverage.sh` | Runs the suite under branch coverage, the hooks' own processes included, and holds the floor in `.coveragerc`. |
-| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu and macOS. |
+| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu, macOS and Windows. |
 | `scripts/measure.py` | Measures a maker against the work this machine keeps, through the turn's end's own `reading.body`, `reading.read` and `reading.Serving` and the examination's `examine.alone`. |
 | `tests/gadfly/frame.schema.json` | Gadfly 0.17.1's schema, copied whole; `tests/test_schema.py` holds every frame the stand-ins are given to it. Copy it again when the Gadfly floor moves. |
 
@@ -220,7 +224,7 @@ The machine folder is `~/.frame/ground/claude/<name>-<hash16>/`, apart from the 
 | `starts.json` | By claim, the commit of the chain at which the hooks first found it ticked. | The hooks |
 | `holds.json` | The last result of each of the person's checks that did not hold, until it holds; changed by another hand, every one of them is kept as unknown. | The hooks, recorded by the watch |
 | `live/<session id>.json` | The band's line: the last sentence, the tension, what needs the person's eye counted, an alert, the time, and the watch's head; while a run goes on, `now`: what runs, when it began and last wrote, its hook's limit, its process id and its counts; `spent`, the tokens and model calls this session's checks spent so far; and `unapproved`, files changed while a proposal waited in the picker: its sentence, the count and the proposals. | The hooks and `examine`, recorded by the watch |
-| `watch.lock`, `reading.lock` | The watch's lock, held 2 s at most; and the reading's, held while a turn's end makes accounts and readings. Never deleted. | The hooks |
+| `watch.lock`, `reading.lock` | The watch's system lock, held 2 s at most; and the reading's, held while a turn's end makes accounts and readings. Never deleted. | The hooks |
 | `watch.json` | The chain: each event's entry, the files' states, the calls out, what counts as the person's, and the digests of the last 4096 log rows the hooks wrote, kept apart from the entries. A look's entry keeps under `waiting` the session and the proposals its picker held. | The hooks, and the person's own hand |
 | `objects/` | The snapshots' git objects, beside the project's own. | The hooks |
 | `~/.frame/ground/claude/<name>-<hash16>-measure-<n>/` | A measure's own folder beside the project's: copies of `snapshots`, `starts.json` and the current `accounts/`, a store whose alternate is the project's `objects/`, and the runs of its maker and readers. One a run, counted up from 1. | `scripts/measure.py` |
@@ -418,6 +422,7 @@ Each part names what a change there most often breaks, with the code that keeps 
 #### The launchers and the command line
 
 - **Isolated mode:** `python3 -I` puts neither the script's folder nor the current one on `sys.path`. Both launchers add the plugin root by hand, so a project's own `json.py` never stands in for the standard library's, nor its `frameloop/` for the writer.
+- **Windows launchers:** Git Bash receives Windows paths, so both launchers turn `\\` into `/` before `dirname`. They skip the Windows Store alias and fall back from `python3` and `python` to `py -3`.
 - **The band runs the launcher alone:** `python3 -m frameloop` from the project's folder loads a project's own `frameloop/` package or `json.py` first, whatever `PYTHONPATH` says. A test plants one and holds `hooks/hand.sh` to the plugin's.
 - **A refusal is an answer:** exit code 1, with its sentence under `said`. The band shows that sentence, and stderr only where no answer came.
 - **The band's words in single quotes:** `scripts/told.py` gathers each text of `labels.ts` written so. The words test fails on a text written any other way.
@@ -542,7 +547,7 @@ Each part names what a change there most often breaks, with the code that keeps 
 #### The watch
 
 - **The watch tells hands apart by its records:** a hook's own writes are recorded by that hook, so another session's log rows are no change. A write the person's own writer made outside the picker looks like the band's to the hooks; the band's witness tells it.
-- **What the watch covers:** each file `machine._hashes` names, by its `lstat`: the ticks, the switch, `readings.jsonl`, the log, `holds.json`, `snapshots`, `starts.json`, every proposal and examination, every account, every live file, and every frame file.
+- **What the watch covers:** each file `machine._hashes` names, by `machine._digest`: the ticks, the switch, `readings.jsonl`, the log, `holds.json`, `snapshots`, `starts.json`, every proposal and examination, every account, every live file, and every frame file.
 - **What it does not cover:** the run folders under `runs/`, nor `withhold.json` or `writer/`. A record changed there is not told at the call that changed it, but the row naming it counts for nothing by its digest, which covers the frame and every record, and that is told once.
 - **It grows.** The proposals and accounts the watch keeps grow with use.
 - **A hook's own write mid-event:** every write an event makes goes through `watch.kept`, which records a file only where it stood as the watch last left it. So another hand's change before it is still told, and each row it logs is recorded by its digest.
@@ -553,7 +558,7 @@ Each part names what a change there most often breaks, with the code that keeps 
 - **What counts is what the watch took:** a tick counts where `approved.json` holds it and the watch took it from the person's own writer. A write made with no call out is taken at the next prompt or session start; one made while a call was out never is.
 - **The band's look comes before both:** a look entry is silent to the hooks, and a record it sets back is set at once.
 - **A broken watch:** a watch gone, cut short or rewritten is told, and so is one gone beside any record it kept, which is never a first look. The person's ticks stand only where `approved.json` and the switch are as the newest anchor kept them, until the band's look sets the record back to their word.
-- **The watch reads no contents:** each file's state is its `lstat`, and a forger cannot move the change time back. Frame files and the machine's records are read only as plain files within a bound.
+- **The watch's state:** on macOS and Linux each file is its `lstat`, and a forger cannot move the change time back. On Windows a plain file is also digested by its bytes, since its change time may be a creation time.
 - **Rows by digest:** a log row is told at a prompt, or taken as a declaration, only where the watch recorded its digest, as `watch.close` and `watch.kept` do.
 - **`machine.log` alone records nothing,** as another hand's append would, and the base of a turn's end is the chain's, never a row's.
 

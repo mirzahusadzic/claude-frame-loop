@@ -4,10 +4,8 @@ snapshots, a call is watched before and after, and a turn's end runs what holds 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
 import contextlib
-import fcntl
 import json
 import os
-import signal
 import subprocess
 import sys
 import time
@@ -15,6 +13,9 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import hold_lock
+import launch
+import link
 from scene import (
     FILES,
     PARTS,
@@ -36,7 +37,7 @@ from scene import (
     unmade,
 )
 
-from frameloop import claims, hooks, machine, reading, watch, words, work
+from frameloop import claims, hooks, host, machine, reading, watch, words, work
 
 RUN = Path(__file__).resolve().parent.parent / "hooks" / "run.sh"
 HEARD: list = []  # what the audit hook below heard while a test listened
@@ -55,7 +56,7 @@ def launched(event, cwd=None, seconds=None):
     """A hook as the harness starts it, through hooks/run.sh; with `seconds`, stopped past them, as the harness
     would."""
     try:
-        done = subprocess.run([str(RUN)], input=event, capture_output=True, text=True, cwd=cwd, timeout=seconds)
+        done = launch.run(RUN, input=event, capture_output=True, text=True, cwd=cwd, timeout=seconds)
     except subprocess.TimeoutExpired:
         return None, ""
     return done.returncode, done.stdout
@@ -360,7 +361,7 @@ class BlindTests(unittest.TestCase):
             shipped.parent.mkdir(parents=True, exist_ok=True)
             shipped.write_bytes((scene.where / machine.approval.FILE).read_bytes())
             (scene.where / machine.approval.FILE).unlink()
-            (scene.where / machine.approval.FILE).symlink_to(shipped)
+            link.make(self, scene.where / machine.approval.FILE, shipped)
 
         in_call = {
             "a tick, then the watch removed": lambda s: (tick_all(s), (s.where / watch.WATCH).unlink()),
@@ -465,7 +466,12 @@ class TrustTests(unittest.TestCase):
         def ran_after(blind, then=None):
             scene = Scene(self)
             ran = scene.outside / "ran"
-            shop(scene, holds=[{"words": "The tests pass.", "command": f"touch '{ran}'"}], approve=False, on=False)
+            shop(
+                scene,
+                holds=[{"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}],
+                approve=False,
+                on=False,
+            )
             scene.hook("SessionStart")
             blind(scene)
             self.assertEqual(scene.standing("limits", L).tension, "project")
@@ -506,7 +512,12 @@ class TrustTests(unittest.TestCase):
         with self.subTest(case="a tick between calls, in a turn"):
             scene = Scene(self)
             ran = scene.outside / "ran"
-            shop(scene, holds=[{"words": "The tests pass.", "command": f"touch '{ran}'"}], approve=False, on=False)
+            shop(
+                scene,
+                holds=[{"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}],
+                approve=False,
+                on=False,
+            )
             scene.hook("UserPromptSubmit", prompt="Made up.")
             scene.call(lambda: None)
             tick_all(scene)
@@ -564,9 +575,10 @@ class TrustTests(unittest.TestCase):
         ran = scene.outside / "ran"
         first = {
             "words": "The ticks are spoilt first.",
-            "command": f"{sys.executable} -c \"open({str(scene.where / machine.approval.FILE)!r}, 'w').write('{{}}')\"",
+            "command": f"'{Path(sys.executable).as_posix()}' -c "
+            f"\"open({(scene.where / machine.approval.FILE).as_posix()!r}, 'w').write('{{}}')\"",
         }
-        holds = [first, {"words": "The tests pass.", "command": f"touch '{ran}'"}]
+        holds = [first, {"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}]
         shop(scene, holds=holds, on=False)
         pieces = scene.turn(lambda: scene.write("limits/count.py", "changed\n")).split("\n")[0].split(words.SEP)
         self.assertFalse(ran.exists())
@@ -575,6 +587,7 @@ class TrustTests(unittest.TestCase):
 
 
 class BoundTests(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "Windows has no os.mkfifo for this pipe test")
     def test_no_hook_waits_on_a_pipe_under_the_frame_or_on_a_held_lock(self):
         scene = shop(Scene(self), on=False)
         fifo = scene.project / ".frame" / "web" / "frame.json"
@@ -597,12 +610,26 @@ class BoundTests(unittest.TestCase):
         told = said["hookSpecificOutput"]["additionalContext"].splitlines()
         self.assertIn(words.fault(words.NOT_PLAIN, ".frame/web/frame.json", kind=words.PLAIN_KINDS["pipe"]), told)
         scene.where.mkdir(parents=True, exist_ok=True)
-        with open(scene.where / machine.LOCK, "a", encoding="utf-8") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            began = time.monotonic()
-            code, out = launched(json.dumps({**event, "hook_event_name": "PreToolUse"}), seconds=20)
-            self.assertLess(time.monotonic() - began, 10)
+        hold_lock.holder(self, scene.where)
+        began = time.monotonic()
+        code, out = launched(json.dumps({**event, "hook_event_name": "PreToolUse"}), seconds=20)
+        self.assertLess(time.monotonic() - began, 10)
         self.assertEqual(json.loads(out), {"systemMessage": words.locked("Read")})
+
+    def test_no_hook_waits_on_a_watch_lock_held_by_another_process(self):
+        scene = shop(Scene(self), on=False)
+        event = {
+            "cwd": str(scene.project),
+            "session_id": "s",
+            "tool_name": "Read",
+            "tool_use_id": "c",
+            "tool_input": {},
+        }
+        hold_lock.holder(self, scene.where)
+        began = time.monotonic()
+        code, out = launched(json.dumps({**event, "hook_event_name": "PreToolUse"}), seconds=20)
+        self.assertLess(time.monotonic() - began, 10)
+        self.assertEqual((code, json.loads(out)), (0, {"systemMessage": words.locked("Read")}))
 
 
 class StopTests(unittest.TestCase):
@@ -703,11 +730,13 @@ class StopTests(unittest.TestCase):
             with self.subTest(case=case):
                 scene = Scene(self)
                 ran = scene.outside / "ran"
-                holds = [{"words": "The tests pass.", "command": f"touch '{ran}'"}]
+                holds = [{"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}]
                 shop(
                     scene,
                     holds=holds,
-                    contracts=[contract("auth", ["limits"], command=f"touch '{ran}.contract'")],
+                    contracts=[
+                        contract("auth", ["limits"], command=f"touch '{ran.with_suffix('.contract').as_posix()}'")
+                    ],
                     on=False,
                 )
                 if case == "a part":
@@ -725,8 +754,8 @@ class StopTests(unittest.TestCase):
     def test_a_ticked_hold_that_fails_is_a_rise_until_it_holds(self):
         scene = Scene(self)
         ok = scene.outside / "ok"
-        hold_ = {"words": "The build is clean.", "command": f"test -f '{ok}'"}
-        shop(scene, holds=[hold_], contracts=[contract("auth", ["limits"], command=f"test -f '{ok}'")])
+        hold_ = {"words": "The build is clean.", "command": f"test -f '{ok.as_posix()}'"}
+        shop(scene, holds=[hold_], contracts=[contract("auth", ["limits"], command=f"test -f '{ok.as_posix()}'")])
         for place, said in (("limits", L), ("auth", A), ("web", W)):
             scene.keep(place, said)
         pieces = scene.turn(lambda: scene.write("README.md", "changed\n")).split(words.SEP)
@@ -766,7 +795,7 @@ class StopTests(unittest.TestCase):
     def test_a_hold_that_does_not_finish_in_time_is_stopped_with_all_it_started(self):
         scene = Scene(self)
         pid = scene.outside / "pid"
-        holds = [{"words": "The tests pass.", "command": f"sleep 30 & echo $! > '{pid}'; wait"}]
+        holds = [{"words": "The tests pass.", "command": f"sleep 30 & echo $! > '{pid.as_posix()}'; wait"}]
         shop(scene, holds=holds, on=False)
         began = time.monotonic()
         with mock.patch.object(hooks, "STOP_SECONDS", 1):
@@ -781,10 +810,11 @@ class HoldOutputTests(unittest.TestCase):
         scene = Scene(self)
         pids = scene.outside / "pids"
         server = (
-            f"{sys.executable} -c \"import subprocess; p = subprocess.Popen(['sleep', '20'], start_new_session=True); "
-            f"open('{pids}', 'a').write(str(p.pid) + chr(10))\""
+            f"'{Path(sys.executable).as_posix()}' -c \"import subprocess; p = subprocess.Popen([r'"
+            f"{Path(sys.executable).as_posix()}', '-c', 'import time; time.sleep(20)']); "
+            f"open(r'{pids.as_posix()}', 'a').write(str(p.pid) + chr(10))\""
         )
-        noisy = f"{sys.executable} -c \"import sys; sys.stdout.write('x' * 30_000_000)\""
+        noisy = f"'{Path(sys.executable).as_posix()}' -c \"import sys; sys.stdout.write('x' * 30_000_000)\""
         holds = [{"words": "The server starts.", "command": server}, {"words": "The log is long.", "command": noisy}]
         shop(scene, holds=holds, on=False)
         self.addCleanup(lambda: [_stop(int(pid)) for pid in pids.read_text("utf-8").split()] if pids.exists() else None)
@@ -800,17 +830,15 @@ class HoldOutputTests(unittest.TestCase):
 
 
 def _stop(pid):
-    with contextlib.suppress(ProcessLookupError):
-        os.kill(pid, signal.SIGKILL)  # the test's own leftover, which it started
+    with contextlib.suppress(OSError):
+        host.stop(pid)  # the test's own leftover, which it started
 
 
 def _alive(pid, seconds=3.0):
     """Whether a process still runs after a short while; a killed one may stand a moment until it is reaped."""
     until = time.monotonic() + seconds
     while time.monotonic() < until:
-        try:
-            os.kill(pid, 0)
-        except ProcessLookupError:
+        if not host.alive(pid):
             return False
         time.sleep(0.05)
     return True
@@ -846,7 +874,7 @@ class FailureTests(unittest.TestCase):
             self.assertEqual(scene.hook("SessionStart"), {"systemMessage": words.failed("OSError")})
         code, out = launched("{")
         self.assertEqual((code, json.loads(out)), (0, {"systemMessage": words.failed("JSONDecodeError")}))
-        done = subprocess.run([str(RUN)], input=b'{"hook_event_name": "\xff"}', capture_output=True)
+        done = launch.run(RUN, input=b'{"hook_event_name": "\xff"}', capture_output=True)
         self.assertEqual((done.returncode, done.stdout, done.stderr), (0, b"", b""))  # bytes that are not UTF-8
 
     def test_a_failure_to_run_git_or_to_read_the_ticks_is_told_as_what_it_is(self):
@@ -860,6 +888,9 @@ class FailureTests(unittest.TestCase):
             "ticks not in their form": (machine.approval.FILE, '{"version": 1, "ticked": "all"}', words.TICKS_UNFORMED),
             "a switch that cannot be opened": (machine.SWITCH, None, words.SWITCH_UNREADABLE),
         }
+        if os.name == "nt":  # chmod does not refuse a read on Windows; its ACL and open refusal are tested by test_host
+            cases.pop("ticks that cannot be opened")
+            cases.pop("a switch that cannot be opened")
         for case, (name, text, said) in cases.items():
             with self.subTest(case=case):
                 scene = shop(Scene(self), on=True)

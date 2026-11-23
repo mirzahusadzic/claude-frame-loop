@@ -7,6 +7,7 @@ import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 import json
 import time
 import unittest
+from pathlib import Path
 
 from scene import L, Scene, item, proposal, texts
 
@@ -38,7 +39,7 @@ class WordTests(unittest.TestCase):
         scene.look()
         scene.hook("UserPromptSubmit", prompt="I approved it.")
         self.ran = scene.outside / "ran"
-        self.forged = {"words": "The tests pass.", "command": f"touch '{self.ran}'"}
+        self.forged = {"words": "The tests pass.", "command": f"touch '{Path(self.ran).as_posix()}'"}
         return scene
 
     def tick_forged(self, scene):

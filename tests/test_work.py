@@ -6,6 +6,7 @@ import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 import os
 import subprocess
 import unittest
+from unittest import mock
 
 from scene import Scene
 
@@ -13,6 +14,24 @@ from frameloop import work
 
 
 class SnapshotTests(unittest.TestCase):
+    def test_a_command_with_no_git_bash_on_windows_is_not_started_and_one_no_program_can_launch_is_missing(self):
+        scene = Scene(self)
+        with mock.patch.object(work.host, "shell", return_value=None):
+            self.assertEqual(work.run("exit 0", scene.project, 5), work.Ran(None, False, False))
+        with mock.patch.object(work.host, "program", side_effect=OSError()):
+            with self.assertRaises(work.GitMissing):
+                work._spawn(["claude.cmd"], scene.project, 5)
+
+    def test_a_windows_tree_that_cannot_be_stopped_is_said_and_a_posix_group_gone_is_not(self):
+        with mock.patch.object(work.host, "WINDOWS", True), mock.patch.object(work.host, "stop", side_effect=OSError()):
+            with self.assertRaises(OSError):
+                work._stop(42)
+        with (
+            mock.patch.object(work.host, "WINDOWS", False),
+            mock.patch.object(work.host, "stop", side_effect=OSError()),
+        ):
+            work._stop(42)
+
     def test_a_snapshot_leaves_the_persons_index_and_files_as_they_were(self):
         scene = Scene(self)
         scene.write("shop.py", "one\n")

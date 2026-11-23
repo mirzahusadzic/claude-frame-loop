@@ -133,6 +133,9 @@ test('/frame-loop on and off switch only by the person’s hand', () => {
 test('a session id names a file only when it is plain', () => {
   assert.equal(isPlain('5d608460-dcb6-f138'), true)
   for (const id of ['', '../escape', 'a/b', 'a.json', 'x'.repeat(129)]) assert.equal(isPlain(id), false, id)
+  for (const id of ['CON', 'con', 'com1', 'LPT9', 'Upper']) assert.equal(isPlain(id, true), false, id)
+  assert.equal(isPlain('5d608460-dcb6-f138', true), true)
+  assert.equal(isPlain('Upper', false), true)
 })
 
 test('a line is never drawn with the word ready, whatever a file says', () => {

@@ -11,6 +11,7 @@ import unittest
 import uuid
 from unittest import mock
 
+import link
 from scene import A, L, Scene, claim, frame, pair, shop, under
 
 from frameloop import claims, machine, reading, watch, words
@@ -91,8 +92,10 @@ class EvidenceTests(unittest.TestCase):
         scene = shop(Scene(self))
         row = scene.keep("limits", L)
         outside = scene.outside / "elsewhere"
-        os.symlink(scene.where / os.path.dirname(row["runs"]), outside)  # the same records, reached from outside
-        os.symlink(outside, scene.where / "runs" / "a-link")
+        link.make(
+            self, outside, scene.where / os.path.dirname(row["runs"]), directory=True
+        )  # the same records, outside
+        link.make(self, scene.where / "runs" / "a-link", outside, directory=True)
         for runs in (
             "../" + os.path.relpath(scene.where / row["runs"], scene.where.parent),
             str(scene.where / row["runs"]),

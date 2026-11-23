@@ -11,10 +11,13 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
+import launch
+import link
 from scene import Scene, claim, frame
 
-from frameloop import claims, hooks, machine, words
+from frameloop import claims, hooks, host, machine, words
 
 TESTS = Path(__file__).resolve().parent
 RUN = TESTS.parent / "hooks" / "run.sh"
@@ -44,7 +47,7 @@ class HomeTests(unittest.TestCase):
             tempfile.TemporaryDirectory(prefix="chosen-", dir=work_) as chosen,
         ):
             linked = work_ / f"home-linked-{os.getpid()}"
-            linked.symlink_to(pinned_home.HOME)
+            link.make(self, linked, pinned_home.HOME, directory=True)
             self.addCleanup(linked.unlink)
             for case, pin in (
                 ("a folder a project names, never made", work_ / "chosen-by-a-project"),
@@ -59,6 +62,42 @@ class HomeTests(unittest.TestCase):
                     finally:
                         os.environ[machine.PIN] = was
         self.assertEqual(machine.home(), pinned_home.HOME)
+
+    def test_a_windows_session_id_is_no_reserved_device_name_and_no_other_case(self):
+        with mock.patch.object(host, "WINDOWS", True):
+            for name in ("con", "COM1", "lpt9", "Clock$", "UPPER"):
+                with self.subTest(name=name):
+                    self.assertIsNone(machine.plain_name(name))
+            self.assertEqual(machine.plain_name("5d608460-dcb6-f138"), "5d608460-dcb6-f138")
+        with mock.patch.object(host, "WINDOWS", False):
+            self.assertEqual(machine.plain_name("UPPER"), "UPPER")
+            self.assertIsNone(machine.plain_name("../away"))
+
+    def test_a_new_windows_machine_folder_is_kept_to_this_account(self):
+        with tempfile.TemporaryDirectory(prefix="home-", dir=TESTS / ".work") as root:
+            home = Path(root)
+            (home / machine.SUITE_MARK).write_text("made\n", "utf-8")
+            where = home / ".frame" / "ground" / "claude" / "shop-0123456789abcdef"
+            with (
+                mock.patch.object(machine, "home", return_value=home),
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(host, "restrict") as kept,
+            ):
+                self.assertEqual(machine.folders(where, home), where)
+                self.assertEqual(machine.folders(where, home), where)
+                machine._RESTRICTED.clear()
+                self.assertEqual(machine.folders(where, home), where)
+            self.assertEqual(
+                [call.args[0] for call in kept.call_args_list],
+                [where] * 2,
+            )
+            with (
+                mock.patch.object(machine, "home", return_value=home),
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(host, "restrict") as kept,
+            ):
+                machine._restrict(Path("/outside-the-home"), True, home)
+            kept.assert_not_called()
 
     def test_a_reach_into_the_persons_own_folders_fails_the_test(self):
         for guarded in pinned_home.GUARDED:
@@ -96,7 +135,7 @@ class HomeTests(unittest.TestCase):
     def test_a_hook_started_as_a_child_keeps_its_machine_folder_under_the_pin(self):
         scene = Scene(self)
         event = {"hook_event_name": "UserPromptSubmit", "cwd": str(scene.project), "session_id": scene.session}
-        done = subprocess.run([str(RUN)], input=json.dumps(event), capture_output=True, text=True, check=True)
+        done = launch.run(RUN, input=json.dumps(event), capture_output=True, text=True, check=True)
         self.assertEqual(done.stdout, "")
         self.assertIn(pinned_home.HOME, scene.where.parents)
         self.assertEqual([row["event"] for row in machine.logged(scene.where)], ["prompt"])

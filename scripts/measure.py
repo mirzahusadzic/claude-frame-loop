@@ -31,6 +31,7 @@ from frameloop import (  # noqa: E402  (after the source root is on the path)
     approval,
     claims,
     examine,
+    host,
     machine,
     now,
     reading,
@@ -260,4 +261,5 @@ def checked(
 
 
 if __name__ == "__main__":
+    host.utf8(sys.stdout)
     sys.exit(main(sys.argv[1:]))

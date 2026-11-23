@@ -4,8 +4,12 @@ the frame above it, is left out whole with one sentence saying why."""
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
 import json
+import tempfile
 import unittest
+from pathlib import Path
+from unittest import mock
 
+import link
 from scene import STEP, Scene, claim, contract, frame, hole, pair, split, under
 
 from frameloop import claims, words
@@ -36,6 +40,14 @@ def left(file, field, expect, value, names=()):
 
 
 class FormTests(unittest.TestCase):
+    def test_a_file_swapped_for_a_link_after_it_is_looked_at_is_never_read(self):
+        with tempfile.TemporaryDirectory() as folder:
+            top, path = Path(folder), Path(folder) / "frame.json"
+            path.write_text("{}\n", "utf-8")
+            with mock.patch.object(claims.host, "open_read", side_effect=claims.host.NotPlain("link")):
+                with self.assertRaises(claims.NotPlain):
+                    claims.plain_bytes(top, path, 100)
+
     def test_a_frame_in_its_form_is_taken_whole(self):
         tree = shop(Scene(self))
         self.assertEqual(tree.faults, {})
@@ -280,7 +292,7 @@ class FormTests(unittest.TestCase):
                 target = scene.project / WEB
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if kind == "link":
-                    target.symlink_to(outside)
+                    link.make(self, target, outside)
                 elif kind == "folder":
                     target.mkdir()
                 elif kind == "large":
@@ -289,7 +301,7 @@ class FormTests(unittest.TestCase):
                     target.parent.rmdir()
                     (scene.outside / "web").mkdir()
                     (scene.outside / "web" / "frame.json").write_bytes(outside.read_bytes())
-                    target.parent.symlink_to(scene.outside / "web")
+                    link.make(self, target.parent, scene.outside / "web", directory=True)
                 tree = claims.load(scene.project)
                 self.assertNotIn("web", tree.frames)
                 self.assertEqual(tree.faults.get("web"), said)

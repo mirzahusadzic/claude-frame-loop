@@ -43,7 +43,9 @@ def state(folder):
 
 
 def run(*argv, cwd):
-    done = subprocess.run([sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, cwd=cwd)
+    done = subprocess.run(
+        [sys.executable, str(SCRIPT), *argv], capture_output=True, text=True, encoding="utf-8", cwd=cwd
+    )
     return done.returncode, done.stdout.splitlines()
 
 

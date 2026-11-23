@@ -16,7 +16,6 @@ router, even where the person has them installed.
 """
 
 import os
-import pwd
 import sys
 import tempfile
 from pathlib import Path
@@ -26,7 +25,22 @@ sys.path.insert(0, str(TESTS.parent))
 WRITABLE = (str(TESTS.parent), os.path.realpath(tempfile.gettempdir()), *filter(None, [sys.pycache_prefix]))
 
 PIN = "FRAME_LOOP_GROUND_TESTS_HOME"  # machine.PIN, named again so the pin is set before frame-loop is imported
-REAL = Path(pwd.getpwuid(os.getuid()).pw_dir)
+
+
+def _real_home() -> Path:
+    if os.name != "nt":
+        import pwd
+
+        return Path(pwd.getpwuid(os.getuid()).pw_dir)
+    import ctypes
+
+    found = ctypes.create_unicode_buffer(32768)
+    if ctypes.windll.shell32.SHGetFolderPathW(None, 0x0028, None, 0, found) != 0 or not found.value:
+        raise OSError("profile")
+    return Path(found.value)
+
+
+REAL = _real_home()
 GUARDED = tuple(
     sorted({str(base / part) for base in (REAL, REAL.resolve()) for part in (".frame", ".claude", ".config")})
 )
@@ -76,6 +90,7 @@ os.environ.update(
     {
         PIN: str(HOME),
         "HOME": str(HOME),
+        "USERPROFILE": str(HOME),
         "XDG_CONFIG_HOME": str(HOME / ".config"),
         "GIT_CONFIG_NOSYSTEM": "1",
         "GIT_AUTHOR_NAME": "A Tester",
@@ -88,7 +103,10 @@ os.environ.update(
 
 
 def _under(path: str, folders: tuple) -> bool:
-    return any(path == folder or path.startswith(folder + os.sep) for folder in folders)
+    path = os.path.normcase(os.path.abspath(path))
+    return any(
+        path == os.path.normcase(folder) or path.startswith(os.path.normcase(folder) + os.sep) for folder in folders
+    )
 
 
 def reached(path: str, writes: bool) -> bool:
@@ -113,7 +131,7 @@ def _audit(event: str, args: tuple) -> None:
             raise Reached(f"a child started without the pinned home: {args[0]}")
         command = args[1] if len(args) > 1 else None
         program = os.fsdecode(command[0]) if isinstance(command, (list, tuple)) and command else None
-        if program and os.path.basename(program) in STOOD_IN and Path(program).resolve().parent != FAKES:
+        if program and Path(program).stem.casefold() in STOOD_IN and Path(program).resolve().parent != FAKES:
             raise Reached(f"a child that is no stand-in: {program}")
         return
     if event not in EVENTS:

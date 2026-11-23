@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from typing import NamedTuple, Optional
 
-from frameloop import approval, claims, examine, hold, machine, reading, recoil, watch, words, work
+from frameloop import approval, claims, examine, hold, host, machine, reading, recoil, watch, words, work
 from frameloop import now as running  # `now` is a snapshot's tree id here
 
 STOP_SECONDS = 540  # what holds and the reading may take at a turn's end, inside the Stop hook's 600 seconds
@@ -46,6 +46,7 @@ class Seen(NamedTuple):
 
 
 def main() -> None:
+    host.utf8(sys.stdout)
     sys.stdout.write(respond(sys.stdin.buffer.read().decode("utf-8", "replace")))
 
 

@@ -19,6 +19,7 @@ Nothing else of the session is sent by the tool. Not the transcript, your approv
 #### How each is reached
 
 - **The writer.** Claude Haiku 5.5, through your own signed-in `claude` command. It runs with no tools, MCP servers, hooks, saved session or settings of yours.
+- **The writer on Windows.** Where your `claude` is a batch file, its PowerShell script beside it is run in its place, with PowerShell's execution policy bypassed for that one call. A batch file cannot take the writer's arguments safely, and one with no such script is refused.
 - **The maker and the readers.** Through Gadfly, which reaches them through the router on this computer ([what the check needs](../README.md#what-the-check-needs)).
 
 #### When each is asked
@@ -62,7 +63,7 @@ The rows you approve lie in your repository; everything else the tool keeps lies
 - **In your repository.** The frame files under `.frame/`: your rows, commands, path rules and splits, and none of your approvals.
 - **Outside it.** The machine folder: proposals and their checks, accounts, the records of every model call, kept checks, snapshots, and a copy of your approvals and your switch.
 - **Whose word counts.** Your approvals and your switch are kept by the host for you. The copies in the folder are what the hooks read, and a copy another hand changed is put back.
-- **No write through a link.** Every folder on the way is made by the tool as a real folder. A link on the way refuses the write whole.
+- **No write through a link.** Every folder on the way is made by the tool as a real folder. A link, junction or Windows reparse point on the way refuses the write whole.
 
 ---
 

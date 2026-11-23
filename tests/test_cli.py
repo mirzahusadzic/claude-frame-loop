@@ -6,16 +6,22 @@ import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
 import ast
 import hashlib
+import io
 import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
+import launch
+import link
 from scene import ROOT, C, D, Scene, item, shop
 from scene import proposal as made
 
+from frameloop import __main__ as command
 from frameloop import approval, claims, hooks, machine, proposal, reading, words
 
 RUN = ROOT / "hooks" / "run.sh"
@@ -46,6 +52,16 @@ def environment_reads(tree):
 
 
 class HandTests(unittest.TestCase):
+    def test_any_failure_is_one_of_the_tools_own_sentences_in_the_commands_own_answer(self):
+        for verb, answer in (("where", {"said": words.failed("OSError")}), ("status", words.failed("OSError"))):
+            with (
+                self.subTest(verb=verb),
+                mock.patch.object(machine, "folder", side_effect=OSError()),
+                mock.patch.object(command.sys, "stdout", io.StringIO()) as out,
+            ):
+                self.assertEqual(command.main([verb]), 1)
+                self.assertEqual(json.loads(out.getvalue()) if verb != "status" else out.getvalue().strip(), answer)
+
     def test_switch_answers_with_the_switch_and_its_sentence(self):
         scene = shop(Scene(self), on=False)
         self.assertEqual(_said(scene.by_hand("switch", "on")), (0, {"switch": "on", "said": words.switched(True)}))
@@ -67,13 +83,14 @@ class HandTests(unittest.TestCase):
         out = scene.outside / "out.json"
         hold = {
             "words": "The switch stays as it is.",
-            "command": f"PYTHONPATH='{ROOT}' python3 -m frameloop switch on > '{out}'",
+            "command": f"PYTHONPATH='{ROOT.as_posix()}' '{Path(sys.executable).as_posix()}' -m frameloop switch on > "
+            f"'{out.as_posix()}'",
         }
         shop(scene, holds=[hold], on=False)
         scene.hook("UserPromptSubmit", prompt="Made up.")
         scene.write("web/page.py", "changed\n")
         event = {"hook_event_name": "Stop", "cwd": str(scene.project), "session_id": scene.session}
-        subprocess.run([str(RUN)], input=json.dumps(event), capture_output=True, text=True, check=True)
+        launch.run(RUN, input=json.dumps(event), capture_output=True, text=True, check=True)
         self.assertEqual(json.loads(out.read_text("utf-8")), {"switch": "off", "said": words.IN_HOOK})
         self.assertFalse(machine.reading_on(scene.where))
 
@@ -87,7 +104,12 @@ class HandTests(unittest.TestCase):
         # As the band once ran the writer: from the project, the plugin's root on PYTHONPATH. The project's own wins.
         env = {**os.environ, "PYTHONPATH": str(ROOT)}
         before = subprocess.run(
-            [sys.executable, "-m", "frameloop", "where"], cwd=scene.project, env=env, capture_output=True, text=True
+            [sys.executable, "-m", "frameloop", "where"],
+            cwd=scene.project,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         )
         self.assertEqual(before.stdout, '{"folder": "/a/made/up/folder"}\n')
         stood = stood_in.read_text("utf-8")
@@ -96,7 +118,7 @@ class HandTests(unittest.TestCase):
             (["switch", "on"], {"switch": "on", "said": words.switched(True)}),
         ):
             with self.subTest(argv=argv):
-                done = subprocess.run([str(LAUNCHER), *argv], cwd=scene.project, capture_output=True, text=True)
+                done = launch.run(LAUNCHER, *argv, cwd=scene.project, capture_output=True, text=True)
                 self.assertEqual((*_said((done.returncode, json.loads(done.stdout))), done.stderr), (0, answer, ""))
         self.assertTrue(machine.reading_on(scene.where))
         self.assertEqual(stood_in.read_text("utf-8"), stood)  # nothing of the project's ran under the launcher
@@ -105,9 +127,38 @@ class HandTests(unittest.TestCase):
             cwd=scene.project,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env={**os.environ, machine.IN_HOOK: "1"},
         )
         self.assertEqual(json.loads(marked.stdout), {"switch": "on", "said": words.IN_HOOK})  # it clears no mark
+
+    @unittest.skipIf(os.name == "nt", "the Windows branch is reached here with Git Bash stand-ins")
+    def test_both_launchers_skip_the_store_alias_and_fall_back_to_the_py_launcher_on_windows(self):
+        scene = Scene(self)
+        with tempfile.TemporaryDirectory() as made:
+            tools = Path(made) / "tools"
+            store = tools / "WindowsApps"
+            store.mkdir(parents=True)
+            marker = Path(made) / "store-python-ran"
+            for name in ("python3", "python"):
+                fake = store / name
+                fake.write_text(f"#!/bin/sh\ntouch '{marker}'\nexit 0\n", "utf-8")
+                fake.chmod(0o755)
+            uname = tools / "uname"
+            uname.write_text("#!/bin/sh\necho MINGW64_NT-10.0\n", "utf-8")
+            uname.chmod(0o755)
+            launcher = tools / "py"
+            launcher.write_text(f"#!/bin/sh\necho '{sys.executable}'\n", "utf-8")
+            launcher.chmod(0o755)
+            env = {**os.environ, "PATH": os.pathsep.join([str(store), str(tools), "/usr/bin", "/bin"])}
+            event = {"hook_event_name": "SessionStart", "cwd": str(scene.project), "session_id": scene.session}
+            ran = launch.run(RUN, input=json.dumps(event), capture_output=True, text=True, env=env, cwd=scene.project)
+            self.assertEqual(ran.returncode, 0, ran.stderr)
+            self.assertIn("hookSpecificOutput", json.loads(ran.stdout))
+            hand = launch.run(LAUNCHER, "where", capture_output=True, text=True, env=env, cwd=scene.project)
+            self.assertEqual(hand.returncode, 0, hand.stderr)
+            self.assertEqual(json.loads(hand.stdout), {"folder": str(scene.where)})
+            self.assertFalse(marker.exists())
 
     def test_the_writer_takes_what_the_band_sends_through_the_launcher(self):
         scene = Scene(self)
@@ -115,7 +166,7 @@ class HandTests(unittest.TestCase):
         def by_launcher(*argv):
             if argv[0] == "approve":  # with the digests show gave the picker, as the band sends them
                 argv = (*argv, "--shown", by_launcher("show", argv[1])[1]["shown"])
-            done = subprocess.run([str(LAUNCHER), *argv], cwd=scene.project, capture_output=True, text=True)
+            done = launch.run(LAUNCHER, *argv, cwd=scene.project, capture_output=True, text=True)
             return done.returncode, json.loads(done.stdout)
 
         held = scene.outside / "draft.json"
@@ -163,6 +214,7 @@ class HandTests(unittest.TestCase):
             cwd=scene.project,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             env=env,
         )
         self.assertEqual(done.returncode, 0, done.stderr)
@@ -178,7 +230,7 @@ class HandTests(unittest.TestCase):
             "tool_input": {"command": command},
             "tool_response": {},
         }
-        done = subprocess.run([str(RUN)], input=json.dumps(event), capture_output=True, text=True, env=env)
+        done = launch.run(RUN, input=json.dumps(event), capture_output=True, text=True, env=env)
         self.assertEqual(done.returncode, 0, done.stderr)
         for ident in (first, second):
             examined = json.loads((scene.where / "proposals" / f"{ident}.examined.json").read_text("utf-8"))
@@ -203,7 +255,7 @@ class HandTests(unittest.TestCase):
         digests = {"approved.json": _sha(scene.where / "approved.json"), "switch": _sha(scene.where / "switch")}
         self.assertEqual(scene.by_hand("look"), (0, {"copies": word, "digests": digests}))
         (scene.where / "switch").unlink()
-        (scene.where / "switch").symlink_to(scene.where / "approved.json")
+        link.make(self, scene.where / "switch", scene.where / "approved.json")
         self.assertEqual(scene.by_hand("look")[1]["copies"]["switch"], "")  # no plain file: never the word
 
     def test_status_shows_the_frame_as_a_session_is_told_it(self):

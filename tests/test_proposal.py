@@ -3,12 +3,15 @@ person picked of it, and writes nothing that would be left out."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
-import fcntl
 import importlib.util
 import json
+import os
 import re
 import unittest
+from unittest import mock
 
+import hold_lock
+import link
 from scene import (
     ROOT,
     STEP,
@@ -29,7 +32,7 @@ from scene import (
     under,
 )
 
-from frameloop import approval, claims, hooks, machine, reading, words
+from frameloop import approval, claims, hooks, host, machine, reading, words
 from frameloop import proposal as proposal_
 from frameloop.proposal import ITEM_KEYS, KEYS
 
@@ -309,7 +312,7 @@ class ProposeTests(unittest.TestCase):
         folder.mkdir(parents=True)
         outside = scene.outside / "3.json"
         outside.write_text(json.dumps(held), "utf-8")
-        (folder / "3.json").symlink_to(outside)
+        link.make(self, folder / "3.json", outside)
         (folder / "4.json").write_text(json.dumps({**held, "id": "4"}) + " " * proposal_.PROPOSAL_BYTES, "utf-8")
         for ref in ("3", "4"):
             with self.subTest(ref=ref):
@@ -488,9 +491,8 @@ class ShownTests(unittest.TestCase):
         scene = Scene(self)
         ident = scene.propose(proposal("frame", "", [item(C)]))["id"]
         shown = scene.by_hand("show", ident)[1]["shown"]
-        with open(scene.where / machine.LOCK, "a", encoding="utf-8") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)  # another process holds the watch's lock
-            said = scene.by_hand("approve", ident, "--ticked", "0", "--shown", shown)
+        hold_lock.holder(self, scene.where)
+        said = scene.by_hand("approve", ident, "--ticked", "0", "--shown", shown)
         self.assertEqual(said, (1, {"written": [], "approved": 0, "said": words.HAND_LOCKED}))
         self.assertFalse((scene.project / ".frame").exists())
 
@@ -795,6 +797,30 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(both["holds"], [new, quiet])
         proposal_._hold(both, new)
         self.assertEqual(both["holds"], [new, quiet])  # one there as it stands is not written twice
+
+    def test_a_proposal_is_kept_past_a_stale_file_and_where_the_new_file_is_a_rename(self):
+        """A file a dead process left under this process's number is no proposal that took the id. And Windows puts a
+        new file in place by renaming it, so the name it was written under is gone before the writer tidies up."""
+        scene = Scene(self)
+        folder = machine.folders(scene.where / machine.PROPOSALS)
+        stale = folder / f".{os.getpid()}.new"
+        stale.write_text("left by a process that died", "utf-8")
+        write, new_file, calls = host.write_text, host.new_file, []
+
+        def counted(path, text):
+            calls.append(path)
+            if len(calls) > 3:
+                raise RuntimeError("the writer went round on a stale file")
+            write(path, text)
+
+        with mock.patch.object(host, "write_text", counted):
+            ident, _ = proposal_.keep(scene.where, proposal("frame", "", [item(C)]))
+        self.assertEqual((ident, len(calls)), ("1", 1))
+        with mock.patch.object(host, "new_file", lambda beside, path: new_file(beside, path, True)):
+            ident, path = proposal_.keep(scene.where, proposal("frame", "", [item(D)]))
+        self.assertEqual(ident, "2")
+        self.assertTrue(path.is_file())
+        self.assertEqual([each.name for each in folder.iterdir() if each.name.endswith(".new")], [stale.name])
 
     def test_an_options_proposal_writes_the_pick_or_the_persons_own_line(self):
         options = [

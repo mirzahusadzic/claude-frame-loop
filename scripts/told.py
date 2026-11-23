@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from frameloop import words  # noqa: E402  (after the source root is on the path)
+from frameloop import host, words  # noqa: E402  (after the source root is on the path)
 
 LABELS = ROOT / "hooks" / "band" / "labels.ts"
 QUOTED = r"'(?:[^'\\\n]|\\.)*'"  # a text as labels.ts writes one, in single quotes
@@ -53,4 +53,5 @@ def page() -> str:
 
 
 if __name__ == "__main__":
+    host.utf8(sys.stdout)
     sys.stdout.write(page())
