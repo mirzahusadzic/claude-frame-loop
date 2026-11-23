@@ -1,0 +1,335 @@
+#!/usr/bin/env python3
+"""A stand-in for Gadfly's command line, first on the tests' PATH: it calls no model and no network.
+
+It plays a reader on the frame it is given, trial by trial, and reads the levels by Gadfly's verdict rules in short,
+so a test holds what the tool's frames are made to show: a reader whose yes rests on the declared claims reads
+carried, and one whose yes rests on nothing reads cooled. Which reader is played for a frame is the scenario's, the
+JSON file FAKE_GADFLY names, by the longest prefix of the frame's name:
+
+    {"readers": {"reading-": "rests", "gate-": "piece"}, "version": "0.17.1", "step": "1. ...",
+     "reversed_step": "1. ...", "firm": true}
+
+Through a kept step each input is served the step kept under its own question, as frameloop/kept.py serves it: the
+claim reversed by the frame's input inversion has a question of its own, renamed as Gadfly renames (a capital kept),
+and a question with no step kept is an opening. Through the live maker (`run`), the claim's input is made `step` and
+the claim reversed `reversed_step`; null for either is a maker that gave none for that input.
+
+Readers: rests (yes while an anchor is there, no to the claim reversed, unclear without the anchors), all (as rests,
+but yes only while every anchor is there), first (as rests, but yes only while the first anchor is there, so
+the others carry nothing), unturned (as rests, but yes to the claim reversed too, as the first real
+run's reader read it when served the step kept for the claim as worded), stuck (yes, whatever is cut), gap (no), unclear,
+waver (yes, then no when asked again), piece (no while the anchor is there, yes without it), fail (every call an
+opening), and worded, for a claim alone: it holds the claim's line to the instruction it is sent, and answers no
+only to a line holding a word that instruction quotes as pointing outside it; where the instruction quotes none, it
+answers no to a line where a pronoun comes before its noun, as the first real run's readers did. Each call is kept, with the frame it was given, in FAKE_LOG. `report` and `gate` read their levels back
+from the kept records alone, as Gadfly's do, so a test can hold a reading to its evidence.
+
+A which-step's frame ("which-") has a line of an account for each input and the person's claims for its body. Each
+line is answered by the first key of the scenario's `serves` that it holds: a part of a claim's words (that claim's
+label), none, unclear, waver (the first claim, then none when asked again, read alike in half the draws), or
+agreed-none (none as it is and again, unclear with the claims cut, read alike in 0.8 of the draws, as the third real
+run's readers read a line); a line no key names is answered by the reader named for "which-": first (the first claim,
+by default), none or unclear. With the claims cut every other line is none. Each input's share of draws is kept in
+its records, as Gadfly reads it from them.
+"""
+
+import hashlib
+import json
+import os
+import re
+import sys
+
+SPLIT = "\n\n---\n\n"
+GATE = {"carried": "climbs", "coupled but misaligned": "climbs", "cooled": "absorbed", "unresolved": "stops"}
+
+
+def scenario():
+    if not os.environ.get("FAKE_GADFLY"):
+        return {}
+    with open(os.environ["FAKE_GADFLY"], encoding="utf-8") as file:
+        return json.load(file)
+
+
+def load(path):
+    with open(path, encoding="utf-8") as file:
+        return json.load(file)
+
+
+def option(argv, name, default=None):
+    return argv[argv.index(name) + 1] if name in argv else default
+
+
+def reader_for(said, frame):
+    readers = said.get("readers") or {}
+    named = [prefix for prefix in readers if frame["name"].startswith(prefix)]
+    return readers[max(named, key=len)] if named else "unclear"
+
+
+def answer(reader, trial, kept, anchors, reversed_):
+    present = bool(kept)
+    if reader == "rests":
+        return "no" if reversed_ else "yes" if present else "unclear"
+    if reader == "unturned":
+        return "yes" if present else "unclear"
+    if reader == "all":
+        return "no" if reversed_ else "yes" if len(kept) == len(anchors) else "unclear"
+    if reader == "first":
+        return "no" if reversed_ else "yes" if anchors and anchors[0] in kept else "unclear"
+    if reader == "stuck":
+        return "yes"
+    if reader == "gap":
+        return "no"
+    if reader == "waver":
+        return "no" if trial == "repeat" else "yes"
+    if reader == "piece":
+        return "no" if present else "yes"
+    return "unclear"
+
+
+def trials(frame):
+    spans = frame["body"]["spans"]
+    ids, anchors, asked = [s["id"] for s in spans], frame["anchors"], frame["interventions"]
+    found = [("baseline", ids, False)]
+    if asked.get("repeat"):
+        found.append(("repeat", ids, False))
+    found.append(("ablation", [i for i in ids if i not in anchors], False))
+    if asked.get("eachAnchor"):
+        found += [(f"ablation-{a}", [i for i in ids if i != a], False) for a in anchors]
+    if asked.get("sham"):
+        kinds = {s["kind"] for s in spans if s["id"] in anchors}
+        free = [s["id"] for s in spans if s["id"] not in anchors and s.get("kind") in kinds]
+        if len(free) >= len(anchors):
+            cut = free[: len(anchors)]
+            found.append(("sham-1", [i for i in ids if i not in cut], False))
+    if asked.get("inputInversion"):
+        found.append(("input-inversion", ids, True))
+    return found
+
+
+def renamed(text, mapping):
+    """As Gadfly renames: whole words and phrases, case folded, a capital kept."""
+    for old, new in mapping.items():
+        text = re.sub(rf"(?<!\w){re.escape(old)}(?!\w)",
+                      lambda found, new=new: new[:1].upper() + new[1:] if found.group(0)[:1].isupper() else new,
+                      text, flags=re.IGNORECASE)
+    return text
+
+
+def unstepped(frame):
+    """Why a call through a kept step could find no step for its question, or None: each input, the claim reversed
+    among them, is served only the step kept under its own question."""
+    maker = (frame.get("battery") or {}).get("maker") or {}
+    if maker.get("kind") != "kept-step":
+        return None
+    question, steps = frame["inputs"][0]["text"], maker.get("steps") or {}
+    if question not in steps or set(maker) - {"kind", "steps"}:
+        return "no step was kept for this question"
+    inverted = frame["interventions"].get("inputInversion")
+    if inverted and renamed(question, inverted) not in steps:
+        return "no step was kept for the question reversed"
+    return None
+
+
+PRONOUNS = {"it", "its", "they", "them", "their", "this", "these", "those"}
+ARTICLES = {"the", "a", "an"}
+
+
+def worded(frame):
+    """Whether the worded reader finds the claim's line one that stands alone, by the instruction it was sent."""
+    line = frame["body"]["spans"][0]["text"]
+    pointers = re.findall("«([^»]+)»", frame["observe"]["instruction"])
+    if pointers:
+        return not any(re.search(rf"(?<!\w){re.escape(p)}(?!\w)", line, re.IGNORECASE) for p in pointers)
+    said = re.findall(r"[a-z]+", line.lower())
+    first = {kind: next((n for n, w in enumerate(said) if w in held), len(said))
+             for kind, held in (("pronoun", PRONOUNS), ("noun", ARTICLES))}
+    return first["pronoun"] > first["noun"]
+
+
+def which_target(said, frame, line):
+    """What a which-step's line serves in the scenario: by the first key of `serves` it holds, else by the reader."""
+    for part, target in (said.get("serves") or {}).items():
+        if part in line:
+            return target
+    named = [prefix for prefix in said.get("readers") or {} if frame["name"].startswith(prefix)]
+    return said["readers"][max(named, key=len)] if named else "first"
+
+
+def which_levels(frame, said):
+    """Each line's levels, and its share of draws, by input."""
+    labels, spans = frame["observe"]["labels"], frame["body"]["spans"]
+    found = {}
+    for x in frame["inputs"]:
+        target = which_target(said, frame, x["text"])
+        if target == "waver":
+            found[x["id"]] = ({"baseline": labels[0], "repeat": "none", "ablation": "none"}, 0.5)
+            continue
+        if target == "agreed-none":
+            found[x["id"]] = ({"baseline": "none", "repeat": "none", "ablation": "unclear"}, 0.8)
+            continue
+        if target in ("none", "unclear"):
+            label = target
+        elif target == "first":
+            label = labels[0]
+        else:
+            label = next(label for span, label in zip(spans, labels) if target in span["text"])
+        cut = label if label in ("none", "unclear") else "none"
+        found[x["id"]] = ({"baseline": label, "repeat": label, "ablation": cut}, 1.0)
+    return found
+
+
+def by_input(frame, said):
+    """Each input's levels and share of draws: a which-step's lines, or the one claim of any other frame."""
+    if frame["name"].startswith("which-"):
+        return which_levels(frame, said)
+    return {frame["inputs"][0]["id"]: (levels(frame, said), 1.0)}
+
+
+def levels(frame, said, only=None):
+    reader = reader_for(said, frame)
+    anchors = frame["anchors"]
+    if reader == "worded":
+        alone = "yes" if worded(frame) else "no"
+        return {trial: (alone if [a for a in anchors if a in body] else "unclear")
+                for trial, body, _ in trials(frame) if only is None or trial in only}
+    return {trial: answer(reader, trial, [a for a in anchors if a in body], anchors, reversed_)
+            for trial, body, reversed_ in trials(frame) if only is None or trial in only}
+
+
+def category(frame, read):
+    base, allowed = read["baseline"], frame["allowed"]
+    if any(level is None for level in read.values()) or read.get("repeat", base) != base:
+        return "unresolved"
+    cut = read["ablation"]
+    if cut != base and cut not in allowed["ablation"]:
+        return "coupled but misaligned"
+    if cut == base:
+        return "cooled"
+    if any(level != base for trial, level in read.items() if trial.startswith("sham")):
+        return "unresolved"
+    if "input-inversion" in read and read["input-inversion"] not in allowed.get("inputInversion", []):
+        return "coupled but misaligned"
+    return "carried"
+
+
+def kept_levels(path, frame):
+    """A run's levels and shares, read back from its records, by input: each trial's observation, and the least
+    share of draws its records keep. A record that names no input is the frame's first input's."""
+    with open(path, encoding="utf-8") as file:
+        rows = [json.loads(line) for line in file if line.strip()]
+    found = {}
+    for row in rows:
+        levels_, share = found.setdefault(row.get("input", frame["inputs"][0]["id"]), ({}, 1.0))
+        levels_[row["trial"]] = row.get("observation")
+        found[row.get("input", frame["inputs"][0]["id"])] = (levels_, min(share, row.get("share", 1.0)))
+    return found
+
+
+def read_back(frame, path):
+    """What a run's records say, as report and gate print it: each input's finding, and its share of draws."""
+    kept = kept_levels(path, frame)
+    findings = [{"input": x, "category": category(frame, read) if "baseline" in read and "ablation" in read
+                 else "unresolved", "levels": read} for x, (read, _) in kept.items()]
+    return findings, {x: share for x, (_, share) in kept.items()}
+
+
+def overall_of(findings):
+    found = {f["category"] for f in findings}
+    return found.pop() if len(found) == 1 else "unresolved"
+
+
+def latest(runs):
+    named = sorted((int(name[:-6]), name) for name in os.listdir(runs) if name.endswith(".jsonl") and name[:-6].isdigit())
+    return os.path.join(runs, named[-1][1]) if named else None
+
+
+def opened(why, calls):
+    print(json.dumps({"openings": {why: calls}, "exit": 1, "firm": False}))
+    return 1
+
+
+def main(argv):
+    said = scenario()
+    frame_path = next((a for a in argv[1:] if a.endswith(".json") and os.path.isfile(a)), None)
+    if os.environ.get("FAKE_LOG"):
+        kept = {"program": "gadfly", "argv": argv, "cwd": os.getcwd(),
+                "frame": load(frame_path) if frame_path else None}
+        with open(os.environ["FAKE_LOG"], "a", encoding="utf-8") as file:
+            file.write(json.dumps(kept) + "\n")
+    if argv == ["--version"]:
+        print(f"gadfly {said.get('version', '0.17.1')}")
+        return 0
+    command = argv[0]
+    if command == "firm":
+        frame = load(argv[1])
+        why = unstepped(frame)
+        if why or reader_for(said, frame) == "fail":
+            return opened(why or said.get("opening", "the reader failed"), 3)
+        read = by_input(frame, said)
+        runs = option(argv, "--runs")
+        with open(os.path.join(runs, "1.jsonl"), "w", encoding="utf-8") as file:
+            file.write("".join(json.dumps({"input": x, "trial": t, "observation": v, "share": share}) + "\n"
+                               for x, (levels_, share) in read.items() for t, v in levels_.items()))
+        findings = [{"input": x, "category": category(frame, levels_), "levels": levels_}
+                    for x, (levels_, _) in read.items()]
+        shares = {x: share for x, (_, share) in read.items()}
+        firm = said.get("firm", True) and all(share >= 0.95 for share in shares.values())
+        print(json.dumps({"firm": firm, "category": overall_of(findings), "short": None, "stopped": None,
+                          "findings": findings, "shares": shares, "exit": 0}))
+        return 0
+    if command == "run":
+        frame = load(argv[1])
+        only = [argv[n + 1] for n, a in enumerate(argv) if a == "--only"]
+        step = said.get("step", "1. What the claim's key term means.\n2. What would show it false.")
+        turned = said.get("reversed_step", "1. What the claim reversed means.\n2. What would show it so.")
+        out = option(argv, "--out")
+        if step is None or reader_for(said, frame) == "fail":
+            with open(out, "x", encoding="utf-8") as file:  # every call kept, each an opening
+                file.write("".join(json.dumps({"trial": t, "input": "claim", "opening": "the maker gave no step"}) + "\n"
+                                   for t in only))
+            return opened("the maker gave no step", 6)
+        read = levels(frame, said, only)
+        with open(out, "x", encoding="utf-8") as file:
+            for trial, level in read.items():
+                text = turned if trial == "input-inversion" else step
+                if text is None:  # the maker gave no step for this input: an opening, never another's step
+                    file.write(json.dumps({"trial": trial, "input": "claim", "opening": "the maker gave no step"}) + "\n")
+                    continue
+                made = {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest(), "text": text}
+                raw = json.dumps({"made": made, "read": level})
+                file.write(json.dumps({"trial": trial, "input": "claim", "observation": level, "raw": raw,
+                                       "battery": "branch"}) + "\n")
+        print(json.dumps({"made": len(read), "exit": 0}))
+        return 0
+    if command == "report":
+        findings, _ = read_back(load(argv[1]), argv[2])
+        print(json.dumps({"overall": {"category": overall_of(findings)}, "findings": findings}))
+        return 0
+    if command == "successor":
+        frame, hole = load(argv[1]), option(argv, "--hole")
+        text, kind = option(argv, "--text"), option(argv, "--kind")
+        if {"id": hole, "kind": kind} not in frame.get("holes", []):
+            return 2
+        frame["body"]["spans"].append({"id": hole, "text": text, "kind": kind,
+                                       "source": {"sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}})
+        frame["anchors"] = [hole]
+        frame.pop("holes")
+        with open(option(argv, "--out"), "x", encoding="utf-8") as file:
+            json.dump(frame, file)
+        print(json.dumps({"draft": frame, "reframes": []}))
+        return 0
+    if command == "gate":
+        after, run = load(argv[2]), latest(option(argv, "--runs"))
+        if run is None:
+            return 2
+        findings, shares = read_back(after, run)
+        found = overall_of(findings)
+        firm = said.get("firm", True) and all(share >= 0.95 for share in shares.values())
+        print(json.dumps({"gate": GATE[found] if firm else "stops", "category": found, "firm": firm, "climbs": [],
+                          "shares": shares}))
+        return 0
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

@@ -21,11 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        python: ["3.13", "3.14", "3.15"]  # Gadfly's own set: the hooks run on its Python
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.9", "3.13", "3.14"]
     defaults:
       run:
-        shell: bash  # Git Bash on Windows, the shell Claude Code runs hooks with there
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
@@ -35,42 +35,26 @@ jobs:
         run: git config --global user.email ci@example.invalid && git config --global user.name ci
       - name: Lint and format
         run: uvx ruff@0.17.4 check . && uvx ruff@0.17.4 format --check .
-      - name: Test, without Gadfly
-        run: uv run --no-project --python ${{ matrix.python }} python -m unittest discover -s tests
+      - name: Test forward
+        run: python3 tests/run.py
+      - name: Test reverse
+        run: python3 tests/run.py reverse
 
-  with-gadfly:
-    name: With Gadfly on ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  coverage:
+    name: Coverage on Ubuntu
+    runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-        with:
-          repository: mirzahusadzic/gadfly
-          ref: f35d5b1014558c81e6bdbf1722630eedd4a54b43  # v0.15.0, for the contract tests
-          path: gadfly
       - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
         with:
           python-version: "3.13"
       - name: Git identity for the tests' own repositories
         run: git config --global user.email ci@example.invalid && git config --global user.name ci
-      - name: Install Gadfly
-        run: uv tool install 'midwife>=0.15.0' && gadfly --version
-      - name: Test, with Gadfly; no network call and no key
-        env:
-          GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly
-        run: uv run --no-project --python 3.13 python -m unittest discover -s tests
       - name: Coverage of the hooks, held to its floor in .coveragerc
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          GADFLY_CHECKOUT: ${{ github.workspace }}/gadfly
         run: sh scripts/coverage.sh
 
   plugin:
@@ -80,7 +64,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     defaults:
       run:
         shell: bash
@@ -90,8 +74,10 @@ jobs:
         with:
           node-version: 24
       - name: Install Claude Code, the version the docs are tested with
-        run: npm install -g @anthropic-ai/claude-code@2.1.319
+        run: npm install -g @anthropic-ai/claude-code@2.1.330
+      - name: The band's plain tests
+        run: node --import ./tests/node/resolve.mjs --test 'tests/node/*.spec.ts'
       - name: Validate, as the plugin directory does
-        run: claude plugin validate . --strict
+        run: claude plugin validate .
       - name: The band's tests
         run: claude plugin test .

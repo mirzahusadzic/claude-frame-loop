@@ -1,5 +1,3 @@
-tests/.work/
 __pycache__/
-.frame-loop/steps.jsonl
-.frame-loop/work/
-.frame-loop/switch
+tests/.work/
+.claude-plugin/types/

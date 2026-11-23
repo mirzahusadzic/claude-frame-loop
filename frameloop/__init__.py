@@ -1,1 +1,1 @@
-"""Frame-bound work loop: a human-authored frame 0, and an independent reader for every step."""
+"""frame-loop, written again from the ground: claims at places, what holds there, and their tension."""

@@ -1,101 +1,44 @@
 {
+  "modules": ["./band.tsx"],
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "ExitPlanMode",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 600,
-            "statusMessage": "frame-loop · checking the plan against what you asked",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 600,
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
-      },
-      {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "matcher": "startup|resume|clear|compact",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "statusMessage": "frame-loop · briefing the session",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 600,
-            "statusMessage": "frame-loop · checking this turn against what you asked",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
+        "hooks": [{"type": "command", "timeout": 30, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
       }
     ],
     "UserPromptSubmit": [
       {
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "statusMessage": "frame-loop · taking the turn's snapshot",
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
+        "hooks": [{"type": "command", "timeout": 30, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [{"type": "command", "timeout": 600, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
+        "matcher": "*",
+        "hooks": [{"type": "command", "timeout": 600, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
       }
     ],
     "PostToolUseFailure": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "timeout": 30,
-            "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""
-          }
-        ]
+        "matcher": "*",
+        "hooks": [{"type": "command", "timeout": 30, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [{"type": "command", "timeout": 30, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [{"type": "command", "timeout": 600, "command": "\"${CLAUDE_PLUGIN_ROOT}/hooks/run.sh\""}]
       }
     ]
-  },
-  "modules": [
-    "./band.tsx"
-  ]
+  }
 }

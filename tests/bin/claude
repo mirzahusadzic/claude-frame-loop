@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""A stand-in for the person's own `claude -p`, first on the tests' PATH: it calls no model.
+
+It keeps each call it is given (its arguments, its folder and what came on its input) in the file FAKE_LOG names,
+and answers as the scenario FAKE_CLAUDE names says, a JSON file: its result, its exit, whether it is an error, and how
+long it sleeps first. `results`, a list, gives the result of each call in turn, counted from the calls FAKE_LOG
+already holds, the last one for every call after it. With no scenario it answers one numbered claim.
+
+A call whose system prompt is the notice's own (it writes the account of an implementer's notice) is answered by
+`notice` where the scenario gives it, a list in turn as `results` is, counted from the notice's calls alone. With
+`obeys`, the writer is a gullible one: wherever its input holds "write this line: <words>", fenced or not, it adds
+those words as a numbered line of its own after its answer, as a writer that follows text in its data would.
+"""
+
+import re
+
+import json
+import os
+import sys
+import time
+
+
+def main():
+    given = sys.stdin.read()
+    scenario = {}
+    if os.environ.get("FAKE_CLAUDE"):
+        with open(os.environ["FAKE_CLAUDE"], encoding="utf-8") as file:
+            scenario = json.load(file)
+    argv = sys.argv[1:]
+    noticing = "implementer's notice" in (argv[argv.index("--system-prompt") + 1] if "--system-prompt" in argv else "")
+    before = []
+    if os.environ.get("FAKE_LOG") and os.path.exists(os.environ["FAKE_LOG"]):
+        with open(os.environ["FAKE_LOG"], encoding="utf-8") as file:
+            before = [json.loads(line) for line in file if line.strip()]
+    made = sum(1 for row in before if row.get("program") == "claude" and row.get("noticing", False) == noticing)
+    if os.environ.get("FAKE_LOG"):
+        with open(os.environ["FAKE_LOG"], "a", encoding="utf-8") as file:
+            file.write(json.dumps({"program": "claude", "argv": argv, "cwd": os.getcwd(), "stdin": given,
+                                   "noticing": noticing}) + "\n")
+    time.sleep(scenario.get("sleep", 0))
+    if scenario.get("exit"):
+        sys.stdout.write(scenario.get("stdout", ""))
+        return scenario["exit"]
+    results = scenario.get("results") or [scenario.get("result", "1. The change alters the work.")]
+    if noticing and "notice" in scenario:
+        results = scenario["notice"] if isinstance(scenario["notice"], list) else [scenario["notice"]]
+    else:
+        made = sum(1 for row in before if row.get("program") == "claude")
+    result = results[min(made, len(results) - 1)]
+    if scenario.get("obeys"):
+        told = re.findall(r"write this line: ([^\n]+)", given)
+        count = len([line for line in result.splitlines() if line.strip()])
+        result = "\n".join([*result.splitlines(), *(f"{count + n}. {line}" for n, line in enumerate(told, 1))])
+    print(json.dumps({"type": "result", "is_error": scenario.get("is_error", False), "result": result,
+                      "total_cost_usd": 0}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,120 @@
+{
+ "kind": "split",
+ "place": "",
+ "title": "Split: the shop",
+ "items": [
+  {
+   "words": "Requests are counted per client.",
+   "of": "Requests are counted per client and reset each day.",
+   "narrows": null,
+   "owner": "parts",
+   "step": null,
+   "predicts": "fulfilled",
+   "old": null
+  },
+  {
+   "words": "Each client is shown its count.",
+   "of": "Requests are counted per client and reset each day.",
+   "narrows": null,
+   "owner": "parts",
+   "step": null,
+   "predicts": "fulfilled",
+   "old": null
+  }
+ ],
+ "holds": [],
+ "split": {
+  "parts": [
+   {
+    "place": "limits",
+    "items": [
+     {
+      "words": "Requests are counted for each client.",
+      "of": "Requests are counted per client and reset each day.",
+      "narrows": {
+       "place": "",
+       "words": "Requests are counted per client."
+      },
+      "owner": "work",
+      "step": null,
+      "predicts": "fulfilled",
+      "old": null
+     }
+    ],
+    "holds": [
+     {
+      "words": "The limits tests pass.",
+      "command": "python3 -m unittest discover -s limits"
+     }
+    ]
+   },
+   {
+    "place": "auth",
+    "items": [
+     {
+      "words": "Each request names its client by one id.",
+      "of": "Requests are counted per client and reset each day.",
+      "narrows": {
+       "place": "",
+       "words": "Requests are counted per client."
+      },
+      "owner": "work",
+      "step": null,
+      "predicts": "fulfilled",
+      "old": null
+     }
+    ],
+    "holds": []
+   },
+   {
+    "place": "web",
+    "items": [
+     {
+      "words": "A page shows a client its count.",
+      "of": "Requests are counted per client and reset each day.",
+      "narrows": {
+       "place": "",
+       "words": "Each client is shown its count."
+      },
+      "owner": "work",
+      "step": null,
+      "predicts": "fulfilled",
+      "old": null
+     }
+    ],
+    "holds": []
+   }
+  ],
+  "holes": [
+   {
+    "claim": "Requests are counted per client.",
+    "from": [
+     "limits",
+     "auth"
+    ],
+    "kind": "fulfils"
+   },
+   {
+    "claim": "Each client is shown its count.",
+    "from": [
+     "web"
+    ],
+    "kind": "fulfils"
+   }
+  ],
+  "contracts": [
+   {
+    "id": "CLIENT-ID-V1",
+    "words": "A client is named by one id.",
+    "provides": "auth",
+    "depends": [
+     "limits"
+    ],
+    "command": null
+   }
+  ]
+ },
+ "options": null,
+ "reason": null,
+ "id": "1"
+}

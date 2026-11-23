@@ -1,101 +1,102 @@
-export type Live = {
-  session: string
-  at: number
-  state: 'reading' | 'done'
-  what?: string
-  why?: string | null
-  step_started?: number | null
-  answers?: number
-  tokens?: number // what the reader has spent on this reading
-  expected?: number | null
-  expected_seconds?: number | null
-  step?: string
-  n?: number
-  of?: number
-  started?: number | null
-  decision?: string
-  lines?: string[]
-  detail?: string[]
-  pid?: number // a background read's process
-  wake?: boolean // this reading starts a turn for Claude, once the session is free
-}
-
-// Where the work is, as the hooks write it beside the live state (<session>.part.json): the part
-// engaged, by its name, where it sits and whether its requirements are all done, or none at
-// frame 0; and the name of a part just left when it is done.
-export type PartLine = {
-  at: number
-  part: { name: string; where: string; done: boolean } | null
-  finished: string | null
-}
-
-// One item of a decomposition, as the picker shows it. `quotes` is the parent's requirement a
-// part's line narrows, by its id: never shown, read for the header and the record.
-export type Item = { text: string; detail?: string; isChecked: boolean; isRemoval?: boolean; quotes?: string }
-
-// One part of a split: its file's name, its plain name, its lines, the paths it may change, and
-// whether its page was seen.
-export type Part = { id: string; name: string; items: Item[]; scope: string[]; isSeen: boolean }
-
-// A contract of a split: one statement that two or more of its parts must each keep, written
-// once, the parts it binds by their ids, and one check mark however many pages show it.
-export type Contract = { text: string; parts: string[]; isChecked: boolean }
-
-// What the picker holds until its round closes. `node` is the frame's place in the tree: a
-// node's id, or none for frame 0. A split holds its parts instead of items, the frame it splits
-// (`parent`, a node's id, or none for frame 0), and the page shown: one per part, then the
-// review, numbered from 0.
+// A proposal as the band shows it: the stored file read back and made safe to draw
+// (hooks/band/frameloop.ts, proposalOf). Every text is a string, every list a list.
+export type Reversal = { words: string; lines: string[] }
+// `ask` is the session's own question to the person, where the row says more, less or other than their words.
+export type Item = { words: string; of: string; narrows: string; owner: string; step: string[]; reversal: Reversal | null; predicts: string; old: string; ask: string }
+// `byCommand` where a command checks it, its detail that command; else its detail the paths a change must not touch.
+export type Hold = { words: string; detail: string; byCommand: boolean }
+export type Hole = { claim: string; from: string[]; kind: string }
+// A contract's command is '' where it has no check yet, as one laid down before anything is built.
+export type Contract = { id: string; words: string; provides: string; depends: string[]; command: string }
+// A part of a crossing: its place, its own claims, each narrowing a claim above, and what must hold there.
+export type Part = { place: string; items: Item[]; holds: Hold[] }
 export type Proposal = {
+  id: string
+  kind: string
+  place: string
   title: string
-  node?: string
   items: Item[]
-  leftOut: string[]
-  parts?: Part[]
-  contracts?: Contract[]
-  parent?: string
-  page?: number
-  header?: Header
+  holds: Hold[]
+  split: { parts: Part[]; holes: Hole[]; contracts: Contract[] } | null
+  options: { words: string; cost: string }[] | null
+  reason: { words: string; about: string } | null
+}
+export type Mark = { item: number; kind: string; words: string }
+// A step as the readers will be asked it: the claim's own lines, and the claim reversed with its own, where kept.
+export type Step = { lines: string[]; reversal: Reversal | null }
+// Whether a crossing's parts carry a claim above (null: not settled), with the parts it does not hold without and
+// those it holds without; a claim above with none was not read.
+export type Above = { carried: boolean | null; carry: string[]; idle: string[] }
+// Steps and marks number every claim of a proposal in one order: its items, then each part's own in turn. `failed`
+// is the one plain line of an examination that could not run at all, '' for none.
+export type Examined = {
+  marks: Mark[]
+  carried: boolean | null
+  validated: boolean
+  steps: Record<string, Step>
+  above: Record<string, Above>
+  contracts: Record<string, boolean | null>
+  failed: string
 }
 
-// Where a split sits, read by the band from the tree's files as the picker opens, never from
-// Claude's words: the frames from frame 0 down to the one split, by name; that frame's
-// requirements by id, each with whether its words are the ones approved; the principles every
-// part inherits, each with the frame it comes from; the guide's rules, counted; and what could
-// not be read.
-export type Header = {
-  path: string[]
-  requirements: Record<string, { text: string; isApproved: boolean }>
-  principles: { text: string; from: string }[]
-  guideRules: number
-  unread?: string
-  // The split's own reading, when the hooks read this split before the picker opened: each
-  // requirement split, by id, as covered, not covered or not settled, and each line that was
-  // found needed, or one the other lines already cover.
-  // and the lines whose detail says which words they narrow and not how.
-  // Per part, by its id: the rule its lines may break (or "not settled"), the guide's rules that
-  // hold for its files, and what a change there will owe.
-  check?: {
-    requirements: Record<string, string>
-    lines: Record<string, string>
-    thin?: string[]
-    parts?: Record<string, { breaks: string | null; scoped: string[]; owes: string[] }>
-    // Per contract, by its words: whether the lines of the parts it binds keep it (kept, not
-    // kept or not settled); none when the split had no contracts.
-    contracts?: Record<string, string>
-  }
+// The one open proposal, as the picker in its pane holds it, and the ids stored while it was open, which wait their
+// turn. `shown` is the digests `show` gave of the proposal and its examination as drawn, which the writer is held
+// to; `check` the switch as `show` read it; `checking` while the band's own examination of it runs, from `began` in
+// seconds; `checkFailed` why that examination could not run, where the process itself said so; `said` the person's
+// own prompt the proposal answers, as the prompt hook saw it. `cursor` is the stop under the cursor: `said`, a row
+// by its id, `ok`, or `retry`; `answered` the rows under review the person said yes to;
+// `kept` the rows a proposal this one took the place of had answered, each by its words and its question, kept where
+// they stand unchanged;
+// `changing` the stop the person pressed enter on, under which its one line is open in the pane; `typed` his words in
+// that line as he types them; `changed` the line he sent as his change, there or at the host's prompt, while the
+// session answers it and the picker is
+// closed; `details` the row whose details are open, or `said` for his sentence whole; `help` the list of keys; `aside`
+// the picker closed by esc, the proposal waiting; `writing` and `failed` the writer's run and its refusal.
+export type Open = {
+  id: string
+  proposal: Proposal
+  examined: Examined | null
+  foreign: boolean
+  shown: string
+  check: 'on' | 'off'
+  checking: boolean
+  began: number
+  checkFailed: string
+  said: string
+  cursor: string
+  answered: string[]
+  kept: string[]
+  changing: string
+  typed: string
+  changed: string
+  details: string
+  help: boolean
+  aside: boolean
+  pick: number | null
+  writing: boolean
+  failed: string
 }
+// A proposal stored while another was open, by its id, with the kind and place a re-proposal is known by, and the
+// person's prompt it answers.
+export type Waiting = { id: string; kind: string; place: string; said: string }
+// `told`: each proposal closed with nothing written, as the sentence the session is told at its next prompt;
+// `ever`: whether this session's picker ever held a proposal, so each prompt then says how it stands; `closing`:
+// the one line that tells what the person approved last, drawn in the band until their next prompt.
+export type Picker = { open: Open | null; waiting: Waiting[]; told: string[]; ever: boolean; closing: string }
+
+// What the band, as a second witness, found changed outside the picker: the sentence on its line, and whether the
+// session has been told it yet.
+export type Witness = { line: string; told: boolean }
+
+// Where the host seated the picker's pane, for the proposal `id`: `shown` drawn with the keyboard given it once at
+// least, `unheld` drawn but never given the keyboard, `undrawn` open but waiting undrawn on a terminal too narrow for
+// a pane nobody asked for; '' where no pane is open.
+export type Seat = { id: string; seat: '' | 'shown' | 'unheld' | 'undrawn' }
 
 declare module 'claude-code' {
   interface PluginState {
     'frame-loop': {
-      live: Live | null
-      frame: number
-      dismissedAt: number
-      openedAt: number
-      off: boolean
-      proposal: Proposal | null
-      woken: number
-      part: PartLine | null
+      picker: Shaped<Picker>; live: string; witness: Shaped<Witness>; beat: number; asked: string; drafted: boolean; seat: Shaped<Seat>
     }
   }
 }
