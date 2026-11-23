@@ -142,13 +142,23 @@ test('with the check off the picker opens at once, says so, judges no row, and o
   assert.equal(isOffered(at(o, { type: 'focus', stop: 'c2' }, { type: 'yes' })), true)
 })
 
+test('the last line promises a confirm only on a row under review: elsewhere enter changes the row, or all of it', () => {
+  const off = opened(NOTES_FRAME, null, 'off')
+  const row = rowsOf(off)[0].id
+  assert.match(foot(at(off, { type: 'focus', stop: row })), /^enter change this row · /) // the check off, and no ask on this row: nothing to confirm
+  assert.match(foot(at(off, { type: 'focus', stop: 'said' })), /^enter change it all · /)
+  const on = at(opened(NOTES_FRAME, FRAME_CHECKED), { type: 'focus', stop: 'c2' })
+  assert.equal(rowsOf(on).find(r => r.id === 'c2')?.status, 'Review')
+  assert.match(foot(on), /^y yes, fine · enter confirm or change · /) // an empty line there confirms, as y does
+})
+
 test('with the check on, a row the maker gave no step is Review with why, and can only be changed', () => {
   const partial = examinedOf({ marks: [{ item: 2, kind: 'unread', words: `could not be checked: ${GADFLY}.` }], carried: null, validated: false,
     steps: { '0': FRAME_CHECKED.steps['0'], '1': FRAME_CHECKED.steps['1'] } })
   const o = at(opened(NOTES_FRAME, partial), { type: 'focus', stop: 'c2' })
   const row = rowsOf(o).find(r => r.id === 'c2')
   assert.deepEqual([row?.status, row?.notes, row?.noStep], ['Review', ['You did not say a note is one line; I would keep it to one. OK?', `could not be checked: ${GADFLY}.`], true])
-  assert.equal(foot(o), `enter confirm or change · d details · ${KEYS_TAIL}`) // no y
+  assert.equal(foot(o), `enter change this row · d details · ${KEYS_TAIL}`) // no y, and nothing an empty line could confirm
   const after = at(o, { type: 'yes' })
   assert.deepEqual(after.answered, [])
   const still = at(o, { type: 'press' }, { type: 'submit', text: '' })

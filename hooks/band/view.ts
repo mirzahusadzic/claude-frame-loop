@@ -247,11 +247,14 @@ const keysAt = (o: Open, paged: boolean, cut: boolean): Key[] => {
   const offered = isOffered(o)
   const build: Key[] = offered ? [{ key: 'o', means: LABELS.keys.build, hotkey: 'o' }] : []
   if (o.cursor === 'ok') return [...(offered ? [{ key: LABELS.keys.enter, means: LABELS.keys.build }] : []), ...tail]
-  const change: Key = { key: LABELS.keys.enter, means: LABELS.keys.choose }
-  if (o.cursor === 'said') return [...build, change, ...(cut || o.details === 'said' ? [{ key: 'd', means: LABELS.keys.whole, hotkey: 'd' }] : []), ...tail]
+  const enter = (means: string): Key => ({ key: LABELS.keys.enter, means })
+  if (o.cursor === 'said') return [...build, enter(LABELS.keys.changeAll), ...(cut || o.details === 'said' ? [{ key: 'd', means: LABELS.keys.whole, hotkey: 'd' }] : []), ...tail]
   const row = rowsOf(o).find(r => r.id === o.cursor)
-  const yes: Key[] = row && ((row.status === 'Review' && !row.noStep) || (o.proposal.kind === 'options' && row.status !== 'Yes'))
+  const review = !!row && row.status === 'Review' && !row.noStep
+  const yes: Key[] = review || (row && o.proposal.kind === 'options' && row.status !== 'Yes')
     ? [{ key: 'y', means: LABELS.keys.y, hotkey: 'y' }] : []
+  // enter opens the row's line: only a row under review can be confirmed there, by an empty line, so only it says so
+  const change = enter(review ? LABELS.keys.choose : LABELS.keys.change)
   const details: Key[] = row?.details.length ? [{ key: 'd', means: LABELS.keys.d, hotkey: 'd' }] : []
   return [...yes, ...build, change, ...details, ...tail]
 }

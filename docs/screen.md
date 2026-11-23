@@ -137,7 +137,7 @@ Only the keys that apply at the cursor are on the last line, dim, each with its 
 | ↑ ↓, tab, shift+tab | Moves between the stops, round again at either end; none takes the keyboard out of the pane |
 | pgup, pgdn | Moves a page of the list; a wheel's tick moves one stop |
 | `y` | Answers the row's question yes, and goes to the next row under review, or to OK after the last |
-| enter | On a row or "You said", opens a line to confirm or change; on "OK, build it", approves |
+| enter | On a row or "You said", opens a line for your change; on a row under review an empty line confirms it. On "OK, build it", approves |
 | `o` | Approves the whole, once the check is done, nothing is left to review, and an options proposal has a pick |
 | `d` | Opens the row's details: its step, the row turned around, and the check's other remarks; `d` again or esc closes them |
 | `h` | Lists every key; `h` again or esc closes the list |

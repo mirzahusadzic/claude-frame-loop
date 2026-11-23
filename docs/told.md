@@ -745,6 +745,8 @@ command:
 yes, fine
 enter
 confirm or change
+change this row
+change it all
 confirm
 send your change
 build it

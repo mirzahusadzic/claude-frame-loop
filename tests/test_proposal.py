@@ -778,6 +778,24 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(scene.standing("limits", L).tension, "fulfilled")  # its own words, step and work are as read
         self.assertEqual(scene.standing("", new).tension, "open")
 
+    def test_a_command_approved_under_the_same_words_takes_the_old_ones_place(self):
+        """The picker shows a proposal's commands, so those are what is written: a hold proposed anew under words the
+        frame already holds replaces the old command where it stood, and the frame keeps no second copy."""
+        scene = Scene(self)
+        passing, quiet = "The tests pass.", {"words": "The linter is quiet.", "command": "true"}
+        old, new = {"words": passing, "command": "exit 1"}, {"words": passing, "command": "exit 0"}
+        scene.picked(proposal("frame", "", [item(C)], holds=[old, quiet]), "--ticked", "0")
+        self.assertEqual(claims.load(scene.project).frames[""]["holds"], [old, quiet])
+        said = scene.picked(proposal("frame", "", [item(D)], holds=[new]), "--ticked", "0")
+        self.assertEqual(claims.load(scene.project).frames[""]["holds"], [new, quiet])
+        self.assertIn("exit 0", said["said"])  # the new command is named to the session as newly ticked
+        self.assertNotIn("exit 1", said["said"])
+        both = {"holds": [old, quiet, new]}  # a frame as an earlier writer left it, with the two side by side
+        proposal_._hold(both, new)
+        self.assertEqual(both["holds"], [new, quiet])
+        proposal_._hold(both, new)
+        self.assertEqual(both["holds"], [new, quiet])  # one there as it stands is not written twice
+
     def test_an_options_proposal_writes_the_pick_or_the_persons_own_line(self):
         options = [
             {"words": "A day runs from midnight, the shop's time.", "cost": "Clients abroad reset at odd hours."},

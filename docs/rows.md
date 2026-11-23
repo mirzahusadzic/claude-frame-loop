@@ -45,7 +45,7 @@ Two more cases stand beside the roads:
 - **Kept by a path rule.** A rule about files a change must not touch. Every change is held against its paths, with no command.
 - **Neither, on this machine.** A claim nothing here can show, as one about another operating system. It stays a row that predicts `open`, and the session asks you about it.
 
-Approving a row that a command checks approves the command. A command you did not approve never runs, and one that did not pass keeps its place open until it does.
+Approving a row that a command checks approves the command. A command you did not approve never runs, and one that did not pass keeps its place open until it does. A command you approve under the words of an earlier one takes its place.
 
 Where a row is seen in the work but only a run could show it, the picker asks: «Only a test can show this, and it has no command. OK as it is?». Yes keeps it a row, and a change can give it a command.
 

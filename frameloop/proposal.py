@@ -181,7 +181,8 @@ def tick(
     ticks it all as theirs, all of it under the watch's lock, so that nothing is read here that another hand changes
     before it is written. It writes only where the proposal and its examination are the bytes `seen` names, the
     digests the picker showed them by. A hold already ticked at that place is neither written twice nor counted as
-    new. Raises Refused, or machine.Locked before anything is read or written."""
+    new, and one proposed under the words of a hold already there takes its place. Raises Refused, or machine.Locked
+    before anything is read or written."""
     from frameloop import watch  # it reads the machine's files, so it is reached only when asked
 
     def write() -> watch.Wrote:
@@ -223,7 +224,8 @@ def _written(
     for item in items:
         _put(tree, frames, place, item)
     frame = frames[place]
-    frame["holds"] += [hold for hold in proposal["holds"] if hold not in frame["holds"]]
+    for hold in proposal["holds"]:
+        _hold(frame, hold)
     if proposal["split"] is not None:  # the crossing whole: the split above, and each part's own frame file
         frame["split"] = _split(place, proposal["split"], examination_shown(where, proposal, raw, exam)[0])
         for part in seen["split"]["parts"]:
@@ -231,7 +233,8 @@ def _written(
             frames.setdefault(at, copy.deepcopy(tree.frames.get(at) or claims.empty(at)))
             for item in part["items"]:
                 _put(tree, frames, at, item)
-            frames[at]["holds"] += [hold for hold in part["holds"] if hold not in frames[at]["holds"]]
+            for hold in part["holds"]:
+                _hold(frames[at], hold)
     after = claims.load(project, instead=frames)
     for each in sorted(set(frames) | set(tree.frames)):
         if each not in after.frames:
@@ -476,6 +479,15 @@ def _picked(proposal: dict, ticked: list[int], own: Optional[str], pick: Optiona
     if (own is None) == (pick is None) or (pick is not None and not 0 <= pick < len(proposal["options"])):
         raise Refused(words.PICK)
     return [{**items[0], "words": own if own is not None else proposal["options"][pick]["words"]}]
+
+
+def _hold(frame: dict, hold: dict) -> None:
+    """A proposal's hold put into a frame file. One already there under the same words gives way to it, where it
+    stood: a command approved anew takes the old one's place, so the file holds the rows the picker showed and no
+    second copy of them. A hold there as it stands is not written twice."""
+    rest = [each for each in frame["holds"] if each["words"] != hold["words"]]
+    at = next((n for n, each in enumerate(frame["holds"]) if each["words"] == hold["words"]), len(rest))
+    frame["holds"] = rest[:at] + [hold] + rest[at:]
 
 
 def _put(tree: claims.Tree, frames: dict, place: str, item: dict) -> None:

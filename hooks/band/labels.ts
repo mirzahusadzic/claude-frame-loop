@@ -86,6 +86,8 @@ export const LABELS = {
     y: 'yes, fine',
     enter: 'enter',
     choose: 'confirm or change',
+    change: 'change this row',
+    changeAll: 'change it all',
     confirm: 'confirm',
     send: 'send your change',
     build: 'build it',
