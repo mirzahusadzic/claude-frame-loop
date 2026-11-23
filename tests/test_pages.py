@@ -4,6 +4,7 @@ must not be told wrong."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -231,6 +232,19 @@ class PagesTests(unittest.TestCase):
             elif line.strip():
                 self.assertLessEqual(run, LONGEST_RUN, line)
                 run = 0
+
+    def test_a_release_is_named_by_one_version_wherever_it_is_named(self):
+        """The version stands in the manifest, in the citation file and on the README's status badge: whichever of
+        them a reader meets says the same."""
+        version = json.loads((ROOT / ".claude-plugin" / "plugin.json").read_text("utf-8"))["version"]
+        self.assertRegex(version, r"^\d+\.\d+\.\d+$")
+        cited = re.findall(r"^version: (\S+)$", (ROOT / "CITATION.cff").read_text("utf-8"), re.M)
+        self.assertEqual(cited, [version])
+        badges = re.findall(
+            r"!\[([^\]]*)\]\(https://img\.shields\.io/badge/status-([^)]*)\)",
+            (ROOT / "README.md").read_text("utf-8"),
+        )
+        self.assertEqual(badges, [(f"alpha {version}", f"alpha%20{version}-e5a50a")])
 
 
 if __name__ == "__main__":

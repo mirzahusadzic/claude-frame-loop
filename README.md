@@ -6,7 +6,7 @@
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
 ![macOS · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-lightgrey)
-![alpha](https://img.shields.io/badge/status-alpha-e5a50a)
+![alpha 0.3.0](https://img.shields.io/badge/status-alpha%200.3.0-e5a50a)
 
 A Claude Code plugin that holds what you asked for against what was built.
 
