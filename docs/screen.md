@@ -6,7 +6,7 @@ What you see of frame-loop: the picker in a pane of its own, its keys, the one l
 
 ### The standard
 
-What the tool shows and says follows [clig.dev](https://clig.dev), so a person, a script and another model read it alike. These rules hold on every part of the screen.
+What the tool shows and says is written so that a person, a script and another model read it alike. These rules hold on every part of the screen.
 
 - **Plain words.** Passed, missing, not sure, not seen, extra, the check. The picker says "row", never "claim".
 - **Nothing of yours is cut.** A row you wrote stands whole wherever it is shown. The tool shortens only its own words, and then says how to see the rest.
