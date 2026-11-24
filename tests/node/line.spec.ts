@@ -83,7 +83,7 @@ test('while a run goes on: a spinner frame that moves each second, what runs, it
   const first = nowText({ ...NOW, maker: 0, records: 0, tokens: null, writer: 1 }, 1000)
   assert.equal(first, `${LABELS.spinner[0]} ${LABELS.name} · 0 ${LABELS.seconds} · 1 ${LABELS.spend.calls[0]} · checking 2 of 5`) // no tokens known: the calls
   assert.equal(nowText({ ...NOW, maker: 0, records: 0, tokens: null }, 1000), `${LABELS.spinner[0]} ${LABELS.name} · 0 ${LABELS.seconds} · checking 2 of 5`) // no naught
-  assert.match(nowText({ ...NOW, at: 1095 }, 1100), / · 1 m 40 s · /) // past a minute, in minutes
+  assert.ok(/ · 1 m 40 s · /.test(nowText({ ...NOW, at: 1095 }, 1100))) // past a minute, in minutes
   // what runs comes last, so a cut at the end of the line takes the quoted words and never a count
   const quoted = nowText({ ...NOW, said: 'checking 3 of 5: «A note longer than 200 characters is refused with a message.»' }, 1047)
   assert.equal(quoted, '⠧ frame-loop · 47 s · 8.2k tokens · checking 3 of 5: «A note longer than 200 characters is refused with a message.»')

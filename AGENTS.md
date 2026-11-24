@@ -94,7 +94,7 @@ python3 scripts/told.py > docs/told.md
 python3 scripts/frame_schema.py <frame.schema.json> <frame>...
 python3 scripts/measure.py <project folder> <maker> [--also "<words>"]
 python3 scripts/accounts.py <project folder>
-claude plugin validate .
+claude plugin validate . --strict --profile directory
 uvx ruff@0.17.4 check .
 uvx ruff@0.17.4 format --check .
 sh scripts/coverage.sh
@@ -112,7 +112,7 @@ hooks/hand.sh status
 | `python3 scripts/frame_schema.py` | Checks frames against Gadfly's own `midwife/frame.schema.json`, with no `jsonschema`; it refuses a schema keyword it does not read. Run it on the frames a real run leaves in `runs/`. |
 | `python3 scripts/measure.py` | For a maintainer, with the real maker and readers: each requirement the person approved in a project, owned by its work, with what changed kept on this machine, gets its step now from the maker named, one of `private-1`, `account-1` or `contributor-1`, and is checked against the kept accounts by the turn's end's own code, with the readers of the tier in force. It prints a line a requirement with each trial's answer, then the totals, the tier and the spend. `--also` checks a made-up one beside them. It checks whatever the switch says, and writes only into a folder of its own, which it names. |
 | `python3 scripts/accounts.py` | For a maintainer: each account of the rules that stand now kept for the project, its two tree ids in short, any notice's digest in short, how many lines it kept and dropped, and each dropped line with its fault. It calls no model and writes nothing. |
-| `claude plugin validate .` | Checks the manifest, the hooks and the band's module. |
+| `claude plugin validate . --strict --profile directory` | Checks the manifest, the hooks and the band's module with the plugin directory's checks, and fails on a warning. |
 | `uvx ruff@0.17.4 check .` | Checks every Python file under the rules in `ruff.toml`. |
 | `uvx ruff@0.17.4 format --check .` | Holds every Python file to Ruff's formatter without changing it. |
 | `sh scripts/coverage.sh` | Branch coverage of `frameloop/` under the whole suite, held to `fail_under = 100` in `.coveragerc`. It installs coverage in a venv of its own under `tests/.work/`, and needs `uv`. |

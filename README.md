@@ -154,7 +154,7 @@ python3 tests/run.py
 python3 tests/run.py reverse
 node --import ./tests/node/resolve.mjs --test 'tests/node/*.spec.ts'
 claude plugin test .
-claude plugin validate .
+claude plugin validate . --strict --profile directory
 python3 scripts/told.py > docs/told.md
 ```
 

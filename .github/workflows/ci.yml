@@ -88,6 +88,6 @@ jobs:
       - name: The band's plain tests
         run: node --import ./tests/node/resolve.mjs --test 'tests/node/*.spec.ts'
       - name: Validate, as the plugin directory does
-        run: claude plugin validate .
+        run: claude plugin validate . --strict --profile directory
       - name: The band's tests
         run: claude plugin test .
