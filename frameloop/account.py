@@ -550,8 +550,7 @@ def _files(project: Path, where: Path, before: str, after: str, old: str, new: s
     ).split("\0")
     found: dict = {}
     for status, path in zip(listed[0::2], listed[1::2]):
-        if path:
-            found.setdefault(KINDS.get(status[:1], "modified"), []).append(path)
+        found.setdefault(KINDS.get(status[:1], "modified"), []).append(path)
     return found
 
 

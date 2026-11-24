@@ -274,9 +274,6 @@ def _split(
             marks.append(_mark(item, "unread", words.mark_unread(words.NO_STEP)))
             return None
     parts = [(part, held) for part, held in sorted(lines.items()) if held]
-    if not parts:
-        marks.append(_mark(item, "unread", words.mark_unread(words.NO_PARTS)))
-        return None
     spans = [
         {"id": f"part{m}", "kind": "part", "text": words.part_line(part, held)}
         for m, (part, held) in enumerate(parts, 1)
@@ -336,10 +333,7 @@ def _contract(
     """A contract of a crossing against the claims of both its sides as the crossing lays them down: whether their
     lines keep it (true, false, or None for not settled), or "unread"."""
     own = {part["place"]: [each["words"] for each in part["items"]] for part in held["split"]["parts"]}
-    sides = [(side, own.get(side, [])) for side in [contract["provides"], *contract["depends"]]]
-    if not all(lines for _, lines in sides):
-        marks.append(_mark(n, "unread", words.mark_unread(words.NO_PARTS)))
-        return "unread"
+    sides = [(side, own[side]) for side in [contract["provides"], *contract["depends"]]]
     spans = [
         {"id": f"side{m}", "kind": "side", "text": words.part_line(side, lines)}
         for m, (side, lines) in enumerate(sides, 1)
