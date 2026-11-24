@@ -30,6 +30,14 @@ class HomeTests(unittest.TestCase):
         self.assertEqual(machine.home(), pinned_home.HOME)
         self.assertIn(pinned_home.HOME, machine.folder(Path("/made/up/shop")).parents)
 
+    def test_pythons_own_cache_may_be_written_wherever_python_is_installed(self):
+        """A Python a tool installed for the account lies in the home, and writes its modules' cache beside them."""
+        inside = os.path.join(pinned_home.HOMES[0], "made-up-tools", "python")
+        with mock.patch.object(pinned_home, "PYTHONS", (inside,)):
+            self.assertFalse(pinned_home.reached(os.path.join(inside, "lib", "__pycache__", "one.pyc"), True))
+            self.assertTrue(pinned_home.reached(os.path.join(inside, "lib", "one.py"), True))  # a module is no cache
+        self.assertTrue(pinned_home.reached(os.path.join(pinned_home.HOMES[0], "__pycache__", "one.pyc"), True))
+
     def test_a_pin_outside_this_repositorys_tests_is_not_followed(self):
         was = os.environ[machine.PIN]
         with tempfile.TemporaryDirectory() as outside:

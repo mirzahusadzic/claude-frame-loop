@@ -98,8 +98,18 @@ os.environ.update(
         "GIT_COMMITTER_NAME": "A Tester",
         "GIT_COMMITTER_EMAIL": "tester@example.invalid",
         "PATH": os.pathsep.join([str(FAKES), os.environ.get("PATH", "")]),
+        # git tidies a repository in a process of its own after a commit, and that process would drop a lock file
+        # under .git while a test looks at what the tool itself deletes there
+        "GIT_CONFIG_COUNT": "2",
+        "GIT_CONFIG_KEY_0": "maintenance.auto",
+        "GIT_CONFIG_VALUE_0": "false",
+        "GIT_CONFIG_KEY_1": "gc.auto",
+        "GIT_CONFIG_VALUE_1": "0",
     }
 )
+
+
+PYTHONS = tuple(sorted({os.path.realpath(each) for each in (sys.prefix, sys.base_prefix, sys.exec_prefix)}))
 
 
 def _under(path: str, folders: tuple) -> bool:
@@ -114,7 +124,14 @@ def reached(path: str, writes: bool) -> bool:
     in their home but this repository and the system's temporary folder."""
     if _under(path, GUARDED):
         return True
-    return writes and _under(path, HOMES) and not _under(os.path.realpath(path), WRITABLE)
+    return writes and _under(path, HOMES) and not _under(os.path.realpath(path), WRITABLE) and not _bytecode(path)
+
+
+def _bytecode(path: str) -> bool:
+    """Python's own cache of a module of its own installation, which may itself lie in the home, as one a tool
+    installed for the account does."""
+    real = os.path.realpath(path)
+    return "__pycache__" in Path(real).parts and _under(real, PYTHONS)
 
 
 def _writes(event: str, args: tuple) -> bool:

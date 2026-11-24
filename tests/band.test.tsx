@@ -393,6 +393,7 @@ test('a proposal changed under the open picker is checked again and shown as it 
   held.items[0].words = 'add keeps the note' // a shell, keeping the id, while the picker is open
   seen.files[path] = JSON.stringify(held)
   await clock.advance(1000)
+  await clock.advance(1000) // the check a tick starts ends in its own time: a second tick lets a slow machine finish it
   expect(verbs(seen).filter(v => v === 'examine')).toHaveLength(2)
   expect((await look($)).text).toContain('add keeps the note')
 })
