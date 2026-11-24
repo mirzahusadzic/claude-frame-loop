@@ -92,6 +92,7 @@ node --import ./tests/node/resolve.mjs --test 'tests/node/*.spec.ts'
 claude plugin test .
 python3 scripts/told.py > docs/told.md
 python3 scripts/frame_schema.py <frame.schema.json> <frame>...
+python3 scripts/with_gadfly.py
 python3 scripts/measure.py <project folder> <maker> [--also "<words>"]
 python3 scripts/accounts.py <project folder>
 claude plugin validate . --strict --profile directory
@@ -110,6 +111,7 @@ hooks/hand.sh status
 | `claude plugin test .` | The band's shell, `tests/band.test.tsx`, under the host's own kit. |
 | `python3 scripts/told.py > docs/told.md` | Makes the page again after any change to `words.py` or `labels.ts`. |
 | `python3 scripts/frame_schema.py` | Checks frames against Gadfly's own `midwife/frame.schema.json`, with no `jsonschema`; it refuses a schema keyword it does not read. Run it on the frames a real run leaves in `runs/`. |
+| `python3 scripts/with_gadfly.py` | Checks every kind of frame the tool sends with the installed Gadfly's `check-frame` and `plan`, and builds the kept battery in Gadfly's own Python. It calls no model, and needs `gadfly` on the path. |
 | `python3 scripts/measure.py` | For a maintainer, with the real maker and readers: each requirement the person approved in a project, owned by its work, with what changed kept on this machine, gets its step now from the maker named, one of `private-1`, `account-1` or `contributor-1`, and is checked against the kept accounts by the turn's end's own code, with the readers of the tier in force. It prints a line a requirement with each trial's answer, then the totals, the tier and the spend. `--also` checks a made-up one beside them. It checks whatever the switch says, and writes only into a folder of its own, which it names. |
 | `python3 scripts/accounts.py` | For a maintainer: each account of the rules that stand now kept for the project, its two tree ids in short, any notice's digest in short, how many lines it kept and dropped, and each dropped line with its fault. It calls no model and writes nothing. |
 | `claude plugin validate . --strict --profile directory` | Checks the manifest, the hooks and the band's module with the plugin directory's checks, and fails on a warning. |
@@ -163,9 +165,10 @@ The Python side is in `frameloop/`, one job a module; the band is in `hooks/band
 | `tests/bin/*.cmd`, `tests/bin/*.ps1` | The Windows path to the same stand-ins, through PowerShell so their arguments stay data. |
 | `scripts/told.py` | Prints the page of every sentence. |
 | `scripts/coverage.sh` | Runs the suite under branch coverage, the hooks' own processes included, and holds the floor in `.coveragerc`. |
-| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu and macOS. |
+| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu and macOS, and the installed Gadfly's own checks at the floor and at the newest, on Ubuntu. |
 | `scripts/measure.py` | Measures a maker against the work this machine keeps, through the turn's end's own `reading.body`, `reading.read` and `reading.Serving` and the examination's `examine.alone`. |
-| `tests/gadfly/frame.schema.json` | Gadfly 0.17.1's schema, copied whole; `tests/test_schema.py` holds every frame the stand-ins are given to it. Copy it again when the Gadfly floor moves. |
+| `scripts/with_gadfly.py` | Holds the frames, the schema copy and the kept battery against the installed Gadfly, with no model call. `tests/frames.py` gathers the frames for it and for the schema test. |
+| `tests/gadfly/frame.schema.json` | Gadfly 0.17.1's schema, copied whole; `tests/test_schema.py` holds every frame the stand-ins are given to it, and `scripts/with_gadfly.py` holds it byte for byte against the installed one at the floor. Copy it again when the Gadfly floor moves. |
 
 ---
 

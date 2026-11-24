@@ -91,3 +91,34 @@ jobs:
         run: claude plugin validate . --strict --profile directory
       - name: The band's tests
         run: claude plugin test .
+
+  gadfly:
+    name: Gadfly, ${{ matrix.which }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: "1"
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - which: the floor
+            midwife: "midwife==0.17.1"
+          - which: the newest
+            midwife: "midwife>=0.17.1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2  # v10.3.3
+        with:
+          python-version: "3.13"
+      - name: Git identity for the tests' own repositories
+        run: git config --global user.email ci@example.invalid && git config --global user.name ci
+      - name: Install Gadfly
+        run: uv tool install '${{ matrix.midwife }}'
+      - name: Gadfly version
+        run: gadfly --version
+      - name: Check the frames and the kept battery
+        run: uv run --no-project --python 3.13 python scripts/with_gadfly.py
