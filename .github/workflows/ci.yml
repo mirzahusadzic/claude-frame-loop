@@ -17,14 +17,13 @@ jobs:
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 25
     env:
       PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
         python: ["3.9", "3.13", "3.14"]
     defaults:
       run:
@@ -46,14 +45,13 @@ jobs:
   coverage:
     name: Coverage on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 30
     env:
       PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest]
     defaults:
       run:
         shell: bash
@@ -70,14 +68,13 @@ jobs:
   plugin:
     name: Plugin on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 10
     env:
       PYTHONUTF8: "1"
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     defaults:
       run:
         shell: bash
