@@ -191,7 +191,7 @@ A script keeps the same rule: the command line's `approve` refuses a row that wa
 A proposal in the picker is approved by no one yet, whether it is open, closed for now or waiting its turn. The tool says so to the session and to you.
 
 - **At every prompt** the session is told that nothing of it is approved, and to build nothing toward it.
-- **Files changed meanwhile are a failure.** The turn's end says so, as `failed: 2 files changed while proposal 1 waited in the picker, and nothing of it is approved`. A file with nothing in it is not counted.
+- **Files changed meanwhile are a failure.** The turn's end says so, as `Unapproved work: 2 files changed while proposal 1 waited in the picker, and nothing of it is approved`. A file with nothing in it is not counted.
 - **It is shown twice.** The same stands under the pane's header, and on the line above the prompt.
 - **It stays** until a proposal is approved or withdrawn, counting every file changed since.
 

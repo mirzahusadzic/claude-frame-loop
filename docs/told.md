@@ -154,8 +154,8 @@ frame-loop: the check could not run: {why}. It runs again at the next turn's end
 {n} against their prediction
 ready: nothing under the frame is open
 {paths} and {n} more
-failed: {files} changed while {proposals} waited in the picker, and nothing of it is approved
-frame-loop failed: {files} changed while {proposals} waited in the picker, and nothing of it is approved. Approve it there, or send the change you want.
+Unapproved work: {files} changed while {proposals} waited in the picker, and nothing of it is approved
+frame-loop: Unapproved work: {files} changed while {proposals} waited in the picker, and nothing of it is approved. Approve it there, or send the change you want.
 1 file
 {n} files
 proposal {ids}

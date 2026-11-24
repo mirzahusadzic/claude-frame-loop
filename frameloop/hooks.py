@@ -428,24 +428,39 @@ def stop(event: dict, project: Path) -> tuple:
 
 def _unapproved(seen: Seen, session: str, changed: list[str], now: str):
     """Files changed while the band's picker holds a proposal and nothing of it is approved, as its look before this
-    turn's end named them: those of this turn, but any with nothing in it, and those an earlier turn's end of this
-    session counted while one of the same proposals waited; with its sentence, the count, the proposals, and `new`
-    where this turn changed any. None where the picker holds none; AS_WAS where no band names what it holds."""
+    turn's end named them: those of this turn that changed after the earliest of those proposals was kept, or all of
+    this turn's where the work was not noted then, but any with nothing in it; and those an earlier turn's end of
+    this session counted while one of the same proposals waited. With its sentence, the count, the proposals, and
+    `new` where this turn changed any. None where the picker holds none; AS_WAS where no band names what it holds."""
     waits = watch.waiting(seen.where, session)
     if waits is None:
         return AS_WAS
     if not waits:
         return None
+    rows = _recorded(seen.where)
+    starts = [
+        (row.get("id"), row.get("tree"))
+        for row in rows
+        if row.get("event") == "proposal" and isinstance(row.get("tree"), str)
+    ]
     blank = set()
     try:
         blank = work.blank(seen.project, seen.where, seen.snap or now, changed) if changed else set()
     except work.GitFailed:  # git could not say what the files hold: each counts, as work
         pass
-    mine = [path for path in changed if path not in blank]
+    if all(any(ident == wait for ident, _ in starts) for wait in waits):
+        start = next(tree for ident, tree in starts if ident in waits)
+        try:
+            since = set(work.changed(seen.project, seen.where, start, now))
+        except work.GitFailed:  # the tree the proposal named is gone: count the change as before
+            since = set(changed)
+    else:  # a proposal kept before its tree was noted: count the change as before
+        since = set(changed)
+    mine = [path for path in changed if path not in blank and path in since]
     before = next(
         (
             row.get("unapproved")
-            for row in reversed(_recorded(seen.where))
+            for row in reversed(rows)
             if row.get("event") == "turn" and row.get("session") == session
         ),
         None,

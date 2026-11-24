@@ -1113,7 +1113,7 @@ test('a pane drawn but never given the keyboard: the band says ctrl+x tab answer
 
 test('files changed while a proposal waits: the failure stands under the pane’s header and in the band, until it is closed', async ($, on) => {
   const live = `${FOLDER}/live/s1.json`
-  const failed = 'frame-loop failed: 3 files changed while proposal p1 waited in the picker, and nothing of it is approved. Approve it there, or close it.'
+  const failed = 'frame-loop: Unapproved work: 3 files changed while proposal p1 waited in the picker, and nothing of it is approved. Approve it there, or close it.'
   const { seen, clock, propose, gone } = await world($, on)
   await propose()
   await $.classic.Stop({ stop_hook_active: false } as any) // each look names what the picker holds, none of it approved
@@ -1123,7 +1123,7 @@ test('files changed while a proposal waits: the failure stands under the pane’
   expect((await look($)).text).not.toContain('failed') // not a proposal of this picker's: nothing of it drawn
   seen.files[live] = JSON.stringify({ line: 'x', tension: { open: 0 }, at: 6, alert: failed, unapproved: { said: failed, files: 3, proposals: ['p1'] } })
   await clock.advance(1000)
-  expect((await look($)).lines[1]?.startsWith(' frame-loop failed: 3 files changed while proposal p1 waited')).toBe(true) // under the header
+  expect((await look($)).lines[1]?.startsWith(' frame-loop: Unapproved work: 3 files changed while proposal p1 waited')).toBe(true) // under the header
   expect((await peek($)).lines).toEqual([failed]) // and the band's alert
   await gone()
   expect((await peek($)).lines).toEqual([failed, `${LABELS.name} · ${LABELS.waiting} · ${LABELS.reopens}`])

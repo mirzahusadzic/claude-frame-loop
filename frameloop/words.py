@@ -226,10 +226,12 @@ SEP = " · "
 # Work done while the picker held a proposal and nothing of it was approved: a failure, first on the turn's line and
 # the band's alert, which stays until a proposal is approved or withdrawn at the person's word. The files are those
 # changed since it first waited.
-UNAPPROVED_WORK = "failed: {files} changed while {proposals} waited in the picker, and nothing of it is approved"
+UNAPPROVED_WORK = (
+    "Unapproved work: {files} changed while {proposals} waited in the picker, and nothing of it is approved"
+)
 UNAPPROVED_ALERT = (
-    "frame-loop failed: {files} changed while {proposals} waited in the picker, and nothing of it is approved. "
-    "Approve it there, or send the change you want."
+    "frame-loop: Unapproved work: {files} changed while {proposals} waited in the picker, and nothing of it is "
+    "approved. Approve it there, or send the change you want."
 )
 UNAPPROVED_FILE = "1 file"
 UNAPPROVED_FILES = "{n} files"

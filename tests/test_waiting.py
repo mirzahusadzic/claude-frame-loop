@@ -4,12 +4,16 @@ the band's alert, until no look names the proposal any more."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
+import io
 import json
+import os
 import unittest
+from unittest import mock
 
-from scene import Scene, unmade
+from scene import C, Scene, item, proposal, unmade
 
-from frameloop import words
+from frameloop import __main__ as command
+from frameloop import hooks, machine, watch, words, work
 
 
 class WaitingTests(unittest.TestCase):
@@ -34,6 +38,79 @@ class WaitingTests(unittest.TestCase):
 
     def line(self):
         return self.scene.by_hand("line", self.scene.session)[1]
+
+    def test_work_done_before_a_proposal_is_kept_is_not_counted_while_it_waits(self):
+        self.scene.hook("UserPromptSubmit", prompt="Just build it.")
+        self.scene.write("jot.py", "print('notes')\n")
+        ident = self.scene.propose(proposal("frame", "", [item(C)]))["id"]
+        self.looked(ident)
+        told = self.scene.ended()
+        self.assertNotIn("Unapproved work:", told)
+        self.assertIsNone(self.line()["unapproved"])
+        self.assertTrue(words.unapproved_work(1, ["4"]).startswith("Unapproved work:"))
+        self.assertIn("Unapproved work: 1 file", words.unapproved_alert(1, ["4"]))
+
+    def kept_with_no_work_noted(self, patched):
+        self.scene.hook("UserPromptSubmit", prompt="Just build it.")
+        self.scene.write("jot.py", "print('notes')\n")
+        file = self.scene.outside / "proposal.json"
+        file.write_text(json.dumps(proposal("frame", "", [item(C)])), "utf-8")
+        with (
+            patched,
+            mock.patch.object(os, "getcwd", return_value=str(self.scene.project)),
+            mock.patch.object(command.sys, "stdout", io.StringIO()) as out,
+        ):
+            self.assertEqual(command.main(["propose", str(file)]), 0)
+        ident = json.loads(out.getvalue())["id"]
+        self.looked(ident)
+        self.assertIn(words.unapproved_work(1, [ident]), self.scene.ended().splitlines()[0].split(words.SEP))
+
+    def test_a_proposal_is_kept_where_git_cannot_show_the_work_and_its_wait_counts_every_change(self):
+        self.kept_with_no_work_noted(mock.patch.object(work, "snapshot", side_effect=work.GitFailed()))
+
+    def test_a_proposal_is_kept_where_its_tree_cannot_be_noted_and_its_wait_counts_every_change(self):
+        noted = watch.kept
+
+        def refused(where, names, *more, rows=(), **named):
+            if any(row.get("event") == "proposal" for row in rows):
+                raise machine.Locked()
+            return noted(where, names, *more, rows=rows, **named)
+
+        self.kept_with_no_work_noted(mock.patch.object(watch, "kept", side_effect=refused))
+
+    def test_files_count_from_the_earliest_proposal_that_still_waits(self):
+        self.scene.hook("UserPromptSubmit", prompt="Just build it.")
+        self.scene.write("before.py", "x = 1\n")
+        first = self.scene.propose(proposal("frame", "", [item(C)]))["id"]
+        self.scene.write("after.py", "y = 2\n")
+        second = self.scene.propose(proposal("frame", "", [item(C)]))["id"]
+        self.looked(first, second)
+        told = self.scene.ended()
+        self.assertIn(words.unapproved_work(1, [first, second]), told.splitlines()[0].split(words.SEP))
+        self.assertEqual(self.line()["unapproved"]["files"], 1)
+
+    def test_a_proposal_kept_in_an_earlier_turn_counts_a_change_in_this_one(self):
+        self.scene.hook("UserPromptSubmit", prompt="Just build it.")
+        ident = self.scene.propose(proposal("frame", "", [item(C)]))["id"]
+        self.looked(ident)
+        self.assertNotIn("Unapproved work:", self.scene.ended())
+        self.scene.hook("UserPromptSubmit", prompt="Now add one.")
+        self.scene.write("jot.py", "print('notes')\n")
+        self.looked(ident)
+        told = self.scene.ended()
+        self.assertIn(words.unapproved_work(1, [ident]), told.splitlines()[0].split(words.SEP))
+        self.assertEqual(self.line()["unapproved"]["files"], 1)
+
+    def test_a_proposal_whose_tree_is_gone_counts_the_change_as_before(self):
+        self.scene.hook("UserPromptSubmit", prompt="Just build it.")
+        self.scene.write("jot.py", "print('notes')\n")
+        ident = self.scene.propose(proposal("frame", "", [item(C)]))["id"]
+        self.looked(ident)
+        seen = hooks.see(self.scene.project)
+        now = work.snapshot(self.scene.project, self.scene.where)
+        with mock.patch.object(hooks.work, "changed", side_effect=work.GitFailed()):
+            found = hooks._unapproved(seen, self.scene.session, ["jot.py"], now)
+        self.assertEqual(found["files"], 1)
 
     def test_files_changed_while_a_proposal_waits_are_a_failure_on_the_turns_line_and_the_bands_alert(self):
         def build():

@@ -97,7 +97,17 @@ def propose(file: Path, again: bool = False) -> int:
             },
             1,
         )
-    name, path = proposal.keep(machine.folder(project), held)
+    where = machine.folder(project)
+    try:  # the work as it stands, so that its wait counts only what changes after
+        tree = work.snapshot(project, where)
+    except (work.GitFailed, OSError):  # kept all the same, and its wait counts every change
+        tree = None
+    name, path = proposal.keep(where, held)
+    if tree:
+        try:
+            watch.kept(where, (), rows=({"event": "proposal", "id": name, "tree": tree},))
+        except (machine.Locked, OSError):  # kept all the same, and its wait counts every change
+            pass
     return _answer({"id": name, "path": str(path), "faults": [], "said": words.proposed(name)}, 0)
 
 
