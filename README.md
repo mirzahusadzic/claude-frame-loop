@@ -5,7 +5,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 ![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-d97757)
 ![Python 3.9+](https://img.shields.io/badge/python-3.9%2B%20%C2%B7%20stdlib%20only-3776ab?logo=python&logoColor=white)
-![macOS · Linux · Windows](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-lightgrey)
+![macOS · Linux](https://img.shields.io/badge/platform-macOS%20%C2%B7%20Linux-lightgrey)
 ![pre-release alpha 0.3.0](https://img.shields.io/badge/status-pre--release%20alpha%200.3.0-e5a50a)
 
 A Claude Code plugin that holds what you asked for against what was built.
@@ -61,9 +61,9 @@ From your sentence to the block, it goes in this order. Steps 3 and 6 call model
 
 ### Install
 
-It needs Claude Code with hooks modules, `git`, and Python 3.9 or later on the path: `python3` or `python`, and `py -3` on Windows. Everything else is Python's standard library.
+It needs Claude Code with hooks modules, `git`, and Python 3.9 or later on the path, as `python3` or `python`. Everything else is Python's standard library.
 
-It runs on macOS, Linux and Windows. It has not been loaded in a session on Windows yet.
+It runs on macOS and Linux.
 
 Install it from its marketplace, at a Claude Code prompt:
 
@@ -146,7 +146,6 @@ The check is the newer part. It is strict, and it can fail a row the work meets,
 ### Develop
 
 The tests use stand-ins and temporary homes alone. They need no network and no model, and the module's plain tests need Node 22.18 or later.
-The commands below use `python3`; on Windows, run the same files with `py -3` or `python`.
 
 The first three run the suite, forwards and backwards, and the module's plain tests. The next two run the module under the host's own test kit and check the manifest. The last makes the page of everything the tool says:
 

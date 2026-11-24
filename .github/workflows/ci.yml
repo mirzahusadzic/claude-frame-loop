@@ -17,6 +17,7 @@ jobs:
   test:
     name: Python ${{ matrix.python }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 25
     env:
       PYTHONUTF8: "1"
@@ -45,6 +46,7 @@ jobs:
   coverage:
     name: Coverage on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 30
     env:
       PYTHONUTF8: "1"
@@ -68,6 +70,7 @@ jobs:
   plugin:
     name: Plugin on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}  # a Windows job runs, and does not decide the run
     timeout-minutes: 10
     env:
       PYTHONUTF8: "1"

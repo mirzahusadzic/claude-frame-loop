@@ -163,7 +163,7 @@ The Python side is in `frameloop/`, one job a module; the band is in `hooks/band
 | `tests/bin/*.cmd`, `tests/bin/*.ps1` | The Windows path to the same stand-ins, through PowerShell so their arguments stay data. |
 | `scripts/told.py` | Prints the page of every sentence. |
 | `scripts/coverage.sh` | Runs the suite under branch coverage, the hooks' own processes included, and holds the floor in `.coveragerc`. |
-| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu, macOS and Windows. |
+| `.github/workflows/ci.yml` | The pipeline: the lint, the format, the suites and the host's kit, on Ubuntu, macOS and Windows. A Windows job runs and does not decide the run. |
 | `scripts/measure.py` | Measures a maker against the work this machine keeps, through the turn's end's own `reading.body`, `reading.read` and `reading.Serving` and the examination's `examine.alone`. |
 | `tests/gadfly/frame.schema.json` | Gadfly 0.17.1's schema, copied whole; `tests/test_schema.py` holds every frame the stand-ins are given to it. Copy it again when the Gadfly floor moves. |
 
