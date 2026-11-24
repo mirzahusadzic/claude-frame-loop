@@ -238,7 +238,10 @@ class PagesTests(unittest.TestCase):
             r"!\[([^\]]*)\]\(https://img\.shields\.io/badge/status-([^)]*)\)",
             (ROOT / "README.md").read_text("utf-8"),
         )
-        self.assertEqual(badges, [(f"alpha {version}", f"alpha%20{version}-e5a50a")])
+        self.assertEqual(len(badges), 1)
+        named, drawn = badges[0]
+        self.assertIn(named, (f"alpha {version}", f"pre-release alpha {version}"))  # after its release, and before
+        self.assertEqual(drawn, named.replace("-", "--").replace(" ", "%20") + "-e5a50a")
 
 
 if __name__ == "__main__":
