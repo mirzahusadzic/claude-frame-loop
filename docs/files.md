@@ -41,7 +41,7 @@ The folder is `~/.frame/loop/claude/<name>-<hash>/`. The name is your repository
 
 - **Your own folder.** `~` is your own folder as the system's record of your account gives it, never the `HOME` variable. So a project's settings cannot move the folder by setting `HOME`.
 - **Windows.** The account profile is read through Windows itself. New machine folders carry an ACL for that account alone, where macOS and Linux use their own folder mode.
-- **No write through a link.** Every folder on the way is made by the tool as a real folder, and a link, junction or Windows reparse point on the way refuses the write whole.
+- **No write through a link.** On macOS and Linux, the tool opens each folder on the way once and keeps it for the read, make, write, rename or remove, so a folder swapped for a link is not followed. Windows keeps its reparse-point-safe handles and account ACL, and a link, junction or reparse point on the way refuses the write whole.
 - **A repository that holds it.** A repository that holds the machine folder itself, as one at your own folder would, is stood aside from. Your approvals there could arrive by a pull.
 - **Another version.** `~/.frame/claude` is apart from it, and this version neither reads nor writes there.
 

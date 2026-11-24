@@ -269,6 +269,78 @@ class OpenTests(unittest.TestCase):
             self.assertEqual(held.tell(), len("made up\n"))
 
 
+@unittest.skipIf(os.name == "nt", "folder descriptors and links are held in their POSIX forms")
+class FolderTests(unittest.TestCase):
+    def descriptors(self) -> int:
+        return len(os.listdir("/dev/fd"))
+
+    def test_a_folder_walk_keeps_the_descriptor_it_checked_and_closes_every_one(self):
+        with tempfile.TemporaryDirectory() as folder:
+            top = Path(folder)
+            (top / "one" / "two").mkdir(parents=True)
+            (top / "file").write_text("plain\n", "utf-8")
+            before = self.descriptors()
+            with host.open_folder(top, top / "one" / "two") as held:
+                self.assertTrue(stat.S_ISDIR(os.fstat(held).st_mode))
+            self.assertEqual(self.descriptors(), before)
+            with self.assertRaises(FileNotFoundError):
+                with host.open_folder(top, top / "one" / "missing"):
+                    pass
+            self.assertEqual(self.descriptors(), before)
+            with host.open_folder(top, top / "made" / "deep", make=True, mode=lambda _path: 0o700):
+                pass
+            self.assertTrue((top / "made" / "deep").is_dir())
+            with host.open_folder(top, top / "plain", make=True):
+                pass
+            self.assertTrue((top / "plain").is_dir())
+            self.assertEqual(self.descriptors(), before)
+
+            (top / "link").symlink_to(top / "one", target_is_directory=True)
+            with self.assertRaises(host.NotPlain) as refused:
+                with host.open_folder(top, top / "link" / "two"):
+                    pass
+            self.assertEqual(refused.exception.kind, "linked")
+            self.assertEqual(self.descriptors(), before)
+
+            with host.open_folder(top, top) as held:
+                with self.assertRaises(host.NotPlain) as final:
+                    host.open_read("link", False, dir_fd=held)
+                self.assertEqual(final.exception.kind, "link")
+            self.assertEqual(self.descriptors(), before)
+
+    def test_a_missing_folder_made_by_another_hand_is_opened_without_following_it(self):
+        with tempfile.TemporaryDirectory() as folder:
+            top = Path(folder)
+            before = self.descriptors()
+            with (
+                mock.patch.object(host.os, "mkdir", side_effect=FileExistsError),
+                self.assertRaises(FileNotFoundError),
+            ):
+                with host.open_folder(top, top / "missing", make=True):
+                    pass
+            self.assertEqual(self.descriptors(), before)
+        with mock.patch.object(host.os, "open", side_effect=PermissionError):
+            with self.assertRaises(PermissionError):
+                with host.open_folder(Path("/top"), Path("/top/one")):
+                    pass
+
+    def test_each_write_and_remove_uses_the_folder_descriptor(self):
+        with tempfile.TemporaryDirectory() as folder:
+            top = Path(folder)
+            before = self.descriptors()
+            with host.open_folder(top, top / "held", make=True) as held:
+                host.write_new("beside", "one\n", dir_fd=held)
+                host.replace("beside", "done", src_dir_fd=held, dst_dir_fd=held)
+                host.append_text("done", "two\n", dir_fd=held)
+                self.assertEqual(host.stat_at(held, "done").st_size, 8)
+                host.unlink_at(held, "done")
+                self.assertFalse((top / "held" / "done").exists())
+                host.write_new("from", "made\n", dir_fd=held)
+                host.new_file("from", "to", False, src_dir_fd=held, dst_dir_fd=held)
+                self.assertEqual((top / "held" / "to").read_text("utf-8"), "made\n")
+            self.assertEqual(self.descriptors(), before)
+
+
 class LockTests(unittest.TestCase):
     def test_the_posix_lock_branch_is_an_exclusive_non_blocking_flock(self):
         fcntl = types.SimpleNamespace(flock=mock.Mock(), LOCK_EX=2, LOCK_NB=4)

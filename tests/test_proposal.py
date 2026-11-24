@@ -805,18 +805,27 @@ class WriterTests(unittest.TestCase):
         folder = machine.folders(scene.where / machine.PROPOSALS)
         stale = folder / f".{os.getpid()}.new"
         stale.write_text("left by a process that died", "utf-8")
-        write, new_file, calls = host.write_text, host.new_file, []
+        write, new_file, calls = host.write_new, host.new_file, []
 
-        def counted(path, text):
+        def counted(path, text, **more):
             calls.append(path)
             if len(calls) > 3:
                 raise RuntimeError("the writer went round on a stale file")
-            write(path, text)
+            write(path, text, **more)
 
-        with mock.patch.object(host, "write_text", counted):
+        with mock.patch.object(host, "write_new", counted):
             ident, _ = proposal_.keep(scene.where, proposal("frame", "", [item(C)]))
         self.assertEqual((ident, len(calls)), ("1", 1))
-        with mock.patch.object(host, "new_file", lambda beside, path: new_file(beside, path, True)):
+
+        def moved(beside, path, **more):
+            if more:
+                os.rename(
+                    beside, path, src_dir_fd=more["src_dir_fd"], dst_dir_fd=more["dst_dir_fd"]
+                )  # Windows puts the new file in place by a rename
+            else:
+                new_file(beside, path, True)
+
+        with mock.patch.object(host, "new_file", moved):
             ident, path = proposal_.keep(scene.where, proposal("frame", "", [item(D)]))
         self.assertEqual(ident, "2")
         self.assertTrue(path.is_file())

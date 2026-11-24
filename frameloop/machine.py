@@ -16,7 +16,7 @@ import os
 import re
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Iterator, Optional
 
@@ -307,22 +307,23 @@ def tail(where: Path, limit: int = 0) -> list[dict]:
     of it stays bounded however long it has grown."""
     limit = limit or LOG_TAIL
     try:
-        if claims.plain_kind(home_of(where), where / LOG) is not None:
-            return []
-        with open(where / LOG, "rb") as handle:
-            size = handle.seek(0, os.SEEK_END)
-            handle.seek(max(0, size - limit))
-            text = handle.read(limit).decode("utf-8", "replace")
-    except OSError:
+        raw = claims.plain_bytes(home_of(where), where / LOG, limit + 1, last=True)  # one more, to know of more
+    except (OSError, claims.NotPlain):
         return []
-    lines = text.split("\n")[1:] if size > limit else text.split("\n")
+    text = raw[-limit:].decode("utf-8", "replace")
+    lines = text.split("\n")[1:] if len(raw) > limit else text.split("\n")
     return [row for row in map(_row, lines) if row is not None]
 
 
 def trim_log(where: Path) -> None:
     """Keeps the log within LOG_BYTES: past them, its last LOG_TAIL bytes of rows are written whole in its place."""
     try:
-        if (where / LOG).stat().st_size <= LOG_BYTES:
+        if host.WINDOWS:
+            size = (where / LOG).stat().st_size
+        else:
+            with host.open_folder(home_of(where), where) as folder:
+                size = host.stat_at(folder, LOG).st_size
+        if size <= LOG_BYTES:
             return
     except OSError:
         return
@@ -453,8 +454,8 @@ def _session_file(session: str) -> Path:
 
 def live(where: Path, session: str) -> dict:
     try:
-        held = claims.strict(_live(where, session).read_text("utf-8"))
-    except (OSError, ValueError, RecursionError):
+        held = claims.strict(mine(where, f"{LIVE}/{_live(where, session).name}", RECORD_BYTES).decode("utf-8"))
+    except (OSError, ValueError, RecursionError, claims.NotPlain, claims.TooLarge):
         return {}
     return held if isinstance(held, dict) else {}
 
@@ -512,8 +513,12 @@ def _locked(where: Path) -> Iterator[None]:
     """One hook at a time reads and writes the watch: calls made side by side start their hooks together. The lock
     is waited for LOCK_SECONDS at most, and a lock file that is a link or a pipe is never waited on."""
     try:
-        folders(where)
-        handle = host.open_lock(where / LOCK)
+        if host.WINDOWS:
+            folders(where)
+            handle = host.open_lock(where / LOCK)
+        else:
+            with _folder(where, home()) as folder:
+                handle = host.open_lock(LOCK, dir_fd=folder)
     except OSError as error:
         raise Locked() from error
     try:
@@ -547,6 +552,25 @@ def folders(path: Path, top: Optional[Path] = None) -> Path:
     that is none of a link's: one that is a link, or no folder, raises Linked, so no write follows a link planted in
     the machine folder or the frame's. Gives the path."""
     top = top if top is not None else home()
+    if not host.WINDOWS:
+        with _folder(path, top):
+            pass
+        return path
+    return _folders_whole(path, top)
+
+
+@contextmanager
+def _folder(path: Path, top: Path, make: bool = True) -> Iterator[int]:
+    """A checked folder descriptor from `top`, its refusal in the machine's own words."""
+    try:
+        with host.open_folder(top, path, make=make, mode=lambda at: _folder_mode(at, home())) as folder:
+            yield folder
+    except host.NotPlain as refused:
+        raise Linked(str(path)) from refused
+
+
+def _folders_whole(path: Path, top: Path) -> Path:
+    """The Windows path: each folder looked at and made by its whole name, as it stood before the POSIX walk."""
     owner = home()
     at = top
     for part in path.relative_to(top).parts:
@@ -562,6 +586,11 @@ def folders(path: Path, top: Optional[Path] = None) -> Path:
             raise Linked(str(at))
         _restrict(at, host.under(at, owner), owner)
     return path
+
+
+def _folder_mode(path: Path, owner: Path) -> int:
+    """A new folder under the account's home is private; a project's own folders keep the system's mode."""
+    return 0o700 if host.under(path, owner) else 0o777
 
 
 def _restrict(path: Path, private: bool, owner: Path) -> None:
@@ -588,9 +617,13 @@ def waited(where: Path, name: str, until: float, waiting=None) -> Iterator[None]
     """A lock of the tool's own in the machine folder, waited for until `until` (time.monotonic) at most, for work
     that takes longer than the watch's lock may be held; `waiting` is called each time round while it waits. Raises
     Locked where it cannot be had by then."""
-    folders(where)
     try:
-        handle = host.open_lock(where / name)
+        if host.WINDOWS:
+            folders(where)
+            handle = host.open_lock(where / name)
+        else:
+            with _folder(where, home()) as folder:
+                handle = host.open_lock(name, dir_fd=folder)
     except OSError as error:
         raise Locked() from error
     try:
@@ -615,15 +648,72 @@ def waited(where: Path, name: str, until: float, waiting=None) -> Iterator[None]
 def write_whole(path: Path, text: str, top: Optional[Path] = None) -> None:
     """Writes a file whole, so no reader meets half of it: written beside it under a name of its own, then moved;
     its folders made from `top` as `folders` makes them, the home where none is given."""
-    folders(path.parent, top)
     beside = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.new")
-    host.write_text(beside, text)
-    host.replace(beside, path)
+    top = top if top is not None else home()
+    if host.WINDOWS:
+        folders(path.parent, top)
+        host.write_text(beside, text)
+        host.replace(beside, path)
+        return
+    with _folder(path.parent, top) as folder:
+        host.write_new(beside.name, text, dir_fd=folder)
+        host.replace(beside.name, path.name, src_dir_fd=folder, dst_dir_fd=folder)
+
+
+def names(path: Path, top: Optional[Path] = None) -> list[str]:
+    """The names in a folder, read from the descriptor held for the folder that was checked, never through another
+    folder swapped into its place."""
+    top = top if top is not None else home()
+    if host.WINDOWS:
+        return os.listdir(folders(path, top))
+    with _folder(path, top) as folder:
+        return os.listdir(folder)
+
+
+def write_new(path: Path, text: str, top: Optional[Path] = None) -> None:
+    """Text kept whole at a name no other writer has, from the folder descriptor held through the write and link."""
+    top = top if top is not None else home()
+    beside = path.with_name(f".{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.new")
+    if host.WINDOWS:
+        folders(path.parent, top)
+        host.write_text(beside, text)
+        try:
+            host.new_file(beside, path)
+        finally:
+            with suppress(FileNotFoundError):
+                beside.unlink()
+        return
+    with _folder(path.parent, top) as folder:
+        host.write_new(beside.name, text, dir_fd=folder)
+        try:
+            host.new_file(beside.name, path.name, src_dir_fd=folder, dst_dir_fd=folder)
+        finally:
+            with suppress(FileNotFoundError):
+                host.unlink_at(folder, beside.name)
+
+
+def remove(path: Path, top: Optional[Path] = None) -> None:
+    """A file of the tool's own removed from the folder descriptor held for its parent, or left where it is absent."""
+    top = top if top is not None else home()
+    try:
+        if host.WINDOWS:
+            path.unlink(missing_ok=True)
+        else:
+            with _folder(path.parent, top, make=False) as folder:
+                with suppress(FileNotFoundError):
+                    host.unlink_at(folder, path.name)
+    except FileNotFoundError:
+        pass
 
 
 def _append(path: Path, row: dict) -> None:
-    folders(path.parent)
-    host.append_text(path, json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    text = json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n"
+    if host.WINDOWS:
+        folders(path.parent)
+        host.append_text(path, text)
+        return
+    with _folder(path.parent, home()) as folder:
+        host.append_text(path.name, text, dir_fd=folder)
 
 
 def _rows(where: Path, name: str) -> list[dict]:

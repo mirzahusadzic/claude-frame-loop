@@ -72,20 +72,30 @@ def plain_kind(top: Path, path: Path) -> Optional[str]:
     return host.kind(os.lstat(path))
 
 
-def plain_bytes(top: Path, path: Path, limit: int) -> bytes:
+def plain_bytes(top: Path, path: Path, limit: int, last: bool = False) -> bytes:
     """A file's bytes, read only where it is a plain file lying in `top` through folders that are no links, and no
-    larger than `limit`: a link, a folder, a pipe, a device or a socket is never opened, and nothing waits on one."""
-    kind = plain_kind(top, path)
-    if kind is not None:
-        raise NotPlain(kind)
-    try:
-        handle = host.open_read(path)
-    except host.NotPlain as refused:
-        raise NotPlain(refused.kind) from None
+    larger than `limit`: a link, a folder, a pipe, a device or a socket is never opened, and nothing waits on one.
+    With `last`, a larger file gives its last `limit` bytes, and nothing before them is read."""
+    if host.WINDOWS:
+        kind = plain_kind(top, path)
+        if kind is not None:
+            raise NotPlain(kind)
+        try:
+            handle = host.open_read(path)
+        except host.NotPlain as refused:
+            raise NotPlain(refused.kind) from None
+    else:
+        try:
+            with host.open_folder(top, path.parent) as folder:
+                handle = host.open_read(path.name, dir_fd=folder)
+        except host.NotPlain as refused:
+            raise NotPlain(refused.kind) from None
     try:
         kind = host.kind(os.fstat(handle))  # the path may have been swapped since it was looked at
         if kind is not None:
             raise NotPlain(kind)
+        if last:
+            os.lseek(handle, max(0, os.fstat(handle).st_size - limit), os.SEEK_SET)
         chunks, size = [], 0
         while size <= limit:
             chunk = os.read(handle, min(1 << 16, limit + 1 - size))
@@ -95,9 +105,9 @@ def plain_bytes(top: Path, path: Path, limit: int) -> bytes:
             size += len(chunk)
     finally:
         os.close(handle)
-    if size > limit:
+    if size > limit and not last:
         raise TooLarge()
-    return b"".join(chunks)
+    return b"".join(chunks)[:limit] if last else b"".join(chunks)
 
 
 class Twice(ValueError):

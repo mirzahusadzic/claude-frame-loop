@@ -4,6 +4,7 @@ the frame above it, is left out whole with one sentence saying why."""
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,7 +13,7 @@ from unittest import mock
 import link
 from scene import STEP, Scene, claim, contract, frame, hole, pair, split, under
 
-from frameloop import claims, words
+from frameloop import claims, host, words
 
 C = "Requests are counted per client and reset each day."
 D = "Each count goes back to nought at midnight."
@@ -47,6 +48,52 @@ class FormTests(unittest.TestCase):
             with mock.patch.object(claims.host, "open_read", side_effect=claims.host.NotPlain("link")):
                 with self.assertRaises(claims.NotPlain):
                     claims.plain_bytes(top, path, 100)
+
+    def test_windows_frame_reads_keep_the_whole_path_form(self):
+        with tempfile.TemporaryDirectory(dir=(Path(__file__).parent / ".work").resolve()) as folder:
+            top, path = Path(folder), Path(folder) / "frame.json"
+            path.write_text("plain\n", "utf-8")
+            with (
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(host, "_win_open", side_effect=lambda name, *_more: os.open(name, os.O_RDONLY)),
+            ):
+                self.assertEqual(claims.plain_bytes(top, path, 100), b"plain\n")
+
+    def test_a_windows_read_refused_by_the_whole_path_says_what_it_met(self):
+        with mock.patch.object(host, "WINDOWS", True):
+            with mock.patch.object(claims, "plain_kind", return_value="link"):
+                with self.assertRaises(claims.NotPlain) as found:
+                    claims.plain_bytes(Path("/top"), Path("/top/frame.json"), 100)
+            with (
+                mock.patch.object(claims, "plain_kind", return_value=None),
+                mock.patch.object(host, "open_read", side_effect=host.NotPlain("link")),
+            ):
+                with self.assertRaises(claims.NotPlain) as refused:
+                    claims.plain_bytes(Path("/top"), Path("/top/frame.json"), 100)
+        self.assertEqual((found.exception.args, refused.exception.args), (("link",), ("link",)))
+
+    @unittest.skipIf(os.name == "nt", "a folder swap needs a link the POSIX test account can make")
+    def test_a_folder_swapped_before_a_frame_read_is_not_followed(self):
+        with tempfile.TemporaryDirectory(dir=(Path(__file__).parent / ".work").resolve()) as folder:
+            top, outside = Path(folder) / "top", Path(folder) / "outside"
+            (top / "one" / "two").mkdir(parents=True)
+            (outside / "two").mkdir(parents=True)
+            path = top / "one" / "two" / "frame.json"
+            path.write_text("inside\n", "utf-8")
+            (outside / "two" / "frame.json").write_text("behind\n", "utf-8")
+            opened, switched = host.os.open, [False]
+
+            def swap_then_open(name, flags, mode=0o777, *, dir_fd=None):
+                if not switched[0] and not flags & os.O_DIRECTORY:
+                    (top / "one").rename(top / "original")
+                    (top / "one").symlink_to(outside, target_is_directory=True)
+                    switched[0] = True
+                if dir_fd is None:
+                    return opened(name, flags, mode)
+                return opened(name, flags, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(host.os, "open", side_effect=swap_then_open):
+                self.assertEqual(claims.plain_bytes(top, path, 100), b"inside\n")
 
     def test_a_frame_in_its_form_is_taken_whole(self):
         tree = shop(Scene(self))

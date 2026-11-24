@@ -1411,7 +1411,7 @@ def asked_alone(where: Path, asked: dict, deadline: float) -> tuple[dict, dict, 
     )
     steps = made(where, records)
     if ran is None:  # calls made, every one an opening, and no step: the maker gave none
-        return {}, steps, None if not steps and _opened(records) else why, folder
+        return {}, steps, None if not steps and _opened(where, records) else why, folder
     said, why, _ = _gadfly(["report", str(folder / "frame.json"), str(records), "--json"], deadline)
     if said is None:
         return {}, steps, why, folder
@@ -1536,10 +1536,11 @@ def made(where: Path, records: Path) -> dict:
     return found
 
 
-def _opened(records: Path) -> bool:
+def _opened(where: Path, records: Path) -> bool:
     try:
-        return any(line.strip() for line in records.read_text("utf-8").splitlines())
-    except OSError:
+        text = machine.mine(where, records.relative_to(where).as_posix(), machine.RECORD_BYTES).decode("utf-8")
+        return any(line.strip() for line in text.splitlines())
+    except (OSError, ValueError, claims.NotPlain, claims.TooLarge):
         return False
 
 

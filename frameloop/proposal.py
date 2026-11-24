@@ -15,14 +15,10 @@ and an examination's steps and marks are kept by that number. A crossing is tick
 
 from __future__ import annotations
 
-import contextlib
 import copy
 import hashlib
 import json
-import os
 import re
-import threading
-import time
 from pathlib import Path
 from typing import NamedTuple, Optional
 
@@ -103,18 +99,14 @@ def keep(where: Path, proposal: dict) -> tuple[str, Path]:
     from frameloop import watch  # it reads the machine's files, so it is reached only when asked
 
     folder = machine.folders(where / machine.PROPOSALS)
-    taken = [int(match.group(1)) for match in map(NAMED.fullmatch, os.listdir(folder)) if match]
+    taken = [int(match.group(1)) for match in map(NAMED.fullmatch, machine.names(folder)) if match]
     number = max(taken, default=0) + 1
 
     def link(number: int) -> None:
         # a name no other writer has, so one a dead process left is never taken for a proposal that took the id
-        beside = folder / f".{os.getpid()}.{threading.get_ident()}.{time.time_ns()}.new"
-        host.write_text(beside, json.dumps({**proposal, "id": str(number)}, ensure_ascii=False, indent=1) + "\n")
-        try:
-            host.new_file(beside, folder / f"{number}.json")  # fails where another propose took the id first
-        finally:
-            with contextlib.suppress(FileNotFoundError):  # on Windows the new file is this one, renamed
-                beside.unlink()
+        machine.write_new(  # fails where another propose took the id first
+            folder / f"{number}.json", json.dumps({**proposal, "id": str(number)}, ensure_ascii=False, indent=1) + "\n"
+        )
 
     while True:
         try:

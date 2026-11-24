@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -106,6 +107,95 @@ class HomeTests(unittest.TestCase):
             ):
                 machine._restrict(Path("/outside-the-home"), True, home)
             kept.assert_not_called()
+
+    def test_windows_record_writes_and_appends_keep_their_whole_path_forms(self):
+        with tempfile.TemporaryDirectory(dir=(TESTS / ".work").resolve()) as folder:
+            top = Path(folder)
+            path = top / "records" / "file"
+
+            def win_open(name, _access, creation, flags):
+                extra = (
+                    os.O_CREAT | (os.O_EXCL if creation == host.CREATE_NEW else 0)
+                    if creation != host.OPEN_EXISTING
+                    else 0
+                )
+                return os.open(name, flags | extra, 0o666)
+
+            with (
+                mock.patch.object(machine, "home", return_value=top),
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(host, "restrict"),
+                mock.patch.object(host, "_win_open", side_effect=win_open),
+            ):
+                machine.write_whole(path, "whole\n", top)
+                machine.write_new(top / "records" / "new", "new\n", top)
+                machine._append(top / "records" / "log", {"row": 1})
+                self.assertEqual(sorted(machine.names(top / "records")), ["file", "log", "new"])
+                machine.remove(top / "records" / "new", top)
+                machine.remove(top / "records" / "gone", top)
+                machine.log(top / "machine", {"row": 1})
+                machine.trim_log(top / "machine")
+            self.assertEqual(path.read_text("utf-8"), "whole\n")
+            self.assertFalse((top / "records" / "new").exists())
+            self.assertEqual((top / "records" / "log").read_text("utf-8"), '{"row": 1}\n')
+            self.assertEqual((top / "machine" / machine.LOG).read_text("utf-8"), '{"row": 1}\n')
+
+    def test_windows_locks_keep_their_whole_path_forms(self):
+        with tempfile.TemporaryDirectory(dir=(TESTS / ".work").resolve()) as folder:
+            top, where = Path(folder), Path(folder) / "machine"
+            held = [os.open(os.devnull, os.O_RDWR), os.open(os.devnull, os.O_RDWR)]
+            with (
+                mock.patch.object(machine, "home", return_value=top),
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(machine, "folders") as made,
+                mock.patch.object(host, "open_lock", side_effect=[*held, OSError(), OSError()]) as opened,
+                mock.patch.object(host, "lock"),
+                mock.patch.object(host, "unlock"),
+            ):
+                with machine._locked(where):
+                    pass
+                with machine.waited(where, machine.READING_LOCK, time.monotonic() + 1):
+                    pass
+                with self.assertRaises(machine.Locked):
+                    with machine._locked(where):
+                        pass
+                with self.assertRaises(machine.Locked):
+                    with machine.waited(where, machine.READING_LOCK, time.monotonic() + 1):
+                        pass
+            self.assertEqual(
+                opened.call_args_list,
+                [mock.call(where / machine.LOCK), mock.call(where / machine.READING_LOCK)] * 2,
+            )
+            self.assertEqual(made.call_args_list, [mock.call(where)] * 4)
+
+    @unittest.skipIf(os.name == "nt", "the POSIX walk is checked here")
+    def test_removing_a_file_whose_folder_is_gone_does_nothing(self):
+        with tempfile.TemporaryDirectory(dir=(TESTS / ".work").resolve()) as folder:
+            top = Path(folder)
+            machine.remove(top / "gone" / "file", top)
+
+    @unittest.skipIf(os.name == "nt", "a folder swap needs a link the POSIX test account can make")
+    def test_a_folder_swapped_before_a_write_is_not_followed(self):
+        with tempfile.TemporaryDirectory(dir=(TESTS / ".work").resolve()) as folder:
+            top, outside = Path(folder) / "top", Path(folder) / "outside"
+            (top / "one" / "two").mkdir(parents=True)
+            (outside / "two").mkdir(parents=True)
+            path = top / "one" / "two" / "file"
+            opened, switched = host.os.open, [False]
+
+            def swap_then_open(name, flags, mode=0o777, *, dir_fd=None):
+                if not switched[0] and not flags & os.O_DIRECTORY:
+                    (top / "one").rename(top / "original")
+                    (top / "one").symlink_to(outside, target_is_directory=True)
+                    switched[0] = True
+                if dir_fd is None:
+                    return opened(name, flags, mode)
+                return opened(name, flags, mode, dir_fd=dir_fd)
+
+            with mock.patch.object(host.os, "open", side_effect=swap_then_open):
+                machine.write_whole(path, "kept\n", top)
+            self.assertFalse((outside / "two" / "file").exists())
+            self.assertEqual((top / "original" / "two" / "file").read_text("utf-8"), "kept\n")
 
     def test_a_reach_into_the_persons_own_folders_fails_the_test(self):
         for guarded in pinned_home.GUARDED:

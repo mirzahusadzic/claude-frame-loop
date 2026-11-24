@@ -206,8 +206,8 @@ def snapshot(project: Path, scratch: Path) -> str:
         _keep_hidden(project, scratch, tree, hidden, objects)
         return tree
     finally:
-        mine.unlink(missing_ok=True)
-        Path(f"{mine}.lock").unlink(missing_ok=True)
+        machine.remove(mine)
+        machine.remove(Path(f"{mine}.lock"))
 
 
 def _reveal(project: Path, indexed: dict) -> None:

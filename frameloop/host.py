@@ -8,6 +8,7 @@ handle, a byte lock, the process's true state, its system tools, and an ACL, or 
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import ntpath
 import os
@@ -18,7 +19,7 @@ import struct
 import subprocess
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Iterator, Optional
 
 try:  # only the Windows forms call into the system: macOS and Linux run on a Python built without ctypes too
     import ctypes
@@ -241,17 +242,69 @@ def _win_open(path: Path, access: int, creation: int, flags: int) -> int:
         raise
 
 
-def open_read(path: Path, windows: Optional[bool] = None) -> int:
+@contextlib.contextmanager
+def open_folder(
+    top: Path,
+    path: Path,
+    make: bool = False,
+    mode: Optional[Callable[[Path], int]] = None,
+) -> Iterator[int]:
+    """A folder opened from `top`, one name at a time, without following a link on the way: each name is opened
+    relative to the folder before it, and `make` makes a missing one there. Gives its descriptor."""
+    held = None
+    at = top
+    try:
+        held = _open_folder(top)
+        for part in path.relative_to(top).parts:
+            parent, held = held, None
+            try:
+                at = at / part
+                try:
+                    held = _open_folder(part, parent)
+                except FileNotFoundError:
+                    if not make:
+                        raise
+                    try:
+                        os.mkdir(part, mode(at) if mode is not None else 0o777, dir_fd=parent)
+                    except FileExistsError:
+                        pass
+                    held = _open_folder(part, parent)
+            finally:
+                os.close(parent)
+        yield held
+    finally:
+        if held is not None:
+            os.close(held)
+
+
+def _open_folder(name, parent: Optional[int] = None) -> int:
+    """One folder by its name, relative to a parent where there is one; a link or no folder is NotPlain."""
+    try:
+        return os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
+    except OSError as error:
+        if error.errno in (errno.ELOOP, errno.ENOTDIR):
+            raise NotPlain("linked") from None
+        raise
+
+
+def open_read(path: Path, windows: Optional[bool] = None, dir_fd: Optional[int] = None) -> int:
     """A plain file opened for reading, never following a link at its own name; anything else raises NotPlain."""
     if not _windows(windows):
-        return os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        more = {} if dir_fd is None else {"dir_fd": dir_fd}
+        try:
+            return os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, **more)
+        except OSError as error:
+            if dir_fd is not None and error.errno in (errno.ELOOP, errno.ENOTDIR):
+                raise NotPlain("link") from None
+            raise
     return _win_open(path, GENERIC_READ, OPEN_EXISTING, os.O_RDONLY)
 
 
-def open_lock(path: Path, windows: Optional[bool] = None) -> int:
+def open_lock(path: Path, windows: Optional[bool] = None, dir_fd: Optional[int] = None) -> int:
     """A lock file opened as a plain file, made where absent, and never through a link at its own name."""
     if not _windows(windows):
-        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600)
+        more = {} if dir_fd is None else {"dir_fd": dir_fd}
+        return os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o600, **more)
     fd = _win_open(path, GENERIC_READ | GENERIC_WRITE, OPEN_ALWAYS, os.O_RDWR)
     try:
         if os.lseek(fd, 0, os.SEEK_END) == 0:
@@ -263,10 +316,11 @@ def open_lock(path: Path, windows: Optional[bool] = None) -> int:
     return fd
 
 
-def open_append(path: Path, windows: Optional[bool] = None) -> int:
+def open_append(path: Path, windows: Optional[bool] = None, dir_fd: Optional[int] = None) -> int:
     """A plain file opened to append, made where absent, and never through a link, pipe or device at its own name."""
     if not _windows(windows):
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o666)
+        more = {} if dir_fd is None else {"dir_fd": dir_fd}
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW | os.O_NONBLOCK, 0o666, **more)
     else:
         fd = _win_open(path, FILE_APPEND_DATA, OPEN_ALWAYS, os.O_WRONLY | os.O_APPEND)
     try:
@@ -279,10 +333,11 @@ def open_append(path: Path, windows: Optional[bool] = None) -> int:
     return fd
 
 
-def write_new(path: Path, text: str, windows: Optional[bool] = None) -> None:
+def write_new(path: Path, text: str, windows: Optional[bool] = None, dir_fd: Optional[int] = None) -> None:
     """Text put at a new name, never through a link that is already there."""
     if not _windows(windows):
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666)
+        more = {} if dir_fd is None else {"dir_fd": dir_fd}
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o666, **more)
     else:
         fd = _win_open(path, GENERIC_WRITE, CREATE_NEW, os.O_WRONLY)
     try:
@@ -425,12 +480,22 @@ def stop(pid: int, windows: Optional[bool] = None) -> None:
     raise OSError("tree")
 
 
-def replace(beside: Path, path: Path, windows: Optional[bool] = None) -> None:
+def replace(
+    beside: Path,
+    path: Path,
+    windows: Optional[bool] = None,
+    src_dir_fd: Optional[int] = None,
+    dst_dir_fd: Optional[int] = None,
+) -> None:
     """A written file moved into place whole; Windows tries again while a reader or scanner briefly holds it."""
     attempt = 0
+    more = {
+        **({"src_dir_fd": src_dir_fd} if src_dir_fd is not None else {}),
+        **({"dst_dir_fd": dst_dir_fd} if dst_dir_fd is not None else {}),
+    }
     while True:
         try:
-            os.replace(beside, path)
+            os.replace(beside, path, **more)
             return
         except PermissionError:
             if not _windows(windows) or attempt == 4:
@@ -439,12 +504,32 @@ def replace(beside: Path, path: Path, windows: Optional[bool] = None) -> None:
             time.sleep(0.02)
 
 
-def new_file(beside: Path, path: Path, windows: Optional[bool] = None) -> None:
+def new_file(
+    beside: Path,
+    path: Path,
+    windows: Optional[bool] = None,
+    src_dir_fd: Optional[int] = None,
+    dst_dir_fd: Optional[int] = None,
+) -> None:
     """A written file put at a new name whole and without replacing one already there."""
     if _windows(windows):
         os.rename(beside, path)
     else:
-        os.link(beside, path)
+        more = {
+            **({"src_dir_fd": src_dir_fd} if src_dir_fd is not None else {}),
+            **({"dst_dir_fd": dst_dir_fd} if dst_dir_fd is not None else {}),
+        }
+        os.link(beside, path, **more)
+
+
+def unlink_at(folder: int, name: str) -> None:
+    """One name removed from the folder its descriptor holds, never through a folder swapped into the path."""
+    os.unlink(name, dir_fd=folder)
+
+
+def stat_at(folder: int, name: str) -> os.stat_result:
+    """A name's own state in the folder its descriptor holds, never following the name as a link."""
+    return os.stat(name, dir_fd=folder, follow_symlinks=False)
 
 
 def write_text(path: Path, text: str) -> None:
@@ -452,9 +537,9 @@ def write_text(path: Path, text: str) -> None:
     write_new(path, text)
 
 
-def append_text(path: Path, text: str) -> None:
+def append_text(path: Path, text: str, dir_fd: Optional[int] = None) -> None:
     """UTF-8 text appended with LF line ends on every system."""
-    fd = open_append(path)
+    fd = open_append(path, dir_fd=dir_fd)
     with os.fdopen(fd, "a", encoding="utf-8", newline="\n") as handle:
         handle.write(text)
 

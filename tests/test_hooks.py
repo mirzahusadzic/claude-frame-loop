@@ -450,6 +450,25 @@ class GrowthTests(unittest.TestCase):
         landed = told(scene.hook("UserPromptSubmit", prompt="Made up."))
         self.assertNotIn(words.foreign(machine.LOG, words.WHEN_SINCE), landed)  # trimmed by the tool: no change of it
         self.assertIn(words.LANDED, landed)  # and the rows it kept are still the hooks' own
+
+    def test_the_logs_tail_reads_its_last_bytes_and_none_before_them(self):
+        scene = shop(Scene(self), on=False)
+        scene.turn(lambda: None)
+        for n in range(50):
+            machine.log(scene.where, {"row": n, "pad": "x" * 100})
+        self.assertGreater((scene.where / machine.LOG).stat().st_size, 4096)
+        read, plain = [], os.read
+
+        def counted(handle, n):
+            chunk = plain(handle, n)
+            read.append(len(chunk))
+            return chunk
+
+        with mock.patch.object(os, "read", side_effect=counted):
+            rows = [row["row"] for row in machine.tail(scene.where, 1024) if "row" in row]
+        self.assertEqual(rows[-1], 49)
+        self.assertLess(len(rows), 50)  # the tail alone, its first torn row passed over
+        self.assertLessEqual(sum(read), 1025)
         scene.session = "killed-session"
         scene.hook("PreToolUse", tool_name="Bash", tool_use_id="never-back", tool_input={})
         scene.session = "a-made-up-session"
