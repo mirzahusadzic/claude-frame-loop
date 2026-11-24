@@ -49,8 +49,8 @@ Two more names are the tool's own, and neither is a setting ([Repository guide](
 
 | Name | Used as |
 | --- | --- |
-| `FRAME_LOOP_GROUND_IN_HOOK` | Set by the hooks' launcher for every hook and the commands it starts, so that approving and switching refuse there |
-| `FRAME_LOOP_GROUND_TESTS_HOME` | The test suite's own home, followed only to a folder the suite made and marked |
+| `FRAME_LOOP_IN_HOOK` | Set by the hooks' launcher for every hook and the commands it starts, so that approving and switching refuse there |
+| `FRAME_LOOP_TESTS_HOME` | The test suite's own home, followed only to a folder the suite made and marked |
 
 `HOME` is never used to find the tool's records. Your own folder is taken from the system's record of your account: the account database or, on Windows, the account profile.
 
@@ -58,6 +58,6 @@ Two more names are the tool's own, and neither is a setting ([Repository guide](
 
 ### Where the record is kept
 
-Each project has one folder of the tool's own, outside the project: `~/.frame/ground/claude/<name>-<hash>/`. The name comes from the repository's top folder's name, and the hash from its full path.
+Each project has one folder of the tool's own, outside the project: `~/.frame/loop/claude/<name>-<hash>/`. The name comes from the repository's top folder's name, and the hash from its full path.
 
 The rows you approve lie in your repository instead, under `.frame/`. [The files](files.md) has every file, where it lies and who writes each.

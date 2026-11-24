@@ -24,7 +24,7 @@ TESTS = Path(__file__).resolve().parent
 sys.path.insert(0, str(TESTS.parent))
 WRITABLE = (str(TESTS.parent), os.path.realpath(tempfile.gettempdir()), *filter(None, [sys.pycache_prefix]))
 
-PIN = "FRAME_LOOP_GROUND_TESTS_HOME"  # machine.PIN, named again so the pin is set before frame-loop is imported
+PIN = "FRAME_LOOP_TESTS_HOME"  # machine.PIN, named again so the pin is set before frame-loop is imported
 
 
 def _real_home() -> Path:

@@ -100,7 +100,7 @@ What you see of the tool ([the screen](screen.md)).
 
 What the tool keeps on this computer, and where ([the files](files.md)).
 
-- **The machine folder.** The tool's folder for one project, outside the project, under `~/.frame/ground/claude/`.
+- **The machine folder.** The tool's folder for one project, outside the project, under `~/.frame/loop/claude/`.
 - **A snapshot.** The project as it stood at a prompt or a turn's end, kept in a store of the tool's own.
 - **The work.** What changed between two snapshots at a row's place. A check is held against that, never against the session's word.
 - **The watch.** The tool's record of the files it decides by. It tells a change made by another hand.

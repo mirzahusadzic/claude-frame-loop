@@ -23,10 +23,10 @@ from typing import Iterator, Optional
 from frameloop import approval, claims, host
 
 TESTS = Path(__file__).resolve().parent.parent / "tests"
-PIN = "FRAME_LOOP_GROUND_TESTS_HOME"
+PIN = "FRAME_LOOP_TESTS_HOME"
 SUITE_MARK = ".made-by-the-suite"  # tests/pinned_home.py writes it in each home it makes
 # Apart from the installed plugin's ~/.frame/claude, whose switch and log mean other things, until this replaces it.
-MACHINE = (".frame", "ground", "claude")
+MACHINE = (".frame", "loop", "claude")
 SWITCH, READINGS, LOG, WATCH, LOCK = "switch", "readings.jsonl", "log.jsonl", "watch.json", "watch.lock"
 SWITCH_TEXT = {True: "on\n", False: "off\n"}
 LAST = "holds.json"  # the last result of each hold and contract check that did not hold, by its key
@@ -43,7 +43,7 @@ RECORD_BYTES = 64 << 20  # a record of the machine folder is read up to this, an
 LOCK_SECONDS = 2  # what a hook waits for the watch's lock, well inside the shortest limit hooks/hooks.json gives
 # run.sh sets this in each hook's environment, so its children have it too. It is no setting: only the person's
 # own hand reads it, to refuse to write ticks or the switch from inside a hook.
-IN_HOOK = "FRAME_LOOP_GROUND_IN_HOOK"
+IN_HOOK = "FRAME_LOOP_IN_HOOK"
 WINDOWS_NAMES = {
     "con",
     "prn",

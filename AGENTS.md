@@ -206,7 +206,7 @@ What a frame file and a step hold, how the makers, accounts and tiers are kept a
 
 #### The machine folder
 
-The machine folder is `~/.frame/ground/claude/<name>-<hash16>/`, apart from `~/.frame/claude`, which the releases before 0.3 used and this one leaves alone.
+The machine folder is `~/.frame/loop/claude/<name>-<hash16>/`, apart from `~/.frame/claude`, which the releases before 0.3 used and this one leaves alone.
 
 | File | Holds | Written by |
 | --- | --- | --- |
@@ -226,8 +226,8 @@ The machine folder is `~/.frame/ground/claude/<name>-<hash16>/`, apart from `~/.
 | `watch.lock`, `reading.lock` | The watch's system lock, held 2 s at most; and the reading's, held while a turn's end makes accounts and readings. Never deleted. | The hooks |
 | `watch.json` | The chain: each event's entry, the files' states, the calls out, what counts as the person's, and the digests of the last 4096 log rows the hooks wrote, kept apart from the entries. A look's entry keeps under `waiting` the session and the proposals its picker held. | The hooks, and the person's own hand |
 | `objects/` | The snapshots' git objects, beside the project's own. | The hooks |
-| `~/.frame/ground/claude/<name>-<hash16>-measure-<n>/` | A measure's own folder beside the project's: copies of `snapshots`, `starts.json` and the current `accounts/`, a store whose alternate is the project's `objects/`, and the runs of its maker and readers. One a run, counted up from 1. | `scripts/measure.py` |
-| `~/.frame/ground/claude/sessions/<session id>.json` | The projects a session has worked in, latest last. | The hooks |
+| `~/.frame/loop/claude/<name>-<hash16>-measure-<n>/` | A measure's own folder beside the project's: copies of `snapshots`, `starts.json` and the current `accounts/`, a store whose alternate is the project's `objects/`, and the runs of its maker and readers. One a run, counted up from 1. | `scripts/measure.py` |
+| `~/.frame/loop/claude/sessions/<session id>.json` | The projects a session has worked in, latest last. | The hooks |
 | `drafts/<session id>.json`, in the host's data folder for this plugin | The fields of the session's last proposal, for `propose` to read. Written over, and never deleted. | The band |
 | The host's store, `word:<folder>` | The person's word: the text of `approved.json` and of the switch as the band's own last write answered them. | The band, at the person's press or typed command |
 | The host's store, `kept-digests:<folder>` | The digests the band's first witness kept, read once to take the word from the copies. | Nothing |
@@ -286,7 +286,7 @@ hooks/hand.sh switch on|off
 | `approve` | Writes the ticked items as open claims at the proposal's place, with all its holds and its split, and ticks all of it as the person's, only where the files are still the bytes `--shown` names; with no `--shown` it writes nothing. With the check on, it refuses any claim it would write that has no step the tool's own examination made (`proposal._checked`), but for options. It answers `{"written": [paths], "approved": <count of new ticks>, "said", "word"}`, where `said` is the person's own sentence naming all they approved. |
 | `switch` | Answers `{"switch": "on" or "off", "said", "word"}`. |
 
-- **Where both refuse.** `approve` and `switch` refuse inside a hook, since `hooks/run.sh` exports `FRAME_LOOP_GROUND_IN_HOOK` and every command a hook runs inherits it. They also refuse while a call is out on the machine.
+- **Where both refuse.** `approve` and `switch` refuse inside a hook, since `hooks/run.sh` exports `FRAME_LOOP_IN_HOOK` and every command a hook runs inherits it. They also refuse while a call is out on the machine.
 - **A call let go.** A call whose later hook never comes, as one denied or stopped, is let go at its session's next prompt after that turn's end, or after an hour. `hooks/hand.sh` neither sets nor clears the mark.
 - **Reframe:** an item with `old` replaces the claim of those words. The holes about it follow it, its openings are let go, and the parts that quote it are carried to the new words and ticked again.
 - **Whole:** the band approves every item at once, `--ticked` naming them all. A script that sends `--ticked ""` names no item, so nothing is written, and `said` says no item is ticked.

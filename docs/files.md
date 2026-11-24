@@ -11,7 +11,7 @@ Three places hold what the tool keeps. Only the first is part of your repository
 | Where | Holds | In your repository |
 | --- | --- | --- |
 | `.frame/` at the top of your repository | The frame files: the rows you approved, place by place | Yes: git sees them as any other file |
-| `~/.frame/ground/claude/<name>-<hash>/` | The machine folder: proposals, snapshots, the check's records, and copies of your word | No |
+| `~/.frame/loop/claude/<name>-<hash>/` | The machine folder: proposals, snapshots, the check's records, and copies of your word | No |
 | The host's own store and data folder | Your word, and the session's last proposal | No |
 
 The tool never commits, and writes nothing into your `.git`. Its snapshots go to a store of its own, which reads your repository's objects and adds none.
@@ -37,7 +37,7 @@ The rows you approve are written into your repository at your approval, one file
 
 ### Where the machine folder lies
 
-The folder is `~/.frame/ground/claude/<name>-<hash>/`. The name is your repository's top folder's name in lower case, each run of other characters made a `-`, or `project` where nothing is left. The hash is the first 16 characters of the SHA-256 of that folder's full path.
+The folder is `~/.frame/loop/claude/<name>-<hash>/`. The name is your repository's top folder's name in lower case, each run of other characters made a `-`, or `project` where nothing is left. The hash is the first 16 characters of the SHA-256 of that folder's full path.
 
 - **Your own folder.** `~` is your own folder as the system's record of your account gives it, never the `HOME` variable. So a project's settings cannot move the folder by setting `HOME`.
 - **Windows.** The account profile is read through Windows itself. New machine folders carry an ACL for that account alone, where macOS and Linux use their own folder mode.
@@ -109,8 +109,8 @@ Four more things lie beside the folder or with the host, never in your repositor
 
 | Place | Holds | Written by |
 | --- | --- | --- |
-| `~/.frame/ground/claude/sessions/<session id>.json` | The last eight projects a session has worked in | The hooks |
-| `~/.frame/ground/claude/<name>-<hash>-measure-<n>/` | A maintainer's measurement, in a folder of its own | `scripts/measure.py` |
+| `~/.frame/loop/claude/sessions/<session id>.json` | The last eight projects a session has worked in | The hooks |
+| `~/.frame/loop/claude/<name>-<hash>-measure-<n>/` | A maintainer's measurement, in a folder of its own | `scripts/measure.py` |
 | `drafts/<session id>.json`, in the host's data folder for this plugin | The fields of a session's last proposal | The module |
 | The host's own store | Your word: your approvals and your switch | The module, at your press or your command |
 

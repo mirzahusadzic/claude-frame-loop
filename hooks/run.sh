@@ -16,7 +16,7 @@ normal() {
 }
 here=$(cd "$(dirname "$(normal "$0")")/.." && pwd) || exit 0
 # The hook's mark, which its children inherit: the person's own hand refuses to write ticks or the switch under it.
-export FRAME_LOOP_GROUND_IN_HOOK=1
+export FRAME_LOOP_IN_HOOK=1
 # The session's tier goes to Python by name; that name, and no other setting, chooses it.
 recent() {
   "$1" -I -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null
