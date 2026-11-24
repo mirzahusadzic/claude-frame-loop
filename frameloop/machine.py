@@ -224,8 +224,10 @@ def keep_reading(
     place and of each place across a contract from it, the outcome, the trials in short, and its evidence: the
     folder of its runs and the digest of their records. The reading calls it, and tests through scene.keep; a row
     counts only as reading.stands holds it."""
-    if outcome not in OUTCOMES or predicts not in claims.PREDICTS:
+    if outcome not in OUTCOMES:
         raise ValueError(outcome)
+    if predicts not in claims.PREDICTS:
+        raise ValueError(predicts)
     from frameloop import watch
 
     row = {

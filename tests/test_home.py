@@ -284,6 +284,15 @@ class HomeTests(unittest.TestCase):
                 late.append(path.name)
         self.assertEqual(late, [])
 
+    def test_a_reading_with_no_outcome_or_prediction_is_refused(self):
+        scene = Scene(self)
+        with self.assertRaises(ValueError) as refused:
+            machine.keep_reading(scene.where, "cid", "step", "fulfilled", None, {}, "made-up", [], "runs/1", "0" * 64)
+        self.assertEqual(str(refused.exception), "made-up")
+        with self.assertRaises(ValueError) as refused:
+            machine.keep_reading(scene.where, "cid", "step", "invented", None, {}, "rests", [], "runs/1", "0" * 64)
+        self.assertEqual(str(refused.exception), "invented")
+
 
 if __name__ == "__main__":
     unittest.main()
