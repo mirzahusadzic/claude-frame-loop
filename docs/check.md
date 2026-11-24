@@ -118,9 +118,11 @@ Three kinds of model are asked, and each sees only the part its job needs. So no
 
 | Who | Is sent | Gives back |
 | --- | --- | --- |
-| The writer | The change, with known secrets cut; never your rows | The account |
-| The maker | One row's words alone | A step: what the row's words must mean, what must be shown, what would show it unmet |
-| The readers | The step, the account and the row; never the code | `yes`, `no` or `unclear` |
+| The writer | The change, with known secrets cut and hidden content left out; never your rows | The account |
+| The maker | One row's words alone, and its turned-around form made by code | A step: what the row's words must mean, what must be shown, what would show it unmet |
+| The readers | The row, its step, the account and notice lines, and the changed file names; never the code | `yes`, `no` or `unclear` |
+
+After the writer answers, a form check in code reads its numbered lines, the cut change, the changed file names and the rows at the place. It sends nothing, and keeps or drops each line.
 
 Gadfly runs the trials and keeps their records, and reading kept records again costs no model call. [Privacy](privacy.md#what-leaves-the-machine) has which model stands behind each name in each tier.
 

@@ -234,7 +234,7 @@ def refused(project: Path, where: Path, before: str, after: str) -> Optional[str
         return None
     try:
         old, new = _objects(project, where, before, after)
-        diff = _git(project, where, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", old, new)
+        diff = _diff(project, where, before, after, old, new)
     except work.GitFailed:
         return None  # make says why
     sent, cut = screen.cut(diff)
@@ -252,7 +252,7 @@ def make(
         return held, None
     try:
         old, new = _objects(project, where, before, after)
-        diff = _git(project, where, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", old, new)
+        diff = _diff(project, where, before, after, old, new)
         files = _files(project, where, before, after, old, new)
     except work.GitFailed:  # a submodule's commits are not in the store, and nothing else is to be had of them
         return None, words.GIT_UNSHOWN
@@ -345,11 +345,7 @@ def noticed(
     if screen.secret_in(notice):
         return None, words.secret(screen.secret_in(notice))
     try:
-        diff = (
-            _git(project, where, "diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", before, after)
-            if before != after
-            else ""
-        )
+        diff = _diff(project, where, before, after, before, after) if before != after else ""
         files = _files(project, where, before, after, before, after) if before != after else {}
     except work.GitFailed:
         return None, words.GIT_UNSHOWN
@@ -522,13 +518,36 @@ def _objects(project: Path, where: Path, before: str, after: str) -> tuple[str, 
     return tuple(blank if side == nothing else side.split(":", 1)[-1] for side in (before, after))
 
 
+def _diff(project: Path, where: Path, before: str, after: str, old: str, new: str) -> str:
+    """The change between two objects as git stores it, less every path a snapshot recorded as hidden under a rule the
+    repository does not hold at either end. A hidden file that is a place of its own has no change to give."""
+    hidden = set().union(*(work.hidden(where, side) for side in (before, after, old, new)))
+    if "" in hidden:
+        return ""
+    flags = ["diff", "--no-ext-diff", "--no-textconv", "--no-renames", "--no-color", old, new]
+    if hidden:
+        flags += ["--", *(f":(top,exclude,literal){path}" for path in sorted(hidden))]
+    return _git(project, where, *flags)
+
+
 def _files(project: Path, where: Path, before: str, after: str, old: str, new: str) -> dict:
     """The paths the change touched, by code, each under what it did: added, deleted or modified; for a place that is
     a file, the place itself, named by the empty path."""
     if (old, new) != (before, after):
         nothing = empty(project, where)
         return {"added" if before == nothing else "deleted" if after == nothing else "modified": [""]}
-    listed = _git(project, where, "diff", "--name-status", "--no-renames", "-z", old, new).split("\0")
+    listed = _git(
+        project,
+        where,
+        "diff",
+        "--no-ext-diff",
+        "--no-textconv",
+        "--name-status",
+        "--no-renames",
+        "-z",
+        old,
+        new,
+    ).split("\0")
     found: dict = {}
     for status, path in zip(listed[0::2], listed[1::2]):
         if path:

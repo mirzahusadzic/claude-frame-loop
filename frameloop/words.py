@@ -200,6 +200,8 @@ OPENED_ACROSS = "{places} opened across contract {id} until its check holds"
 CONTRACT_NO_CHECK = "contract {id} has no check yet, though work stands on both its sides"
 UNTICKED = "{n} not ticked by the person, so not run"
 UNCOVERED = "files nobody asked for: {paths}"
+HIDDEN_CHANGED_ONE = "1 file hidden by a local ignore rule changed; its content was not read"
+HIDDEN_CHANGED = "{n} files hidden by a local ignore rule changed; their content was not read"
 UNLIKE = "not as the person ticked it: {place}, where {drift}"
 LEFT_OUT = "left out, so nothing in it is read or run but the person's own holds: {files}"
 STILL = "frame-loop: no work changed since the last turn's end"
@@ -1174,6 +1176,8 @@ TOLD = (
             CONTRACT_NO_CHECK,
             UNTICKED,
             UNCOVERED,
+            HIDDEN_CHANGED_ONE,
+            HIDDEN_CHANGED,
             UNLIKE,
             LEFT_OUT,
             STILL,
@@ -1635,6 +1639,12 @@ def not_read(why: str, n: int) -> str:
     if why in NOT_READ:
         return NOT_READ[why].format(n=n)
     return CHECK_FAILED.format(n=n, why=why) if failed_check(why) else NOT_READ_WHY.format(n=n, why=why)
+
+
+def hidden_changed(n: int) -> str:
+    """How many changed files were hidden under a rule the repository does not keep, and that their content was not
+    read."""
+    return HIDDEN_CHANGED_ONE if n == 1 else HIDDEN_CHANGED.format(n=n)
 
 
 def failed_check(why: str) -> bool:

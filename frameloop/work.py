@@ -20,6 +20,7 @@ from frameloop import claims, host, machine, now
 
 LINK = "120000"  # the mode git gives a symbolic link
 OBJECTS = "objects"  # the store of the tool's snapshots, in the machine folder
+HIDDEN = "hidden"  # the paths a snapshot holds though git hides them, by the tree or blob git gives them
 GITLINK = "160000"  # the mode git gives a submodule, and the snapshot a repository of its own under the project
 LINGER_SECONDS = 0.2  # what a command's output is waited for once the command has ended
 GIT_SECONDS = 20  # a clean filter or a lock can hold git forever, and a hook past its time gives no answer at all
@@ -201,7 +202,9 @@ def snapshot(project: Path, scratch: Path) -> str:
             _must(
                 git(project, "update-index", "--add", "--cacheinfo", f"{GITLINK},{head.strip()},{name}", more=indexed)
             )
-        return _without_frame(project, objects, _must(git(project, "write-tree", more=indexed)).strip())
+        tree = _without_frame(project, objects, _must(git(project, "write-tree", more=indexed)).strip())
+        _keep_hidden(project, scratch, tree, hidden, objects)
+        return tree
     finally:
         mine.unlink(missing_ok=True)
         Path(f"{mine}.lock").unlink(missing_ok=True)
@@ -273,6 +276,52 @@ def _hidden(project: Path, indexed: dict) -> tuple[list[str], list[str]]:
         for each in under:
             (nested if each.endswith("/") and _repository(project / each) else found).append(each.rstrip("/"))
     return found, nested
+
+
+def _keep_hidden(project: Path, where: Path, tree: str, names: list[str], objects: dict) -> None:
+    """Keeps the paths a snapshot holds though a rule the repository does not hold hides them, by each tree or blob
+    git gives them. The root names a path from the top; a folder's name the path within it; a hidden file itself is
+    marked by its blob, so a change in a place that is only that file has no content to give."""
+    if not names:
+        return
+    entries = [
+        entry for entry in _must(git(project, "ls-tree", "-r", "-t", "-z", tree, more=objects)).split("\0") if entry
+    ]
+    folders, files = {}, {}
+    for entry in entries:
+        meta, path = entry.split("\t", 1)
+        mode, kind, oid = meta.split(" ")
+        if kind == "tree":
+            folders[path] = oid
+        elif kind == "blob":
+            files[path] = mode, oid
+    found: dict[str, set[str]] = {}
+    for name in names:
+        held = files.get(name)
+        if held is None:
+            continue
+        _, oid = held
+        found.setdefault(tree, set()).add(name)
+        found.setdefault(oid, set()).add("")
+        parts = name.split("/")
+        for n in range(1, len(parts)):
+            above = folders["/".join(parts[:n])]
+            found.setdefault(above, set()).add("/".join(parts[n:]))
+    for oid, held in found.items():
+        machine.keep_json(where / HIDDEN / f"{oid}.json", sorted(held))
+
+
+def hidden(where: Path, tree: str) -> set[str]:
+    """The paths a snapshot hid under a rule the repository does not hold, by its tree id or by the blob of a place
+    that is one hidden file; none where the snapshot recorded none or its record cannot be read."""
+    held = machine.read_json(where, where / HIDDEN / f"{tree.rsplit(':', 1)[-1]}.json")
+    return {name for name in held if isinstance(name, str)} if isinstance(held, list) else set()
+
+
+def hidden_changed(where: Path, before: str, after: str, changed: list[str]) -> list[str]:
+    """The changed paths a snapshot recorded as hidden under a rule the repository does not hold at either end."""
+    hidden_paths = hidden(where, before) | hidden(where, after)
+    return [path for path in changed if path in hidden_paths]
 
 
 def _repository(folder: Path) -> bool:

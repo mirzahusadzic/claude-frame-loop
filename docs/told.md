@@ -135,6 +135,8 @@ contract {id}: its check ended, and left something it started still running
 contract {id} has no check yet, though work stands on both its sides
 {n} not ticked by the person, so not run
 files nobody asked for: {paths}
+1 file hidden by a local ignore rule changed; its content was not read
+{n} files hidden by a local ignore rule changed; their content was not read
 not as the person ticked it: {place}, where {drift}
 left out, so nothing in it is read or run but the person's own holds: {files}
 frame-loop: no work changed since the last turn's end

@@ -81,11 +81,14 @@ What changed in the project, how the writer described it, and each check of a ro
 | `objects/` | The snapshots themselves, in a git store of the tool's own | The hooks |
 | `starts.json` | For each row, the snapshot at which it was first found approved | The hooks |
 | `accounts/` | The writer's account of each change, with each line it dropped and why | The check at a turn's end |
+| `hidden/` | The paths a snapshot holds although a local rule hides them, by tree or file id | The hooks |
 | `readings.jsonl` | Each check of a row: its step, the work it read, the outcome, its trials and where its records lie; and what each line of an account serves | The check at a turn's end |
 | `runs/` | A folder for each run of Gadfly's trials, with what was asked and every answer | The check |
 | `holds.json` | The last result of each command, path rule and shared check that did not pass, until it passes | The hooks |
 
 An account is written under the writer's rules of its day, and its name says which. After an update of the tool, an account of older rules is left where it is and written again when a check needs it.
+
+A file hidden by `.git/info/exclude` or an untracked `.gitignore` still lies in the snapshot, so it counts as work. Its path is kept under `hidden/`, and its content is never sent to a model.
 
 ---
 

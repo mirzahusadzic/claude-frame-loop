@@ -10,6 +10,7 @@ import hashlib
 import inspect
 import json
 import re
+import sys
 import time
 import unittest
 from unittest import mock
@@ -258,6 +259,143 @@ class AccountTests(unittest.TestCase):
         (call,) = scene.calls("claude")
         self.assertNotIn(KEY, call["stdin"])
         self.assertIn("+line thirty-five, changed", call["stdin"])
+
+    def test_the_repositorys_diff_drivers_are_never_run_for_an_account(self):
+        scene = Scene(self)
+        scene.fakes(claude={"result": SAID})
+        external, textconv = scene.outside / "external-ran", scene.outside / "textconv-ran"
+        scene.git("config", "diff.external", f"touch {external}; true")
+        scene.git("config", "diff.marker.textconv", f"touch {textconv}; cat")
+        scene.write(".gitattributes", "*.txt diff=marker\n")
+        scene.write("limits/data.txt", "one\n")
+        scene.commit()
+        before = work.snapshot(scene.project, scene.where)
+        scene.write("limits/data.txt", "two\n")
+        scene.git("diff")
+        scene.git("diff", "--no-ext-diff")
+        self.assertTrue(external.exists() and textconv.exists())  # the drivers are configured to run
+        external.unlink()
+        textconv.unlink()
+        after = work.snapshot(scene.project, scene.where)
+        with mock.patch.object(account, "_git", wraps=account._git) as git:
+            held, why = made(scene, before, after)
+        self.assertIsNone(why)
+        self.assertEqual(held["files"], {"modified": ["limits/data.txt"]})
+        self.assertFalse(external.exists() or textconv.exists())
+        diffs = [call.args[2:] for call in git.call_args_list if call.args[2] == "diff"]
+        self.assertTrue(diffs)
+        for argv in diffs:
+            self.assertIn("--no-ext-diff", argv)
+            self.assertIn("--no-textconv", argv)
+
+    def test_a_clean_filter_is_what_the_snapshot_keeps_and_the_writer_is_given(self):
+        scene = Scene(self)
+        scene.fakes(claude={"result": SAID})
+        filter = scene.outside / "clean.py"
+        filter.write_text("import sys\nsys.stdout.write(sys.stdin.read().replace('RAWTOKEN', 'FILTEREDTOKEN'))\n")
+        scene.git("config", "filter.probe.clean", f'"{sys.executable}" "{filter.as_posix()}"')
+        scene.write(".gitattributes", "*.txt filter=probe\n")
+        scene.write("limits/notes.txt", "RAWTOKEN one\n")
+        before = work.snapshot(scene.project, scene.where)
+        entry = scene.snapped("ls-tree", "-r", before, "limits/notes.txt").split()
+        self.assertEqual(scene.snapped("cat-file", "-p", entry[2]), "FILTEREDTOKEN one\n")
+        scene.write("limits/notes.txt", "RAWTOKEN two\n")
+        after = work.snapshot(scene.project, scene.where)
+        held, why = made(scene, before, after)
+        self.assertIsNone(why)
+        self.assertEqual(held["files"], {"modified": ["limits/notes.txt"]})
+        (call,) = scene.calls("claude")
+        self.assertNotIn("RAWTOKEN", call["stdin"])
+        self.assertIn("FILTEREDTOKEN two", call["stdin"])
+
+    def test_a_file_hidden_by_a_local_rule_counts_as_work_but_its_content_never_reaches_the_writer(self):
+        old, new = "PRIVATE-NOTES-OLD", "PRIVATE-NOTES-NEW"
+
+        def exclude(scene):
+            path = scene.project / ".git" / "info" / "exclude"
+            path.write_text(path.read_text("utf-8") + ".env.local\n", "utf-8")
+
+        cases = {
+            "excluded and changed": (
+                lambda scene: (exclude(scene), scene.write(".env.local", old + "\n")),
+                lambda scene: scene.write(".env.local", new + "\n"),
+                {"modified": [".env.local"]},
+            ),
+            "ignored by an untracked .gitignore": (
+                lambda scene: (scene.write(".gitignore", ".env.local\n"), scene.write(".env.local", old + "\n")),
+                lambda scene: scene.write(".env.local", new + "\n"),
+                {"modified": [".env.local"]},
+            ),
+            "excluded and deleted": (
+                lambda scene: (exclude(scene), scene.write(".env.local", old + "\n")),
+                lambda scene: (scene.project / ".env.local").unlink(),
+                {"deleted": [".env.local"]},
+            ),
+            "newly hidden and changed": (
+                lambda scene: scene.write(".env.local", old + "\n"),
+                lambda scene: (scene.write(".gitignore", ".env.local\n"), scene.write(".env.local", new + "\n")),
+                {"added": [".gitignore"], "modified": [".env.local"]},
+            ),
+        }
+        for case, (begin, change, files) in cases.items():
+            with self.subTest(case=case):
+                scene = Scene(self)
+                scene.fakes(claude={"result": SAID})
+                begin(scene)
+                before = work.snapshot(scene.project, scene.where)
+                change(scene)
+                after = work.snapshot(scene.project, scene.where)
+                self.assertIn(".env.local", work.changed(scene.project, scene.where, before, after))
+                held, why = made(scene, before, after)
+                self.assertIsNone(why)
+                self.assertEqual(held["files"], files)
+                (call,) = scene.calls("claude")
+                self.assertNotIn(old, call["stdin"])
+                self.assertNotIn(new, call["stdin"])
+
+    def test_a_hidden_file_at_a_folder_or_file_place_never_reaches_the_writer(self):
+        old, new = "PRIVATE-PLACE-OLD", "PRIVATE-PLACE-NEW"
+        for place, hidden in (("limits", "limits/.env.local"), ("limits/private.py", "limits/private.py")):
+            with self.subTest(place=place):
+                scene = Scene(self)
+                scene.fakes(claude={"result": SAID})
+                exclude = scene.project / ".git" / "info" / "exclude"
+                exclude.write_text(exclude.read_text("utf-8") + hidden + "\n", "utf-8")
+                scene.write(hidden, old + "\n")
+                before = work.trees(scene.project, scene.where, work.snapshot(scene.project, scene.where), [place])[
+                    place
+                ]
+                scene.write(hidden, new + "\n")
+                after = work.trees(scene.project, scene.where, work.snapshot(scene.project, scene.where), [place])[
+                    place
+                ]
+                self.assertNotEqual(before, after)
+                held, why = made(scene, before, after)
+                self.assertIsNone(why)
+                self.assertEqual(held["files"], {"modified": [""] if ":" in before else [".env.local"]})
+                (call,) = scene.calls("claude")
+                self.assertNotIn(old, call["stdin"])
+                self.assertNotIn(new, call["stdin"])
+
+    def test_a_turn_end_says_how_many_hidden_files_changed_and_that_their_content_was_not_read(self):
+        old, new = "HIDDEN-WORK-OLD", "HIDDEN-WORK-NEW"
+        scene = shop(Scene(self))
+        exclude = scene.project / ".git" / "info" / "exclude"
+        exclude.write_text(exclude.read_text("utf-8") + "limits/.env.local\nlimits/notes.local\n", "utf-8")
+        scene.write("limits/.env.local", old + "\n")
+        scene.write("limits/notes.local", old + "\n")
+        scene.fakes(claude={"result": SAID}, gadfly={"readers": {"reading-": "rests"}})
+        person = scene.person(
+            lambda: (
+                scene.write("limits/.env.local", new + "\n"),
+                scene.write("limits/notes.local", new + "\n"),
+            )
+        )
+        self.assertIn(words.hidden_changed(2), person)
+        self.assertEqual(words.hidden_changed(1), words.HIDDEN_CHANGED_ONE)
+        handed = " ".join(call["stdin"] for call in scene.calls("claude"))
+        self.assertNotIn(old, handed)
+        self.assertNotIn(new, handed)
 
     def test_an_account_that_quotes_or_tells_the_past_is_asked_once_more_with_each_fault_named(self):
         scene = Scene(self)

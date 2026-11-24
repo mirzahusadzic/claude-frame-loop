@@ -10,11 +10,17 @@ With the check on, three kinds of model are asked. Each is sent only the part it
 
 | Who | Is sent | Never sent |
 | --- | --- | --- |
-| The writer | The change between two snapshots, with known secrets cut | Your rows |
-| The maker | One row's words | The change, the account, your other rows |
-| The readers | Rows, their steps, the account and the names of the changed files | The change itself |
+| The writer | The change between two snapshots, with known secrets cut and hidden content left out | Your rows |
+| The maker | One row's words, and its turned-around form made by code | The change, the account, your other rows |
+| The readers | Rows, their steps, account and notice lines, and the names of the changed files | The change itself |
 
 Nothing else of the session is sent by the tool. Not the transcript, your approvals, the switch, the watch or the log, and not your sentence as the picker shows it.
+
+The writer's answer is held by a form check in code, which sends nothing. It reads the numbered lines, the cut change, the changed file names and your rows.
+
+A file git hides by a line of `.git/info/exclude` or an untracked `.gitignore` still counts as work. Its path counts with the change, but its content is never sent to a model.
+
+Git makes each snapshot and runs the clean filters the repository configures, so a filtered file reaches the writer only in its filtered form. A snapshot has at most 20 seconds, and a filter that takes longer fails it.
 
 #### How each is reached
 
@@ -24,9 +30,9 @@ Nothing else of the session is sent by the tool. Not the transcript, your approv
 
 #### When each is asked
 
-- **Before you approve.** The maker and the readers are sent the proposal's rows and the words of its contracts. No work exists yet, so none is sent.
-- **At a turn's end.** The writer is sent the change first. The readers are then sent the account, the rows being read and their steps.
-- **A notice.** A line the session leaves about its own work goes to a writer call of its own, with the turn's change. It is fenced as the session's word, never as an instruction, and never reaches the call that describes the change.
+- **Before you approve.** The maker is sent one row's words alone, and its turned-around form made by code. The readers are sent one row's words, or the words of a crossing's parts and contracts, and no work.
+- **At a turn's end.** The writer is sent the change first. The readers are then sent the account and notice lines, the rows being read, their steps and the changed file names.
+- **A notice.** A line the session leaves about its own work goes to a writer call of its own, with the change fenced as the session's word and never as an instruction. That call is separate from the change's, and its account can then be read beside the change.
 
 #### The two tiers
 

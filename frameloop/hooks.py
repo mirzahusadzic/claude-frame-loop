@@ -305,6 +305,7 @@ def stop(event: dict, project: Path) -> tuple:
         except work.GitFailed:  # the last turn's tree is gone from git: read the change against one that is there
             base, gone = work.fallback(project, where)
             changed = work.changed(project, where, base, now)
+        hidden = work.hidden_changed(where, base or "", now, changed)
         trust = _trust(looked, where)
         seen = see(project, now, trust, deadline)
         rows = _recorded(where)
@@ -355,13 +356,17 @@ def stop(event: dict, project: Path) -> tuple:
             read = [line for line in read if line not in borne]
             said = "\n".join(
                 [
-                    _turn_told(seen, changed, checks, gone, spend, ways, unread, _failed_work(unapproved)),
+                    _turn_told(
+                        seen, changed, checks, gone, spend, ways, unread, _failed_work(unapproved), hidden=hidden
+                    ),
                     *read,
                     *_fell(seen),
                 ]
             )
             if block["rows"]:  # the turn's own pieces that bear value beside the block's head: failures, holds, files
-                bare = _turn_told(seen, changed, checks, gone, (), {}, {}, _failed_work(unapproved), rowed=True)
+                bare = _turn_told(
+                    seen, changed, checks, gone, (), {}, {}, _failed_work(unapproved), hidden=hidden, rowed=True
+                )
                 person = words.turn_block(took, block["rows"], block["extra"], bare.split(words.SEP)[1:], holds)
         elif (
             changed and isinstance(unapproved, dict) and unapproved.get("new")
@@ -375,6 +380,7 @@ def stop(event: dict, project: Path) -> tuple:
                 against=0,
                 ready=False,
                 unapproved=_failed_work(unapproved),
+                rises=[words.hidden_changed(len(hidden))] if hidden else [],
             )
         else:  # no work changed: what stays open is told all the same, until it is mended
             rises = _rises(seen)
@@ -763,6 +769,7 @@ def _turn_told(
     ways: Optional[dict] = None,
     unread: Optional[dict] = None,
     unapproved: str = "",
+    hidden: list = (),
     rowed: bool = False,
 ) -> str:
     across = _across(seen, checks)
@@ -787,7 +794,10 @@ def _turn_told(
         against=sum(1 for key in ways if seen.shown[key].mismatch),
         ready=ready,
         gone=gone,
-        rises=_rises(seen, frozenset(check[4] for check in checks)),
+        rises=[
+            *_rises(seen, frozenset(check[4] for check in checks)),
+            *([words.hidden_changed(len(hidden))] if hidden else []),
+        ],
         across=tuple(across),
         spend=tuple(spend),
         unread=tuple(whys.items()),

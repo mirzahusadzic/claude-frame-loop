@@ -8,9 +8,9 @@ import subprocess
 import unittest
 from unittest import mock
 
-from scene import Scene
+from scene import Scene, shop
 
-from frameloop import work
+from frameloop import words, work
 
 
 class SnapshotTests(unittest.TestCase):
@@ -90,10 +90,16 @@ class SnapshotTests(unittest.TestCase):
         scene = Scene(self)
         scene.write("shop.py")
         scene.write("nested/inner.py")
+        exclude = scene.project / ".git" / "info" / "exclude"
+        exclude.write_text(exclude.read_text("utf-8") + ".env.local\n", "utf-8")
+        scene.write(".env.local")
         scene.git("init", "-q", "-b", "main", cwd=scene.project / "nested")
         tree = work.snapshot(scene.project, scene.where)
-        self.assertEqual(scene.snapped("ls-tree", "-r", "--name-only", tree).split(), ["nested", "shop.py"])
+        self.assertEqual(
+            scene.snapped("ls-tree", "-r", "--name-only", tree).split(), [".env.local", "nested", "shop.py"]
+        )
         self.assertEqual(scene.snapped("ls-tree", tree, "nested").split()[:2], [work.GITLINK, "commit"])
+        self.assertEqual(work.hidden(scene.where, tree), {".env.local"})
 
     def test_the_tree_id_of_a_place_changes_with_its_own_files_alone(self):
         scene = Scene(self)
@@ -121,6 +127,50 @@ class SnapshotTests(unittest.TestCase):
             work.changed(scene.project, scene.where, before, after), ["api/limits.py", "docs/new.md", "web/page.py"]
         )
         self.assertEqual(work.changed(scene.project, scene.where, after, after), [])
+
+    def test_a_snapshot_records_the_files_hidden_by_a_rule_the_repository_does_not_hold(self):
+        scene = Scene(self)
+        with open(scene.project / ".git" / "info" / "exclude", "a", encoding="utf-8") as handle:
+            handle.write(".env.local\n")
+        scene.write(".env.local")
+        tree = work.snapshot(scene.project, scene.where)
+        self.assertEqual(work.hidden(scene.where, tree), {".env.local"})
+        self.assertEqual(work.hidden(scene.where, work.snapshot(scene.project, scene.where)), {".env.local"})
+
+        private = scene.project / ".git" / "info" / "exclude"
+        private.write_text(private.read_text("utf-8") + ".frame/private\n", "utf-8")
+        scene.write(".frame/private")
+        tree = work.snapshot(scene.project, scene.where)
+        self.assertEqual(work.hidden(scene.where, tree), {".env.local"})  # the frame is not in the snapshot
+
+    def test_a_self_ignoring_cache_folder_counts_as_work_and_costs_fifteen_git_calls(self):
+        scene = Scene(self)
+        scene.write("app.py")
+        scene.commit()
+        before = work.snapshot(scene.project, scene.where)
+        scene.write(".pytest_cache/.gitignore", "*\n")
+        scene.write(".pytest_cache/v/cache/lastfailed", "{}\n")
+        scene.write(".pytest_cache/v/cache/nodeids", "a test\n")
+        work._objects.cache_clear()
+        with mock.patch.object(work, "git", wraps=work.git) as git:
+            tree = work.snapshot(scene.project, scene.where)
+        cache = [".pytest_cache/.gitignore", ".pytest_cache/v/cache/lastfailed", ".pytest_cache/v/cache/nodeids"]
+        self.assertEqual(work.changed(scene.project, scene.where, before, tree), cache)
+        self.assertEqual(work.hidden(scene.where, tree), set(cache))
+        self.assertEqual(git.call_count, 15)
+
+    def test_the_person_is_told_a_self_ignoring_cache_folder_changed(self):
+        scene = shop(Scene(self), on=False)
+        told = scene.person(
+            lambda: (
+                scene.write(".pytest_cache/.gitignore", "*\n"),
+                scene.write(".pytest_cache/v/cache/lastfailed", "{}\n"),
+                scene.write(".pytest_cache/v/cache/nodeids", "a test\n"),
+            )
+        )
+        self.assertEqual(told.split(words.SEP)[0], words.TURN.format(places=words.ROOT))
+        self.assertIn(words.hidden_changed(3), told)
+        self.assertIn(".pytest_cache/.gitignore", told)
 
 
 if __name__ == "__main__":
