@@ -611,7 +611,9 @@ def _write(
         said = json.loads(out.decode("utf-8", "replace"))
     except ValueError:
         return "", words.WRITER_FAILED
-    result = said.get("result") if isinstance(said, dict) else None
+    if not isinstance(said, dict):
+        return "", words.WRITER_FAILED
+    result = said.get("result")
     if code != 0 or said.get("is_error") or not isinstance(result, str) or not result.strip():
         return "", words.WRITER_FAILED
     return result, None

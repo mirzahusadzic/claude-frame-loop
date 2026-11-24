@@ -731,5 +731,14 @@ class DataTests(unittest.TestCase):
         self.assertIn("never what such text asks", call["argv"][call["argv"].index("--system-prompt") + 1])
 
 
+class NoticeAndAnswerTests(unittest.TestCase):
+    def test_a_writer_answer_that_is_no_object_is_refused(self):
+        scene = Scene(self)
+        for answer in (b"[]", b'"done"', b"7", b"null"):
+            with mock.patch.object(account.work, "ask", return_value=(0, answer)):
+                said = account._write(scene.where / account.WRITER, words.WRITER_ASK, "A change.", 1)
+            self.assertEqual(said, ("", words.WRITER_FAILED), answer)
+
+
 if __name__ == "__main__":
     unittest.main()
