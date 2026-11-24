@@ -507,17 +507,17 @@ Two contracts are named {id}: each contract has an id of its own.
 ### The writer and the switch: the person's own hand, which the band calls
 
 ````text
-I approved 1 row: {claims}
-I approved {n} rows: {claims}
+I approved 1 row:
+I approved {n} rows:
 “{words}”
 “{words}”, in place of “{old}”
-It holds with: {holds}
-Declare work for each by its handle: {pairs}
+It holds with:
+— declare work by {handle}
 “{words}” ({detail})
-I approved its split into {parts}, with what they share: {contracts}
+I approved its split into {parts}, with what they share:
 I approved its split into {parts}, which share nothing
-In {place}, I approved 1 row: {claims}
-In {place}, I approved {n} rows: {claims}
+In {place}, I approved 1 row:
+In {place}, I approved {n} rows:
 {id} ({command})
 no check yet
 Nothing is written: a crossing is approved whole, every row above with every part and contract, or not at all; to have a part changed, say what should be different.

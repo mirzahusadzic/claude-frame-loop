@@ -745,17 +745,17 @@ SEVERAL = (
 SEVERAL_ROW = "This row may say more than one thing: «{words}»."
 
 # The writer and the switch: the person's own hand, which the band calls. A hook never says these.
-WRITTEN_ONE = "I approved 1 row: {claims}"
-WRITTEN_MANY = "I approved {n} rows: {claims}"
+WRITTEN_ONE = "I approved 1 row:"
+WRITTEN_MANY = "I approved {n} rows:"
 QUOTED = "“{words}”"
 IN_PLACE_OF = "“{words}”, in place of “{old}”"
-WRITTEN_HOLDS = "It holds with: {holds}"
-WRITTEN_HANDLES = "Declare work for each by its handle: {pairs}"
+WRITTEN_HOLDS = "It holds with:"
+WRITTEN_HANDLE = "— declare work by {handle}"
 HOLD_WITH = "“{words}” ({detail})"
-WRITTEN_SPLIT = "I approved its split into {parts}, with what they share: {contracts}"
+WRITTEN_SPLIT = "I approved its split into {parts}, with what they share:"
 WRITTEN_SPLIT_BARE = "I approved its split into {parts}, which share nothing"
-WRITTEN_PART_ONE = "In {place}, I approved 1 row: {claims}"
-WRITTEN_PART_MANY = "In {place}, I approved {n} rows: {claims}"
+WRITTEN_PART_ONE = "In {place}, I approved 1 row:"
+WRITTEN_PART_MANY = "In {place}, I approved {n} rows:"
 CONTRACT_WITH = "{id} ({command})"
 NO_CHECK = "no check yet"
 CROSSING_WHOLE = (
@@ -1371,7 +1371,7 @@ TOLD = (
             QUOTED,
             IN_PLACE_OF,
             WRITTEN_HOLDS,
-            WRITTEN_HANDLES,
+            WRITTEN_HANDLE,
             HOLD_WITH,
             WRITTEN_SPLIT,
             WRITTEN_SPLIT_BARE,
@@ -2273,58 +2273,51 @@ def written(
     parts: tuple = (),
 ) -> str:
     """What the band submits as the person's next prompt once the writer wrote: in their voice, each claim they
-    approved in full, with the words it replaced where it did; each hold newly ticked with its command or paths; a
-    split newly ticked with its parts and each contract's check, or that it has none yet; for a crossing, each part's
-    claims and holds, as (place, picked, holds); and each claim's handle, to declare work by."""
+    approved in full on a line of its own, with the words it replaced where it did and its handle; each hold newly
+    ticked on its own line with its command or paths; a split newly ticked with its parts named and each contract's
+    check, or that it has none yet, on a line of its own; for a crossing, each part's claims and holds, as (place,
+    picked, holds), under its name."""
+    pending = list(handles)
 
-    def claims_of(held: list) -> str:
-        return "; ".join(
-            IN_PLACE_OF.format(words=said, old=old) if old else QUOTED.format(words=said) for said, old in held
-        )
+    def row(said: str, old: Optional[str]) -> str:
+        handle = pending.pop(0)[1] if pending and pending[0][0] == said else None
+        quoted = IN_PLACE_OF.format(words=said, old=old) if old else QUOTED.format(words=said)
+        return _ended(f"{quoted} {WRITTEN_HANDLE.format(handle=handle)}" if handle else quoted)
 
-    def holds_of(held: list) -> list:
-        detail = [
-            each["command"] if "command" in each else UNTOUCHED.format(paths=", ".join(each["untouched"]))
-            for each in held
-        ]
-        return (
-            [
-                WRITTEN_HOLDS.format(
-                    holds="; ".join(HOLD_WITH.format(words=each["words"], detail=d) for each, d in zip(held, detail))
-                )
-            ]
-            if held
-            else []
-        )
+    def rows_of(held: list) -> list[str]:
+        return [row(said, old) for said, old in held]
 
-    pieces = [
-        WRITTEN_ONE.format(claims=claims_of(picked))
-        if len(picked) == 1
-        else WRITTEN_MANY.format(n=len(picked), claims=claims_of(picked))
+    def holds_of(held: list) -> list[str]:
+        found = []
+        for each in held:
+            detail = each["command"] if "command" in each else UNTOUCHED.format(paths=", ".join(each["untouched"]))
+            found.append(_ended(HOLD_WITH.format(words=each["words"], detail=detail)))
+        return [WRITTEN_HOLDS, *found] if found else []
+
+    lines = [
+        WRITTEN_ONE if len(picked) == 1 else WRITTEN_MANY.format(n=len(picked)),
+        *rows_of(picked),
     ]
     if split is not None:
-        contracts = "; ".join(
-            CONTRACT_WITH.format(id=each["id"], command=each["command"] or NO_CHECK) for each in split["contracts"]
-        )
         named = ", ".join(split["parts"])
-        pieces.append(
-            WRITTEN_SPLIT.format(parts=named, contracts=contracts)
-            if contracts
-            else WRITTEN_SPLIT_BARE.format(parts=named)
-        )
-    pieces += holds_of(holds)
+        if split["contracts"]:
+            lines.append(WRITTEN_SPLIT.format(parts=named))
+            lines += [
+                _ended(CONTRACT_WITH.format(id=each["id"], command=each["command"] or NO_CHECK))
+                for each in split["contracts"]
+            ]
+        else:
+            lines.append(_ended(WRITTEN_SPLIT_BARE.format(parts=named)))
+    lines += holds_of(holds)
     for at, held, kept in parts:
-        pieces.append(
-            WRITTEN_PART_ONE.format(place=place(at), claims=claims_of(held))
+        lines.append(
+            WRITTEN_PART_ONE.format(place=place(at))
             if len(held) == 1
-            else WRITTEN_PART_MANY.format(place=place(at), n=len(held), claims=claims_of(held))
+            else WRITTEN_PART_MANY.format(place=place(at), n=len(held))
         )
-        pieces += holds_of(kept)
-    if handles:
-        pieces.append(
-            WRITTEN_HANDLES.format(pairs="; ".join(HANDLE_OF.format(handle=h, words=said) for said, h in handles))
-        )
-    return " ".join(_ended(piece) for piece in pieces[:-1]) + (" " if len(pieces) > 1 else "") + pieces[-1]
+        lines += rows_of(held)
+        lines += holds_of(kept)
+    return "\n".join(lines)
 
 
 def handles_now(pairs: list[tuple[str, str]]) -> str:

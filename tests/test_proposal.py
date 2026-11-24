@@ -729,16 +729,17 @@ class WriterTests(unittest.TestCase):
         (handle,) = [h for _, h in named(scene, C)]
         self.assertEqual(
             said["said"],
-            f"I approved 1 row: “{C}” It holds with: “{holds[0]['words']}” "
-            f"({holds[0]['command']}). Declare work for each by its handle: {handle} for "
-            f"«{C}»",
+            f"I approved 1 row:\n“{C}” — declare work by {handle}.\nIt holds with:\n"
+            f"“{holds[0]['words']}” ({holds[0]['command']}).",
         )  # C ends with its own full stop
         again = scene.picked(proposal("frame", "", [item(D)], holds), "--ticked", "0")  # the same hold named again
         self.assertEqual(again["said"], words.written([(D, None)], [], None, named(scene, D)))
         self.assertEqual(again["approved"], 1)  # D alone: the hold was ticked there already
         self.assertEqual(json.loads((scene.project / ".frame" / "frame.json").read_text("utf-8"))["holds"], holds)
         both = scene.picked(proposal("frame", "", [item(E), item("Counts are kept for a day.")]), "--ticked", "0,1")
-        self.assertTrue(both["said"].startswith(f"I approved 2 rows: “{E}”; “Counts are kept for a day.”"))
+        first, second = both["said"].splitlines()[1:3]
+        self.assertTrue(first.startswith(f"“{E}”"))
+        self.assertTrue(second.startswith("“Counts are kept for a day.”"))
 
     def test_a_split_is_written_with_its_holes_named_by_their_words(self):
         scene = built(self)

@@ -160,6 +160,50 @@ class WordsTests(unittest.TestCase):
         self.assertIn("\n  in: 'in',", labels)
         self.assertNotIn("\n  at: 'at',", labels)
 
+    def test_the_approved_prompt_puts_each_row_with_its_handle_on_a_line_of_its_own(self):
+        first, old = "Each request is counted.", "Requests are not counted."
+        second, part = "Each client sees its count.", "The API returns a count."
+        command, path = "python3 -m unittest tests.test_count", "docs/"
+        part_command = "python3 -m unittest tests.test_api"
+        split = {
+            "parts": ["api", "web"],
+            "contracts": [{"id": "c0", "command": "make check"}, {"id": "c1", "command": None}],
+        }
+        said = words.written(
+            [(first, old), (second, None)],
+            [
+                {"words": "The count tests pass.", "command": command},
+                {"words": "Only docs change.", "untouched": [path]},
+            ],
+            split,
+            [(first, "h-one"), (second, "h-two"), (part, "h-part")],
+            (("api", [(part, None)], [{"words": "The API tests pass.", "command": part_command}]),),
+        )
+        lines = said.splitlines()
+        self.assertGreaterEqual(len(lines), 12)
+        for row, handle in ((first, "h-one"), (second, "h-two"), (part, "h-part")):
+            with self.subTest(row=row):
+                own = [line for line in lines if row in line]
+                self.assertEqual(len(own), 1)
+                self.assertIn(handle, own[0])
+        for fact in (
+            old,
+            command,
+            "untouched: docs/",
+            "I approved its split into api, web, with what they share:",
+            "c0 (make check)",
+            f"c1 ({words.NO_CHECK})",
+            "In api, I approved 1 row:",
+            part_command,
+        ):
+            with self.subTest(fact=fact):
+                self.assertEqual(sum(fact in line for line in lines), 1)
+        self.assertEqual(lines.count("It holds with:"), 2)
+        self.assertIn(f"in place of “{old}”", next(line for line in lines if first in line))
+        self.assertTrue(all("; " not in line for line in lines))  # no two facts share one line
+        bare = words.written([(second, None)], [], {"parts": ["api", "web"], "contracts": []}, [(second, "h-two")])
+        self.assertEqual(bare.splitlines()[-1], "I approved its split into api, web, which share nothing.")
+
     def test_what_runs_puts_its_counts_before_any_quoted_words(self):
         for name in [name for name in vars(words) if name.startswith("NOW_")]:
             said = getattr(words, name)

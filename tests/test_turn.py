@@ -75,9 +75,10 @@ class HandleTests(unittest.TestCase):
         )  # with the check on, nothing is approved unchecked
         said = scene.pressed("approve", ident, "--ticked", "0,1")["said"]
         handle = reading.handles(claims.load(scene.project))[("", claims.claim_id("", L))]
-        self.assertIn(words.HANDLE_OF.format(handle=handle, words=L), said)  # in the sentence the band submits
+        row_line = next(line for line in said.splitlines() if L in line)
+        self.assertIn(handle, row_line)  # on the row's own line in the sentence the band submits
         told = "\n".join(texts(scene.hook("UserPromptSubmit", prompt=said)))
-        self.assertIn(words.HANDLE_OF.format(handle=handle, words=L), told)  # and at the next prompt
+        self.assertIn(words.HANDLE_OF.format(handle=handle, words=L), told)  # and its handle at the next prompt
         out = scene.shell(": frame-loop carries counted for each client", call="by-words")
         self.assertEqual(texts(out)[0], words.carries_noted("", L))
         out = scene.shell(": frame-loop carries client", call="both")  # in the words of both: it names neither
