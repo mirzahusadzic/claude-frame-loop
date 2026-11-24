@@ -166,13 +166,17 @@ The block at a turn's end gives each row one state, in a word. Every state but `
 | `not seen` | Nothing in the account speaks to the row yet. |
 | `not checked` | The check could not run, and the line says why: no step, no work at its place, not approved, no time left, the check off, or a failure such as a missing `gadfly`. |
 
+For a row seen in the work, `passed` means the readers agreed that the writer's account of the change shows it. Nothing ran the software, and an account can be wrong or leave something out.
+
 A row that a command checks has states of its own:
 
 | State | What it means |
 | --- | --- |
-| `holds` | The command ran and passed, or no forbidden path was touched. |
+| `holds` | The command ran here and ended well, or no forbidden path was touched. |
 | `failed` | The command ran and did not pass, or a forbidden path was touched. |
 | `timed out`, `not started`, `not run` | The command did not finish, could not start, or had no time left. |
+
+A row checked by a command passes when its command ran here and ended well. Give a command to whatever must be true of the software as it runs.
 
 `extra` is no state of a row. It counts the account's lines that serve none of your rows.
 

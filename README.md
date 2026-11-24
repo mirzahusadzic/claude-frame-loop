@@ -28,9 +28,9 @@ With the check off, as it is in every project until you switch it on, the tool c
 <p align="center"><sub>The ground of the top band is a strip of Albrecht Dürer's woodcut of a man drawing a lute, from Underweysung der Messung (Nuremberg, 1525); public domain; scan by SLUB Dresden, through Wikimedia Commons.</sub></p>
 
 - **Rows.** Your request, restated by the session as a short list of claims, one a row. You read them in the picker and approve them before any work starts.
-- **Commands you approve.** A row only a run can show, as "the tests pass", carries a shell command that fails while it is not so. It runs at each turn's end where the change touched its place.
+- **Commands you approve.** A row only a run can show, as "the tests pass", carries a shell command that fails while it is not so. It runs at each turn's end where the change touched its place, and a command row passes when it ran here and ended well.
 - **The picker.** A pane of its own, beside the transcript or above the prompt: the rows, a question under a row where one is needed, and "OK, build it". Nothing is approved until you press it.
-- **The check.** With the check on, a writer describes each change in plain lines, and readers hold every row against them in fixed trials. A row passes only while the records behind it still stand.
+- **The check.** With the check on, a writer describes each change in plain lines, and readers hold every row against them in fixed trials. A row seen in the work passes when they agree the writer's account shows it; nothing ran the software, and an account can be wrong or leave something out.
 - **The block.** A few lines after a turn: each row's state in a word, your words whole, and the reason where it did not pass.
 - **A crossing.** A change with parts becomes one proposal: each part with its own rows, and the checks the parts share. You approve it whole.
 - **The files.** The rows you approved lie in `.frame/` in your repository. Proposals, snapshots and the check's records lie in a folder outside it.

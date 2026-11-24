@@ -38,6 +38,10 @@ A row takes the road that can show it. The session chooses, and you see the choi
 | Seen in the work | What a person using or running the software could see for themselves | Read against a description of what changed ([the check](check.md#at-a-turns-end)) |
 | Checked by a command | What only a run can show: how the software is made, what it is built from, a number inside it, a published test vector | The command runs at a turn's end, and fails while the row is not true |
 
+A row seen in the work passes when the readers agree that the writer's account of the change shows it. Nothing ran the software, and an account can be wrong or leave something out.
+
+A row checked by a command passes when that command ran here and ended well. Choose a command for whatever must be true of the software as it runs.
+
 A row such as "List prints the notes in the order they were added" is seen in the work: a description of the change can say it, and a reader can judge that. A row such as "No sort library is used" only a run can show, so it carries a command such as `python3 check.py`. Only the first road goes through the readers, and both are checked at a turn's end.
 
 Two more cases stand beside the roads:
@@ -46,6 +50,8 @@ Two more cases stand beside the roads:
 - **Neither, on this machine.** A claim nothing here can show, as one about another operating system. It stays a row that predicts `open`, and the session asks you about it.
 
 Approving a row that a command checks approves the command. A command you did not approve never runs, and one that did not pass keeps its place open until it does. A command you approve under the words of an earlier one takes its place.
+
+A command you approve runs on your machine as you at every turn's end until it passes. It can do whatever you can.
 
 Where a row is seen in the work but only a run could show it, the picker asks: «Only a test can show this, and it has no command. OK as it is?». Yes keeps it a row, and a change can give it a command.
 

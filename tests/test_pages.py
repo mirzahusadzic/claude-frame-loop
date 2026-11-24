@@ -201,6 +201,21 @@ class PagesTests(unittest.TestCase):
             with self.subTest(page=relative(page)):
                 self.assertNotIn("FRAME_LOOP_TRAINING_OK", page.read_text("utf-8"))
 
+    def test_the_pages_say_what_a_pass_means_on_each_road_and_what_a_command_may_do(self):
+        rows = (DOCS / "rows.md").read_text("utf-8")
+        check = (DOCS / "check.md").read_text("utf-8")
+        readme = (ROOT / "README.md").read_text("utf-8")
+        for page, text in (("rows", rows), ("check", check)):
+            with self.subTest(page=page):
+                self.assertIn("Nothing ran the software", text)
+                self.assertIn("an account can be wrong or leave something out", text)
+                self.assertIn("ran here and ended well", text)
+                self.assertIn("must be true of the software as it runs", text)
+        self.assertIn("on your machine as you at every turn's end until it passes", rows)
+        self.assertIn("It can do whatever you can.", rows)
+        self.assertIn("nothing ran the software", readme)
+        self.assertIn("ran here and ended well", readme)
+
     def test_no_page_tells_a_thing_about_one_person_or_names_them_he(self):
         for page in held():
             text = without_code(page.read_text("utf-8"))
