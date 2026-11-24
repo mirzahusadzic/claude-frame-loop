@@ -131,6 +131,25 @@ class HandleTests(unittest.TestCase):
 
 
 class MarkerTests(unittest.TestCase):
+    def test_a_marker_in_a_failed_call_does_not_run_and_the_session_is_told(self):
+        scene = shop(Scene(self))
+        handle = reading.handles(claims.load(scene.project))[("limits", claims.claim_id("limits", L))]
+        command = f": frame-loop carries {handle}"
+        scene.hook(
+            "PreToolUse",
+            tool_name="Bash",
+            tool_use_id="failed-marker",
+            tool_input={"command": command},
+        )
+        out = scene.hook(
+            "PostToolUseFailure",
+            tool_name="Bash",
+            tool_use_id="failed-marker",
+            tool_input={"command": command},
+        )
+        self.assertEqual([row for row in machine.logged(scene.where) if row.get("event") == "carries"], [])
+        self.assertEqual(out["hookSpecificOutput"]["additionalContext"], words.MARKERS_FAILED)
+
     def test_the_marker_alone_in_a_shell_call_examines_once_the_call_ran_and_tells_it(self):
         scene, ident = proposed(self)
         out = scene.shell(f": frame-loop examine {ident}")

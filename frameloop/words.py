@@ -444,6 +444,10 @@ MARKERS_UNRUN = (
     "frame-loop did not do what this call's marker asks, since the call could not be watched: run it again in a "
     "call of its own."
 )
+MARKERS_FAILED = (
+    "frame-loop did not do what this call's marker asks, since the call failed or was stopped: run it again in a "
+    "call of its own."
+)
 MARKER_NOT_ALONE = (
     "frame-loop did not read the marker in this call: a marker is read only where it is the whole command of a shell "
     "call of its own, once that call has run."
@@ -1283,6 +1287,7 @@ TOLD = (
             EXAMINE_NONE,
             EXAMINE_OFF,
             MARKERS_UNRUN,
+            MARKERS_FAILED,
             MARKER_NOT_ALONE,
             EXAMINED,
             MARKS,

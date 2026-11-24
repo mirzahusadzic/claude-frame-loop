@@ -260,15 +260,18 @@ def before(event: dict, project: Path) -> tuple:
 
 
 def after(event: dict, project: Path) -> tuple:
-    """Does what a shell call that is a marker of the tool's own alone asks, once the call ran, so a call the person
-    denied asks nothing; it runs while the call is still out, so the person's own hand refuses until it has ended,
-    and what it writes is recorded as the hook's own. A call that holds a marker otherwise is told it was not read.
-    Then tells a change, made before or during the call, to a file the tool decides by, whoever made it."""
+    """Does what a shell call that is a marker of the tool's own alone asks, once the call ended well, so a call the
+    person denied asks nothing; it runs while the call is still out, so the person's own hand refuses until it has
+    ended, and what it writes is recorded as the hook's own. A failed call runs no marker, and a call that holds one
+    otherwise is told it was not read. Then tells a change, made before or during the call, to a file the tool
+    decides by, whoever made it."""
     where, session = machine.folder(project), _session(event)
     deadline = time.monotonic() + EXAMINE_SECONDS  # from the hook's start
     command, marked = _command(event), []
     found = MARKER.fullmatch(command) if command else None
-    if found and not watch.is_out(where, _call(event)):
+    if found and event["hook_event_name"] == "PostToolUseFailure":
+        marked = [words.MARKERS_FAILED]  # only a call that ended well runs its marker
+    elif found and not watch.is_out(where, _call(event)):
         marked = [words.MARKERS_UNRUN]  # the call could not be watched, so no marker runs in it
     elif found:
         on = watch.trust(where, take=False).switch and machine.reading_on(where)  # the switch as the watch took it

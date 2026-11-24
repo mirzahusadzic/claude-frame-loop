@@ -308,6 +308,7 @@ frame-loop: newly ticked, each with the handle to declare work for it: {pairs}.
 frame-loop checked nothing: there is no proposal {id} in its form on this machine, for this project.
 frame-loop did not check proposal {id}: the check is off, so the picker opens at once.
 frame-loop did not do what this call's marker asks, since the call could not be watched: run it again in a call of its own.
+frame-loop did not do what this call's marker asks, since the call failed or was stopped: run it again in a call of its own.
 frame-loop did not read the marker in this call: a marker is read only where it is the whole command of a shell call of its own, once that call has run.
 frame-loop checked proposal {id}: {marks}; {carried}; {validated}. The result is in {path}.
 {n} questions for the person
