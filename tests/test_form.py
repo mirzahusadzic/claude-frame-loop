@@ -384,6 +384,52 @@ class FormTests(unittest.TestCase):
         tree = claims.load(scene.project)
         self.assertEqual(tree.faults, {"billing": words.fault(words.UNNAMED, ".frame/billing/frame.json")})
 
+    def test_a_top_that_is_no_folder_is_met_as_a_link(self):
+        with tempfile.TemporaryDirectory() as folder:
+            top = Path(folder) / "top"
+            top.write_text("held\n", "utf-8")
+            self.assertEqual(claims.plain_kind(top, top / "frame.json"), "linked")
+
+    def test_paths_that_are_no_frame_file_have_no_place(self):
+        scene = Scene(self)
+        self.assertIsNone(claims.place_of(scene.project, scene.project / "frame.json"))
+        other = scene.project / ".frame" / "limits" / "other.json"
+        self.assertIsNone(claims.place_of(scene.project, other))
+
+    def test_frame_files_past_the_count_are_left_out_with_the_count(self):
+        scene = Scene(self)
+        for n in range(claims.FRAME_FILES + 1):
+            place = f"part-{n:03d}"
+            scene.frame(frame(place, [claim(f"Part {n} holds.", narrows=under("", "Above."))]))
+        tree = claims.load(scene.project)
+        place = f"part-{claims.FRAME_FILES:03d}"
+        too_many = words.fault(words.TOO_MANY, f".frame/{place}/frame.json", n=claims.FRAME_FILES)
+        self.assertEqual(tree.faults[place], too_many)
+        self.assertEqual(list(tree.faults.values()).count(too_many), 1)
+
+    def test_a_frame_that_is_no_text_is_left_out(self):
+        scene = Scene(self)
+        shop(scene)
+        (scene.project / LIMITS).write_bytes(b"\xff\xfe not text\n")
+        tree = claims.load(scene.project)
+        self.assertEqual(tree.faults["limits"], words.fault(words.NOT_TEXT, LIMITS))
+        self.assertEqual(sorted(tree.frames), ["", "auth"])
+
+    def test_a_frame_that_cannot_be_opened_is_left_out(self):
+        scene = Scene(self)
+        shop(scene)
+        real = claims.plain_bytes
+
+        def refused(top, path, limit, last=False):
+            if Path(path).parent.name == "limits":
+                raise OSError("gone")
+            return real(top, path, limit, last=last)
+
+        with mock.patch.object(claims, "plain_bytes", side_effect=refused):
+            tree = claims.load(scene.project)
+        self.assertEqual(tree.faults["limits"], words.fault(words.UNREADABLE, LIMITS))
+        self.assertEqual(sorted(tree.frames), ["", "auth"])
+
 
 if __name__ == "__main__":
     unittest.main()

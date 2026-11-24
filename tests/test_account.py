@@ -732,6 +732,78 @@ class DataTests(unittest.TestCase):
 
 
 class NoticeAndAnswerTests(unittest.TestCase):
+    """A notice is refused before it is sent where it must be, and a writer's answer is held to its form."""
+
+    def test_a_file_that_holds_no_account_is_left_out_of_the_reading(self):
+        scene = Scene(self)
+        folder = scene.where / "accounts"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"stale-{account.RULES[:12]}.json"
+        path.write_text("[]\n", "utf-8")
+        self.assertEqual(account.current(scene.where), [])
+        self.assertTrue(path.is_file())  # left where it is, never deleted
+
+    def test_an_account_that_names_no_trees_is_left_out_of_the_reading(self):
+        scene = Scene(self)
+        folder = scene.where / "accounts"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"stale-{account.RULES[:12]}.json"
+        path.write_text(json.dumps({"hello": "world"}) + "\n", "utf-8")
+        self.assertEqual(account.current(scene.where), [])
+        self.assertTrue(path.is_file())  # left where it is, never deleted
+
+    def test_a_notice_that_holds_a_secret_is_refused_before_any_reading(self):
+        scene = Scene(self)
+        before = account.empty(scene.project, scene.where)
+        held, why = account.noticed(
+            scene.project, scene.where, before, before, f"The key {KEY} is kept.", time.monotonic() + 60
+        )
+        self.assertIsNone(held)
+        self.assertEqual(why, words.secret("aws-key"))
+        self.assertEqual(scene.calls(), [])  # the writer is never started
+
+    def test_a_notice_is_refused_where_git_cannot_show_the_change(self):
+        scene = Scene(self)
+        scene.fakes(claude={"result": SAID})
+        before, after = place_trees(scene)
+        with mock.patch.object(account, "_diff", side_effect=work.GitFailed()):
+            held, why = account.noticed(scene.project, scene.where, before, after, "A notice.", time.monotonic() + 60)
+        self.assertIsNone(held)
+        self.assertEqual(why, words.GIT_UNSHOWN)
+
+    def test_a_notice_whose_change_holds_only_a_secret_is_refused_after_the_cut(self):
+        scene = Scene(self)
+        scene.fakes(claude={"result": SAID})
+        scene.write("limits/keys.py", "a = 1\n")
+        before = work.snapshot(scene.project, scene.where)
+        scene.write("limits/keys.py", f"a = 1\nKEY = '{KEY}'\n")
+        after = work.snapshot(scene.project, scene.where)
+        held, why = account.noticed(scene.project, scene.where, before, after, "A notice.", time.monotonic() + 60)
+        self.assertIsNone(held)
+        self.assertEqual(why, words.secret("aws-key"))
+        self.assertEqual(scene.calls("claude"), [])  # the writer never sees the cut change
+
+    def test_a_notice_without_time_left_is_refused_without_starting_the_writer(self):
+        scene = Scene(self)
+        scene.fakes(claude={"result": SAID})
+        before = account.empty(scene.project, scene.where)
+        held, why = account.noticed(scene.project, scene.where, before, before, "A notice.", time.monotonic() - 5)
+        self.assertIsNone(held)
+        self.assertEqual(why, words.NO_TIME)
+        self.assertEqual(scene.calls("claude"), [])
+
+    def test_a_line_that_points_back_is_a_detail_of_what_came_before(self):
+        first = "Each client has a count."
+        second = "This count is shown on the page."
+        self.assertEqual(account.formed([first, second], "", {}), [(second, "detail")])
+        self.assertEqual(account.formed([first], "", {}), [])
+
+    def test_an_error_answer_from_the_writer_is_a_failure(self):
+        scene = Scene(self)
+        scene.fakes(claude={"is_error": True, "result": SAID})
+        before, after = place_trees(scene)
+        self.assertEqual(made(scene, before, after), (None, words.WRITER_FAILED))
+
     def test_a_writer_answer_that_is_no_object_is_refused(self):
         scene = Scene(self)
         for answer in (b"[]", b'"done"', b"7", b"null"):

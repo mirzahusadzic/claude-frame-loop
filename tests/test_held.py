@@ -1,7 +1,7 @@
 """Attacks the code held from the first, each now held by a test of this tree's own: whose word a tick is, whatever
 field another hand changes after it, at whichever place or project; a part spelled any way but plainly; the work as
 git holds it opening a claim and nothing else doing so; and a frame file that is a link to a device, which no hook
-opens."""
+opens; and what holds a change bears on, where its place was untouched or nobody ticked it."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
@@ -13,7 +13,7 @@ import unittest
 from scene import C, L, Scene, claim, frame, shop, under
 from test_hooks import launched
 
-from frameloop import approval, claims, machine, words
+from frameloop import approval, claims, hold, machine, words
 
 
 class WhoseWordTests(unittest.TestCase):
@@ -116,6 +116,48 @@ class DeviceTests(unittest.TestCase):
         said = json.loads(launched(json.dumps({**event, "hook_event_name": "SessionStart"}), seconds=20)[1])
         told = said["hookSpecificOutput"]["additionalContext"].splitlines()
         self.assertIn(words.fault(words.NOT_PLAIN, ".frame/frame.json", kind=words.PLAIN_KINDS["link"]), told)
+
+
+class HoldChecksTests(unittest.TestCase):
+    def test_a_command_hold_at_a_place_the_change_did_not_touch_is_never_run(self):
+        scene = Scene(self)
+        ran = scene.outside / "ran"
+        shop(scene, on=False)
+        limits = {
+            **claims.load(scene.project).frames["limits"],
+            "holds": [{"words": "The tests pass.", "command": f"touch '{ran.as_posix()}'"}],
+        }
+        scene.frame(limits)
+        scene.commit("A hold at limits")
+        scene.approve("limits")
+        tree, ticks = claims.load(scene.project), approval.approved(scene.where)
+        left = hold.checks(tree, ticks, ["web/page.py"], scene.project, time.monotonic() + 5)
+        self.assertEqual([row for row in left if row[5] == "limits"], [])
+        self.assertFalse(ran.exists())
+        ran_rows = hold.checks(tree, ticks, ["limits/count.py"], scene.project, time.monotonic() + 5)
+        self.assertEqual(
+            [(kind, name, result, paths) for kind, name, result, paths, key, place in ran_rows if place == "limits"],
+            [("command", "The tests pass.", "held", [])],
+        )
+        self.assertTrue(ran.exists())
+
+    def test_a_path_hold_nobody_ticked_that_a_change_touches_is_left_unticked_with_what_it_touched(self):
+        guard = {"words": "The payment code stays untouched.", "untouched": ["pay/**"]}
+        scene = Scene(self)
+        shop(scene, holds=[guard], approve=False, on=False)
+        tree = claims.load(scene.project)
+        for place in ("", "limits", "auth", "web"):
+            frame_ = tree.frames[place]
+            machine.approve(scene.where, [claims.claim_tick(place, frame_, each) for each in frame_["claims"]])
+        tree, ticks = claims.load(scene.project), approval.approved(scene.where)
+        self.assertFalse(approval.hold_is_persons(ticks, "", guard))
+        touched = hold.checks(tree, ticks, ["pay/bill.py"], scene.project, time.monotonic() + 5)
+        self.assertEqual(
+            [(kind, name, result, paths) for kind, name, result, paths, key, place in touched if kind == "path"],
+            [("path", guard["words"], "unticked", ["pay/bill.py"])],
+        )
+        clear = hold.checks(tree, ticks, ["limits/count.py"], scene.project, time.monotonic() + 5)
+        self.assertEqual([row for row in clear if row[0] == "path"], [])
 
 
 if __name__ == "__main__":

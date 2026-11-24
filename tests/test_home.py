@@ -284,6 +284,9 @@ class HomeTests(unittest.TestCase):
                 late.append(path.name)
         self.assertEqual(late, [])
 
+    def test_a_folder_name_that_is_no_path_is_not_inside_the_machine_folders(self):
+        self.assertFalse(machine.inside("\0"))
+
     def test_a_reading_with_no_outcome_or_prediction_is_refused(self):
         scene = Scene(self)
         with self.assertRaises(ValueError) as refused:
@@ -292,6 +295,55 @@ class HomeTests(unittest.TestCase):
         with self.assertRaises(ValueError) as refused:
             machine.keep_reading(scene.where, "cid", "step", "invented", None, {}, "rests", [], "runs/1", "0" * 64)
         self.assertEqual(str(refused.exception), "invented")
+
+    def test_a_which_row_out_of_form_is_refused(self):
+        with self.assertRaises(ValueError):
+            machine.keep_which(Scene(self).where, {})
+
+    def test_last_results_that_are_no_mapping_hold_nothing(self):
+        scene = Scene(self)
+        machine.write_whole(scene.where / machine.LAST, "[]\n")
+        self.assertEqual(machine.lasts(scene.where), {})
+
+    def test_trimming_a_log_that_is_not_there_writes_nothing(self):
+        scene = Scene(self)
+        self.assertIsNone(machine.trim_log(scene.where))
+        self.assertFalse((scene.where / machine.LOG).exists())
+
+    def test_what_runs_now_that_a_link_refuses_is_let_go(self):
+        scene = Scene(self)
+        with mock.patch("frameloop.watch.kept", side_effect=machine.Linked("a link")):
+            self.assertFalse(machine.set_now(scene.where, scene.session, {"pid": 1}, {"tokens": 1}))
+        self.assertEqual(machine.live(scene.where, scene.session), {})
+
+    def test_a_live_file_from_another_account_is_not_what_runs_now(self):
+        now = {"pid": os.getpid() + 1, "until": time.time() + 60}
+        with mock.patch.object(host, "alive", side_effect=OSError("another account")):
+            self.assertFalse(machine._elsewhere(now))
+
+    def test_a_windows_machine_folder_through_a_file_is_refused(self):
+        with tempfile.TemporaryDirectory(dir=(TESTS / ".work").resolve()) as folder:
+            top = Path(folder)
+            (top / "file").write_text("in the way\n", "utf-8")
+            with (
+                mock.patch.object(machine, "home", return_value=top),
+                mock.patch.object(host, "WINDOWS", True),
+                mock.patch.object(host, "restrict"),
+            ):
+                with self.assertRaises(machine.Linked):
+                    machine.folders(top / "file" / "below", top)
+
+    def test_a_shared_windows_folder_is_left_to_its_own_mode(self):
+        with mock.patch.object(host, "WINDOWS", True), mock.patch.object(host, "restrict") as kept:
+            self.assertIsNone(machine._restrict(Path("/made/up/shared"), False, Path("/made/up")))
+        kept.assert_not_called()
+
+    def test_a_lock_waited_for_with_no_callback_waits_quietly(self):
+        scene = Scene(self)
+        with mock.patch.object(host, "lock", side_effect=[BlockingIOError(), None]) as locked:
+            with machine.waited(scene.where, machine.READING_LOCK, time.monotonic() + 5):
+                pass
+        self.assertEqual(locked.call_count, 2)
 
 
 if __name__ == "__main__":

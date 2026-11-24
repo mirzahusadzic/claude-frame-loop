@@ -9,7 +9,7 @@ import unittest
 import link
 from scene import PARTS, A, C, L, Scene, W, claim, contract, frame, shop, under
 
-from frameloop import claims, hooks, machine, words
+from frameloop import approval, claims, hooks, machine, words
 
 ROOT = ""
 
@@ -155,6 +155,73 @@ class ApprovalTests(unittest.TestCase):
         scene.approve("limits")
         self.assertEqual(scene.standing("limits", L).tension, "unread")
         self.assertEqual(scene.standing("auth", A).tension, "project")
+
+
+class ApprovalFormTests(unittest.TestCase):
+    def test_ticks_that_are_no_json_count_as_no_ticks_with_unformed(self):
+        for case, gave in {
+            "no json at all": "not json",
+            "a key named twice": '{"ticked": [], "ticked": [], "sets": {}}',
+        }.items():
+            with self.subTest(case=case):
+                found = approval.parse(gave)
+                self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_nested_past_reading_count_as_no_ticks_with_unformed(self):
+        found = approval.parse("[" * 20000)
+        self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_with_sets_that_are_no_sets_count_as_no_ticks_with_unformed(self):
+        for case, gave in {
+            "sets no dict": '{"ticked": [], "sets": []}',
+            "ticks no list": '{"ticked": "all", "sets": {}}',
+            "ticks with no strings": '{"ticked": [1], "sets": {}}',
+            "no dict at all": "[]",
+        }.items():
+            with self.subTest(case=case):
+                found = approval.parse(gave)
+                self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_with_a_place_that_is_no_place_count_as_no_ticks_with_unformed(self):
+        for case, sets in {
+            "a place with a backslash": {"bad\\place": {"claims": [], "holds": []}},
+            "a place kept as no dict": {"": []},
+            "a place kept with no holds": {"": {"claims": []}},
+        }.items():
+            with self.subTest(case=case):
+                gave = json.dumps({"ticked": [], "sets": sets})
+                found = approval.parse(gave)
+                self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_with_claims_that_show_nothing_count_as_no_ticks_with_unformed(self):
+        for case, claims_held in {
+            "claims kept as no list": "all",
+            "claims with no text": ["ok", 1],
+            "claims with a hidden mark": ["ok", "bad\u0000"],
+        }.items():
+            with self.subTest(case=case):
+                gave = json.dumps({"ticked": [], "sets": {"": {"claims": claims_held, "holds": []}}})
+                found = approval.parse(gave)
+                self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_with_holds_that_are_not_in_form_count_as_no_ticks_with_unformed(self):
+        for case, holds in {
+            "holds kept as no list": "all",
+            "a hold with no check": [{"words": "The tests pass."}],
+            "a hold with no words": [{"command": "exit 0"}],
+        }.items():
+            with self.subTest(case=case):
+                gave = json.dumps({"ticked": [], "sets": {"": {"claims": ["A claim here."], "holds": holds}}})
+                found = approval.parse(gave)
+                self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unformed"))
+
+    def test_ticks_that_cannot_be_read_count_as_no_ticks_with_unreadable(self):
+        scene = shop(Scene(self))
+        self.assertNotEqual(approval.read(scene.where).fault, "unreadable")
+        (scene.where / approval.FILE).write_bytes(b"\xff\xfe\x00bad")
+        found = approval.read(scene.where)
+        self.assertEqual((found.ticks, found.sets, found.fault), (set(), {}, "unreadable"))
+        self.assertEqual(approval.approved(scene.where), set())
 
 
 if __name__ == "__main__":

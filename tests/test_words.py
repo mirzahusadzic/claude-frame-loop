@@ -213,6 +213,37 @@ class WordsTests(unittest.TestCase):
                     self.assertLess(max(counts, default=-1), said.index("«"), said)
         self.assertEqual(words.now_read("A note is kept.", 3, 5), "checking 3 of 5: «A note is kept.»")
 
+    def test_the_notice_that_could_not_be_checked_says_why(self):
+        why = "the notice writer gave no answer"
+        said = words.notice_unread(why)
+        self.assertEqual(said, words.NOTICE_UNREAD.format(why=why))
+        self.assertIn(why, said)
+        self.assertTrue(said.startswith("frame-loop could not check the implementer"))
+
+    def test_the_change_cut_for_the_writer_says_where_it_was_cut(self):
+        said = words.cut_at(60, 120)
+        self.assertEqual(said, words.CUT_AT.format(limit=60, total=120))
+        self.assertIn("60 of 120", said)
+
+    def test_the_files_set_aside_for_a_secret_say_so_and_name_the_place(self):
+        touched = {"added": ["cli.py"]}
+        said = words.files("api", touched, "api-key")
+        self.assertEqual(
+            said,
+            words.FILES_CUT.format(place="api", files="added api/cli.py", kind=words.SECRETS["api-key"]),
+        )
+        self.assertIn("api/cli.py", said)
+        self.assertIn(words.SECRETS["api-key"], said)
+        bare = words.files("api", touched, None)
+        self.assertEqual(bare, words.FILES.format(place="api", files="added api/cli.py"))
+        self.assertNotIn("secret", bare)
+        self.assertIn(words.SECRET_ASSIGNED, words.files("api", touched, "no-such-kind"))
+        self.assertEqual(words.files("api", {"added": [""]}, None), "Files of the change in api: added api.")
+        self.assertEqual(
+            words.files("", {"added": ["cli.py"]}, None),
+            "Files of the change in the root: added cli.py.",
+        )
+
 
 # The words a person reads, made here: the frame's status, the turn's line, a check's line and its outcomes, the
 # notes under a row, what was extra, what the person approved, and the spend; and the band's own, but those the

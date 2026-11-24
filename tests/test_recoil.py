@@ -439,5 +439,90 @@ class SwitchTests(unittest.TestCase):
         self.assertNotIn(words.FULFILLED, line)
 
 
+class ReadyBranchesTests(unittest.TestCase):
+    def ready_scene(self):
+        scene = kept(self, ("limits", L), ("auth", A), ("web", W))
+        scene.cover()
+        scene.keep("web", W)
+        return scene
+
+    def test_equilibrium_does_not_hold_while_a_failed_check_keeps_a_place_open(self):
+        scene = self.ready_scene()
+        seen = hooks.see(scene.project)
+        self.assertTrue(recoil.ready(seen.tree, seen.ticks, seen.shown, seen.sets, seen.failing))
+        self.assertFalse(recoil.ready(seen.tree, seen.ticks, seen.shown, seen.sets, frozenset({"limits"})))
+
+    def test_equilibrium_does_not_hold_where_the_work_has_moved_since_the_person_ticked_it(self):
+        scene = self.ready_scene()
+        seen = hooks.see(scene.project)
+        self.assertTrue(recoil.ready(seen.tree, seen.ticks, seen.shown, seen.sets, seen.failing))
+        moved = {"limits": {"claims": ["Changed words."], "holds": []}}
+        self.assertFalse(recoil.ready(seen.tree, seen.ticks, seen.shown, moved, frozenset()))
+
+    def test_equilibrium_does_not_hold_where_a_hold_is_not_the_persons(self):
+        scene = Scene(self)
+        held = {"words": "Pages load.", "command": "exit 0"}
+        holes = [hole("", C, ["limits", "auth"]), hole("", D, ["web"])]
+        scene.frame(
+            frame(
+                "",
+                [claim(C, owner="parts"), claim(D, owner="parts")],
+                [],
+                split(["limits", "auth", "web"], holes),
+            )
+        )
+        scene.frame(frame("limits", [claim(L, narrows=under("", C))]))
+        scene.frame(frame("auth", [claim(A, narrows=under("", C))]))
+        scene.frame(frame("web", [claim(W, narrows=under("", D))], holds=[held]))
+        for path in FILES:
+            scene.write(path)
+        scene.commit()
+        scene.approve(*PARTS)
+        machine.set_switch(scene.where, True)
+        for place, said in (("limits", L), ("auth", A), ("web", W)):
+            scene.keep(place, said)
+        scene.cover()
+        scene.keep("web", W)
+        seen = hooks.see(scene.project)
+        self.assertTrue(recoil.ready(seen.tree, seen.ticks, seen.shown, seen.sets, seen.failing))
+        without = set(seen.ticks) - {claims.hold_tick("web", held)}
+        self.assertFalse(recoil.ready(seen.tree, without, seen.shown, seen.sets, seen.failing))
+
+    def test_equilibrium_does_not_hold_where_the_split_is_not_the_persons(self):
+        scene = self.ready_scene()
+        seen = hooks.see(scene.project)
+        self.assertTrue(recoil.ready(seen.tree, seen.ticks, seen.shown, seen.sets, seen.failing))
+        split_tick = claims.split_tick("", seen.tree.frames[""]["split"])
+        without = set(seen.ticks) - {split_tick}
+        self.assertFalse(recoil.ready(seen.tree, without, seen.shown, seen.sets, seen.failing))
+
+
+class ClimbTopTests(unittest.TestCase):
+    def test_a_piece_that_has_risen_and_stands_where_nothing_above_waits_for_it_belongs_to_its_split(self):
+        scene = Scene(self)
+        top, mid, leaf = "Counts are right.", "Counts are kept.", "Counts are added."
+        other = {"claim": claims.claim_id("", top), "from": ["mid"], "kind": "carries"}
+        scene.frame(frame("", [claim(top, owner="parts")], split=split(["mid"], [other])))
+        scene.frame(
+            frame(
+                "mid",
+                [claim(mid, owner="parts", narrows=under("", top))],
+                split=split(["mid/leaf"], [hole("mid", mid, ["mid/leaf"])]),
+            )
+        )
+        scene.frame(frame("mid/leaf", [claim(leaf, narrows=under("mid", mid))]))
+        tree = claims.load(scene.project)
+        at = tree.frames["mid/leaf"]["claims"][0]
+
+        def read(place, above):
+            return "climbs", None
+
+        steps = recoil.climb(tree, "mid/leaf", at, "fulfils", read)
+        self.assertEqual(
+            [(step.gate, step.place, step.belongs) for step in steps],
+            [("climbs", "mid", "split"), ("top", "mid", "split")],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -801,6 +801,118 @@ class MakersTests(unittest.TestCase):
                 self.assertEqual((code, shown["examined"], shown["foreign"]), (0, None, True))
 
 
+class SwitchTests(unittest.TestCase):
+    """The one switch every check and the picker go by."""
+
+    def test_the_check_follows_what_the_person_switched(self):
+        scene = Scene(self)
+        machine.set_switch(scene.where, True)
+        scene.hook("UserPromptSubmit", prompt="Made up.")
+        self.assertTrue(examine.check_on(scene.where))
+        machine.set_switch(scene.where, False)
+        scene.hook("UserPromptSubmit", prompt="Made up.")
+        self.assertFalse(examine.check_on(scene.where))
+
+
+class AloneCallTests(unittest.TestCase):
+    """The step a maker makes now for one row's words."""
+
+    def test_a_maker_makes_a_step_for_the_words_and_for_the_words_turned(self):
+        scene = Scene(self)
+        scene.fakes(gadfly={"step": MADE, "reversed_step": TURNED})
+        found, why = examine.alone(scene.where, 0, C, time.monotonic() + 60)
+        self.assertIsNone(why)
+        self.assertEqual(found["maker"], "private-1")
+        self.assertEqual(found["lines"], MADE.splitlines())
+        self.assertEqual(found["reversal"]["words"], words.NOT_SO.format(words=C))
+        self.assertEqual(found["reversal"]["lines"], TURNED.splitlines())
+
+    def test_where_the_maker_gives_no_step_the_words_say_so(self):
+        scene = Scene(self)
+        scene.fakes(gadfly={"readers": {"alone-": "stuck"}, "step": None})
+        found, why = examine.alone(scene.where, 0, C, time.monotonic() + 60)
+        self.assertIsNone(found)
+        self.assertEqual(why, words.MARK_UNMADE)
+
+    def test_where_the_tier_is_unknown_the_words_say_why(self):
+        scene = Scene(self)
+        scene.fakes(gadfly={"step": MADE, "reversed_step": TURNED})
+        with mock.patch.dict(os.environ, {reading.TIER: "open"}):
+            found, why = examine.alone(scene.where, 0, C, time.monotonic() + 60)
+        self.assertIsNone(found)
+        self.assertEqual(why, words.tier_unknown("open"))
+
+    def test_where_the_report_does_not_follow_the_step_is_not_read(self):
+        scene = Scene(self)
+        folder = scene.where / "runs" / "made-up-alone"
+        folder.mkdir(parents=True)
+        levels = {"baseline": "yes", "repeat": "yes"}
+        steps = {"claim": MADE}
+        with mock.patch.object(reading, "asked_alone", return_value=(levels, steps, words.NO_TIME, folder)):
+            marks: list = []
+            made: dict = {}
+            found = examine._alone(scene.where, 0, {"words": C}, marks, made, time.monotonic() + 60, [])
+        self.assertEqual(marks, [{"item": 0, "kind": "unread", "words": words.mark_unread(words.NO_TIME)}])
+        self.assertEqual(found["0"]["lines"], reading.lines_made(MADE))
+        self.assertNotIn("reversal", found["0"])
+        self.assertIn("0", made)
+
+    def test_where_no_records_stand_nothing_is_kept_and_nothing_is_a_mark(self):
+        scene = Scene(self)
+        marks: list = []
+        seen: dict = {}
+        with mock.patch.object(reading, "firm", return_value=(None, words.NO_TIME, None)):
+            examine._seen(scene.where, 0, C, marks, seen, time.monotonic() + 60)
+        self.assertEqual(marks, [])
+        self.assertEqual(seen, {})
+
+
+class AboveFrameTests(unittest.TestCase):
+    """A row above read against its parts' rows beside the frame files."""
+
+    def test_where_the_frame_has_no_row_for_the_row_above_nothing_is_read(self):
+        scene, ident = proposed(self, proposal=part_proposal(), frames=False)
+        result, _ = examined(scene, ident)
+        self.assertIsNone(result["carried"])
+        splits = [c for c in scene.calls("gadfly") if c["frame"] and c["frame"]["name"].startswith("split-")]
+        self.assertEqual(splits, [])
+
+    def test_where_the_frame_file_names_no_split_nothing_is_read(self):
+        scene, ident = proposed(self, proposal=part_proposal(), frames=False)
+        scene.frame(frame("", [claim(C, owner="parts")], split=None))
+        result, _ = examined(scene, ident)
+        self.assertIsNone(result["carried"])
+        splits = [c for c in scene.calls("gadfly") if c["frame"] and c["frame"]["name"].startswith("split-")]
+        self.assertEqual(splits, [])
+
+    def test_where_the_part_is_not_among_the_parts_above_nothing_is_read(self):
+        web_row = item("The web page names each saved note on its own line.", narrows=under("", C))
+        proposal = {
+            "id": "2",
+            "kind": "frame",
+            "place": "web",
+            "title": "Web",
+            "split": None,
+            "holds": [],
+            "items": [web_row],
+            "options": None,
+            "reason": None,
+        }
+        scene, ident = proposed(self, proposal=proposal)
+        result, _ = examined(scene, ident)
+        self.assertIsNone(result["carried"])
+        splits = [c for c in scene.calls("gadfly") if c["frame"] and c["frame"]["name"].startswith("split-")]
+        self.assertEqual(splits, [])
+
+    def test_where_the_split_is_not_read_the_row_above_is_not_read(self):
+        scene, ident = proposed(self, frames=False, **{"split-": "fail"})
+        result, _ = examined(scene, ident)
+        self.assertIsNone(result["carried"])
+        self.assertFalse(result["validated"])
+        self.assertIn((0, "unread"), kinds(result))
+        self.assertEqual(result["above"], {})
+
+
 class WholeTests(unittest.TestCase):
     """With the check on, an examination that made no step for any claim failed as a whole: its result says why under
     `failed`, one plain line the picker shows in place of its rows, and the session is told it so."""

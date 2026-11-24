@@ -3,6 +3,7 @@ person picked of it, and writes nothing that would be left out."""
 
 import pinned_home  # isort: skip  # noqa: F401  (first: the pin)
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -32,7 +33,7 @@ from scene import (
     under,
 )
 
-from frameloop import approval, claims, hooks, host, machine, reading, words
+from frameloop import approval, claims, examine, hooks, host, machine, reading, words
 from frameloop import proposal as proposal_
 from frameloop.proposal import ITEM_KEYS, KEYS
 
@@ -331,6 +332,83 @@ class ProposeTests(unittest.TestCase):
                 said = scene.approving(ref, "--ticked", "0")[1]
                 self.assertEqual(said, {"written": [], "approved": 0, "said": words.no_proposal(ref)})
 
+    def test_a_proposal_is_kept_under_the_next_id_where_another_propose_took_its_id_first(self):
+        """Two proposes at once: where another took the id first, this one is kept under the next id."""
+        scene = Scene(self)
+        real, calls = machine.write_new, []
+
+        def taken(path, text, **more):
+            calls.append(path)
+            if len(calls) == 1:
+                raise FileExistsError("another propose took the id first")
+            return real(path, text, **more)
+
+        with mock.patch.object(machine, "write_new", taken):
+            ident, path = proposal_.keep(scene.where, proposal("frame", "", [item(C)]))
+        self.assertEqual((ident, path.name, len(calls)), ("2", "2.json", 2))
+        self.assertEqual(kept(scene), ["2.json"])
+        self.assertEqual(json.loads(path.read_text("utf-8")), {**proposal("frame", "", [item(C)]), "id": "2"})
+
+    def test_an_examination_that_is_no_plain_file_of_the_machine_folder_is_refused(self):
+        """An examination there but no plain file inside the machine folder refuses what would write it."""
+        scene = Scene(self)
+        ident = scene.propose(proposal("frame", "", [item(C)]))["id"]
+        folder = scene.where / machine.PROPOSALS
+        outside = scene.outside / f"{ident}.examined.json"
+        outside.write_text("{}\n", "utf-8")
+        link.make(self, folder / f"{ident}.examined.json", outside)
+        with self.assertRaises(proposal_.Refused) as refused:
+            proposal_.examination(scene.where, ident)
+        self.assertEqual(refused.exception.args, (words.examination_unformed(ident, words.FILE_ITSELF),))
+        self.assertEqual(
+            scene.approving(ident, "--ticked", "0"),
+            (1, {"written": [], "approved": 0, "said": words.examination_unformed(ident, words.FILE_ITSELF)}),
+        )
+        self.assertFalse((scene.project / ".frame").exists())
+
+
+def _record(trial, text):
+    """A record of the maker's answer to one trial, as Gadfly keeps it: the text kept whole, hashed beside it."""
+    made = {"text": text, "sha256": hashlib.sha256(text.encode("utf-8")).hexdigest()}
+    return json.dumps({"trial": trial, "raw": json.dumps({"made": made})}) + "\n"
+
+
+def _kept_run(scene, name, n, said, claim_text, reversal_text=None):
+    """A folder of the maker's own records for one item, as the examination's `made` keeps it: the frame asked
+    through the maker's own line, and the records with their digest."""
+    folder = scene.where / "runs" / name
+    folder.mkdir(parents=True)
+    machine.keep_json(
+        folder / "frame.json",
+        {
+            "name": examine.alone_name(n, said),
+            "inputs": [{"id": "claim", "text": reading.question(said)}],
+            "battery": {"maker": reading.MAKERS["private-1"]},
+        },
+    )
+    lines = _record("baseline", claim_text)
+    if reversal_text is not None:
+        lines += _record("input-inversion", reversal_text)
+    (folder / "records.jsonl").write_text(lines, "utf-8")
+    return folder.relative_to(scene.where).as_posix(), reading.evidence(scene.where, folder)
+
+
+def _kept_examined(scene, ident, steps, made, validated=False):
+    """An examination kept beside a proposal by hand, bound to the proposal's bytes as the tool's own would be."""
+    raw = (scene.where / machine.PROPOSALS / f"{ident}.json").read_bytes()
+    machine.keep_json(
+        scene.where / machine.PROPOSALS / f"{ident}.examined.json",
+        {
+            "marks": [],
+            "carried": None,
+            "validated": validated,
+            "steps": steps,
+            "proposal": hashlib.sha256(raw).hexdigest(),
+            "made": made,
+        },
+    )
+    return raw
+
 
 class PairTests(unittest.TestCase):
     """A claim's step is the pair of the claim's step and its reversal's: the proposal's form takes it, the writer
@@ -435,6 +513,63 @@ class PairTests(unittest.TestCase):
         self.assertEqual(
             (written["words"], written["step"]), (options[0]["words"], {"maker": "session", "lines": STEP["lines"]})
         )
+
+    def test_a_step_is_the_makers_only_where_its_reversal_is_the_makers_own(self):
+        """The records hold the reversal the step keeps: where the step keeps none the records made, or keeps
+        other lines than the records, the examination is none the tool made and the writer writes nothing."""
+        cases = {
+            "no reversal kept where the records hold one": (
+                {"maker": "private-1", "lines": ["1. A client is one caller."]},
+            ),
+            "other lines than the records hold": (
+                {
+                    "maker": "private-1",
+                    "lines": ["1. A client is one caller."],
+                    "reversal": {"words": words.NOT_SO.format(words=C), "lines": ["1. Nothing is shared."]},
+                },
+            ),
+        }
+        for case, (step,) in cases.items():
+            with self.subTest(case=case):
+                scene = Scene(self)
+                ident = scene.propose(proposal("frame", "", [item(C, step=None)]))["id"]
+                machine.set_switch(scene.where, True)  # the check on, as the person switched it
+                scene.hook("UserPromptSubmit", prompt="Check it.")
+                runs, records = _kept_run(
+                    scene, "made-0", 0, C, "1. A client is one caller.", "1. Clients share one count."
+                )
+                raw = _kept_examined(scene, ident, {"0": step}, {"0": {"runs": runs, "records": records}})
+                held = json.loads(raw.decode("utf-8"))
+                exam = proposal_.examination(scene.where, ident)
+                self.assertIsNone(proposal_.maker_steps(scene.where, held, raw, exam))
+                self.assertEqual(proposal_.examination_shown(scene.where, held, raw, exam), (None, True))
+                self.assertEqual(
+                    scene.approving(ident, "--ticked", "0"),
+                    (1, {"written": [], "approved": 0, "said": words.unchecked_rows([C], 1)}),
+                )
+                self.assertFalse((scene.project / ".frame").exists())
+
+    def test_an_examination_counts_as_the_tools_only_where_every_row_has_the_makers_records(self):
+        """A validated examination with no records for a row is none the tool made: the writer writes nothing."""
+        scene = Scene(self)
+        ident = scene.propose(proposal("frame", "", [item(C, step=None), item(D, step=None)]))["id"]
+        machine.set_switch(scene.where, True)  # the check on, as the person switched it
+        scene.hook("UserPromptSubmit", prompt="Check it.")
+        runs, records = _kept_run(scene, "made-0", 0, C, "1. A client is one caller.", "1. Clients share one count.")
+        step = {
+            "maker": "private-1",
+            "lines": ["1. A client is one caller."],
+            "reversal": {"words": words.NOT_SO.format(words=C), "lines": ["1. Clients share one count."]},
+        }
+        raw = _kept_examined(scene, ident, {"0": step}, {"0": {"runs": runs, "records": records}}, validated=True)
+        held = json.loads(raw.decode("utf-8"))
+        exam = proposal_.examination(scene.where, ident)
+        self.assertIsNone(proposal_.maker_steps(scene.where, held, raw, exam))
+        self.assertEqual(
+            scene.approving(ident, "--ticked", "0,1"),
+            (1, {"written": [], "approved": 0, "said": words.unchecked_rows([C, D], 2)}),
+        )
+        self.assertFalse((scene.project / ".frame").exists())
 
 
 class ShownTests(unittest.TestCase):
@@ -591,6 +726,10 @@ class CrossingFormTests(unittest.TestCase):
             "a claim above owned by its work": (
                 crossed(items=[item(C), item(D, owner="parts")]),
                 words.crossing(words.CROSS_ABOVE_OWNER, words=C, owner="work"),
+            ),
+            "a claim of a part owned by more than its work": (
+                crossed(parts=[part("limits", item(L, owner="parts", narrows=under("", C))), parts[1], parts[2]]),
+                words.crossing(words.CROSS_PART_OWNER, words=L, part="limits", owner="parts"),
             ),
             "a contract provided by no part": (
                 crossed(contracts=[contract("billing", ["limits"])]),
@@ -780,6 +919,42 @@ class WriterTests(unittest.TestCase):
         self.assertEqual(tree.frames["limits"]["claims"][0]["narrows"], under("", new))
         self.assertEqual(scene.standing("limits", L).tension, "fulfilled")  # its own words, step and work are as read
         self.assertEqual(scene.standing("", new).tension, "open")
+
+    def test_a_reframe_leaves_a_quote_of_another_claim_where_it_stands(self):
+        """Only the quotes of the old words follow them: a part's claim under another claim is left as it stands."""
+        scene = Scene(self)
+        X = "Each client is shown its name."
+        crossing = proposal(
+            "split",
+            "",
+            [item(C, owner="parts"), item(D, owner="parts")],
+            split_={
+                "parts": [
+                    part("limits", item(L, narrows=under("", C))),
+                    part("auth", item(A, narrows=under("", C))),
+                    part("web", item(W, narrows=under("", D)), item(X, narrows=under("", C))),
+                ],
+                "holes": [
+                    {"claim": C, "from": ["limits", "auth", "web"], "kind": "fulfils"},
+                    {"claim": D, "from": ["web"], "kind": "fulfils"},
+                ],
+                "contracts": [],
+            },
+        )
+        said = scene.picked(crossing, "--ticked", "0,1")
+        self.assertEqual(sorted(claims.load(scene.project).frames), ["", "auth", "limits", "web"])
+        new = "Requests are counted, one count to a client."
+        reason = {"words": "The count was read as one for all.", "about": C}
+        said = scene.picked(proposal("reframe", "", [item(new, owner="parts", old=C)], reason=reason), "--ticked", "0")
+        tree = claims.load(scene.project)
+        self.assertEqual(tree.faults, {})
+        self.assertEqual(
+            [(each["words"], each["narrows"]) for each in tree.frames["web"]["claims"]],
+            [(W, under("", D)), (X, under("", new))],
+        )
+        self.assertEqual(tree.frames["limits"]["claims"][0]["narrows"], under("", new))
+        self.assertEqual(tree.frames[""]["split"]["holes"][0]["claim"], claims.claim_id("", new))
+        self.assertIn(str(scene.project / claims.file_of("web")), said["written"])
 
     def test_a_command_approved_under_the_same_words_takes_the_old_ones_place(self):
         """The picker shows a proposal's commands, so those are what is written: a hold proposed anew under words the

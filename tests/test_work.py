@@ -10,7 +10,7 @@ from unittest import mock
 
 from scene import Scene, shop
 
-from frameloop import words, work
+from frameloop import machine, words, work
 
 
 class SnapshotTests(unittest.TestCase):
@@ -171,6 +171,94 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(told.split(words.SEP)[0], words.TURN.format(places=words.ROOT))
         self.assertIn(words.hidden_changed(3), told)
         self.assertIn(".pytest_cache/.gitignore", told)
+
+    def test_a_command_that_cannot_start_is_said_as_never_started(self):
+        scene = Scene(self)
+        with mock.patch.object(work.subprocess, "Popen", side_effect=OSError("made up")):
+            self.assertEqual(work.run("exit 0", scene.project, 5), work.Ran(None, False, False))
+
+    def test_a_windows_stop_that_succeeds_says_nothing(self):
+        with mock.patch.object(work.host, "WINDOWS", True):
+            with mock.patch.object(work.host, "stop") as stop:
+                self.assertIsNone(work._stop(42))
+                stop.assert_called_once_with(42)
+
+    def test_a_reading_program_that_cannot_start_has_no_answer(self):
+        scene = Scene(self)
+        with mock.patch.object(work, "_spawn", side_effect=work.GitMissing()):
+            self.assertEqual(work.ask(["claude", "-p"], scene.project, 5), (None, b""))
+
+    def test_a_file_left_out_by_a_tracked_ignore_file_stays_out(self):
+        scene = Scene(self)
+        scene.write(".gitignore", "*.log\n")
+        scene.commit()
+        scene.write("ignored.log", "made up\n")
+        scene.write("kept.py", "made up\n")
+        tree = work.snapshot(scene.project, scene.where)
+        self.assertEqual(work.hidden(scene.where, tree), set())
+        self.assertNotIn("ignored.log", scene.snapped("ls-tree", "-r", "--name-only", tree).split())
+
+    def test_blankness_of_no_path_is_no_work(self):
+        scene = Scene(self)
+        scene.write("shop.py", "made up\n")
+        tree = work.snapshot(scene.project, scene.where)
+        self.assertEqual(work.blank(scene.project, scene.where, tree, []), set())
+
+    def test_a_blank_read_with_no_header_fails(self):
+        scene = Scene(self)
+        scene.write("shop.py", "hello\n")
+        tree = work.snapshot(scene.project, scene.where)
+        real_git = work.git
+
+        def fake(cwd, *args, **kwargs):
+            if "cat-file" in args:
+                return "not-a-header\n"
+            return real_git(cwd, *args, **kwargs)
+
+        with mock.patch.object(work, "git", side_effect=fake):
+            with self.assertRaises(work.GitFailed):
+                work.blank(scene.project, scene.where, tree, ["shop.py"])
+
+    def test_a_chain_whose_log_has_no_answer_is_lost(self):
+        scene = Scene(self)
+        scene.write("shop.py", "made up\n")
+        scene.hook("UserPromptSubmit", prompt="Made up.")
+        real_git = work.git
+
+        def fake(cwd, *args, **kwargs):
+            if "log" in args:
+                return None
+            return real_git(cwd, *args, **kwargs)
+
+        with mock.patch.object(work, "git", side_effect=fake):
+            self.assertEqual(work.chain(scene.project, scene.where), work.Chain([], False, True))
+
+    def test_a_chain_ended_by_a_commit_that_is_no_snapshot_is_cut_and_lost(self):
+        scene = Scene(self)
+        scene.write("shop.py", "made up\n")
+        scene.hook("UserPromptSubmit", prompt="Made up.")
+        tree = work.snapshot(scene.project, scene.where)
+        bad = work.git(
+            scene.project,
+            "commit-tree",
+            tree,
+            "-p",
+            work.head(scene.where),
+            "-m",
+            "made-up-not-json",
+            more=work.store(scene.project, scene.where),
+        )
+        self.assertIsNotNone(bad)
+        machine.write_whole(scene.where / machine.SNAPSHOTS, bad.strip() + "\n")
+        self.assertEqual(work.chain(scene.project, scene.where), work.Chain([], True, True))
+
+    def test_a_chain_with_no_later_snapshot_has_no_change(self):
+        scene = Scene(self)
+        scene.write("shop.py", "made up\n")
+        scene.hook("UserPromptSubmit", prompt="Made up.")
+        held = work.chain(scene.project, scene.where)
+        self.assertGreaterEqual(len(held.snaps), 1)
+        self.assertEqual(work.changes(scene.project, scene.where, held, len(held.snaps) - 1, ""), [])
 
 
 if __name__ == "__main__":
